@@ -7,6 +7,7 @@
 #include "FILNCore.h"
 #include "FILNRoadCache.h"
 #include "FILNDispatchPolicy.h"
+#include "FILNRecovery.h"
 #include "LogisticsSubsystem.generated.h"
 class AFGWheeledVehicleIdentifier;
 class AFGDockingStationIdentifier;
@@ -56,6 +57,8 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) int32 DeliveredCargo = 0;
  UPROPERTY(SaveGame) int32 LastCargo = 0;
  double LastObserved = 0;
+ // Runtime-only clock: saved journey identity and phase remain authoritative on reload.
+ filn::recovery::RetryClock NavigationRetry;
 };
 /** Native server-only prototype. Dedicated empty vanilla LOAD station is the home bay fallback. */
 UCLASS()
@@ -118,6 +121,7 @@ private:
  bool PrepareStationsForUninstall();
  bool ApplyStationFilter(const FFILNStationConfig& Config,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);
  void Observe();
+ bool RetryNavigation(FFILNRegistration& R, double Now);
  void Recover(FFILNRegistration& R, const FString& Why);
  bool Pair(AFGWheeledVehicleIdentifier* Vehicle, AFGDockingStationIdentifier* Home);
  bool Dispatch(FFILNRegistration& R, AFGDockingStationIdentifier* Provider, AFGDockingStationIdentifier* Requester);

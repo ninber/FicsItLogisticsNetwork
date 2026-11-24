@@ -86,7 +86,8 @@ void ALogisticsSubsystem::Rebuild() {
     R.Vehicle->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home) && IsValid(R.Requester) && (R.RetainedCargo || IsValid(R.Provider));
    if(Resume) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
    else SetState(R,S::Recovery);
-   if(!Resume && IsValid(R.Vehicle) && IsValid(R.Vehicle->GetOwnerVehicle()) && !R.Vehicle->GetOwnerVehicle()->GetDriver()) R.Vehicle->SetAutopilotEnabled(false);
+   if(!Resume && IsValid(R.Vehicle) && IsValid(R.Vehicle->GetOwnerVehicle()) && !R.Vehicle->GetOwnerVehicle()->GetDriver() &&
+      !R.RouteIntent.IsEmpty() && R.Vehicle->GetVehicleRoute()==R.RouteIntent && R.Vehicle->IsAutopilotEnabled()) R.Vehicle->SetAutopilotEnabled(false);
    bool Reserved=false;
    if(R.JobId.IsValid() && IsValid(R.Requester)) {
     if(R.RetainedCargo) Reserved=Reservations.AcquireDelivery(Key(R.JobId),Key(R.TruckId),Key(StationId(R.Requester)));
@@ -203,8 +204,10 @@ bool ALogisticsSubsystem::Parked(const FFILNRegistration& R) const {
   Home->GetDockedActor()==R.Vehicle->GetOwnerVehicle() && !R.Vehicle->IsAutopilotEnabled();
 }
 void ALogisticsSubsystem::Recover(FFILNRegistration& R,const FString& Why) {
- SetState(R,S::Recovery); R.Diagnostic=Why;
- if(IsValid(R.Vehicle) && IsValid(R.Vehicle->GetOwnerVehicle()) && !R.Vehicle->GetOwnerVehicle()->GetDriver()) R.Vehicle->SetAutopilotEnabled(false);
+ SetState(R,S::Recovery); R.Diagnostic=Why; R.NavigationRetry.Reset();
+ // Do not disable a player-owned or externally changed route.
+ if(IsValid(R.Vehicle) && IsValid(R.Vehicle->GetOwnerVehicle()) && !R.Vehicle->GetOwnerVehicle()->GetDriver() &&
+    !R.RouteIntent.IsEmpty() && R.Vehicle->GetVehicleRoute()==R.RouteIntent && R.Vehicle->IsAutopilotEnabled()) R.Vehicle->SetAutopilotEnabled(false);
  UE_LOG(LogFILN,Warning,TEXT("job=%s RECOVERY: %s (reservations retained)"),*R.JobId.ToString(),*Why);
 }
 bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationIdentifier* H) {
@@ -300,11 +303,8 @@ void ALogisticsSubsystem::Observe() {
   if(!ValidHome(R.Home) || (!R.RetainedCargo && !PB->GetIsInLoadMode()) || QB->GetIsInLoadMode() || R.Vehicle->GetVehicleRoute()!=R.RouteIntent) {
    Recover(R,TEXT("Home cargo/mode, endpoint mode or route changed")); ++Cursor; continue;
   }
-  if(R.Vehicle->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None || R.Elapsed>1800.f) {
-   Recover(R,FString::Printf(TEXT("Autopilot error=%d or journey timeout"),static_cast<int32>(R.Vehicle->GetAutopilotErrorStatus()))); ++Cursor; continue;
-  }
   auto* Owner=R.Vehicle->GetOwnerVehicle();
-  if(Owner->GetDriver()) { Recover(R,TEXT("Player took control; leave vehicle state untouched")); ++Cursor; continue; }
+  if(Owner->GetDriver() || !R.Vehicle->IsAutopilotEnabled()) { Recover(R,TEXT("Player control or autopilot disabled; leave vehicle state untouched")); ++Cursor; continue; }
   const bool AtP=PB && PB->GetDockedActor()==Owner, AtQ=QB->GetDockedActor()==Owner, AtH=HB->GetDockedActor()==Owner;
   const S Before=StateOf(R); S Next=Before;
   if(R.Automatic) {
@@ -324,6 +324,15 @@ void ALogisticsSubsystem::Observe() {
     Recover(R,TEXT("Station departed without measured matching cargo transfer")); ++Cursor; continue;
    }
   }
+  if(R.Vehicle->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None) {
+   if(!R.Automatic || !RetryNavigation(R,Now)) Recover(R,FString::Printf(TEXT("Native autopilot error=%d; automatic retry is unsafe"),static_cast<int32>(R.Vehicle->GetAutopilotErrorStatus())));
+   ++Cursor; continue;
+  }
+  if(R.NavigationRetry.waiting) {
+   R.NavigationRetry.Reset(); R.Elapsed=0;
+   R.Diagnostic=TEXT("Native navigation fault cleared; continuing reserved journey, no transfer inferred");
+  }
+  if(R.Elapsed>1800.f) { Recover(R,TEXT("Journey timeout without a native navigation error")); ++Cursor; continue; }
   if(Before==S::ToProvider && AtP) Next=filn::Advance(Before,filn::Event::ProviderDock);
   else if(Before==S::Loading && !AtP) Next=filn::Advance(Before,filn::Event::ProviderLeave);
   else if(Before==S::ToRequester && AtQ) Next=filn::Advance(Before,filn::Event::RequesterDock);

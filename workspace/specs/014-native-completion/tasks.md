@@ -52,3 +52,6 @@
 - [x] T046 Add server-paginated station/provider/requester/vehicle/depot overview with actual cargo, fuel/AP/driver, reservations and diagnostics.
 - [x] T047 Read back native station filter assignment/restoration and retain recovery metadata on failure.
 - [x] T048 Revoke retained-cargo provenance after unexplained/manual/recovery inventory changes.
+
+- [x] T049 Port Lua bounded-frequency native navigation retry policy; integrate guarded route/target reapplication for active automatic travel phases and preserve player-changed routes.
+- [ ] T050 Build/UHT and verify native navigation retry, fault clearance, route readback, player takeover and indefinite bounded-frequency retry in disposable real game. Full alternate-route return, stalled-without-error recovery, and legacy migration remain unresolved.
