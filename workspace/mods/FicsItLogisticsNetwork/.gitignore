@@ -1,0 +1,12 @@
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+build/
+.idea/
+.vscode/
+*.o
+*.so
+*.dll
+*.pdb
+*.log

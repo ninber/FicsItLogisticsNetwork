@@ -1,0 +1,10 @@
+const assert=require('assert');const {convert,group}=require('./filn-blueprints.cjs');
+const ORIGINAL='/Game/FactoryGame/Buildable/Factory/TruckStation/Build_TruckStation.Build_TruckStation_C';
+const station={typePath:ORIGINAL,instanceName:'station',properties:{mBuiltWithRecipe:{value:{pathName:'/Game/FactoryGame/Recipes/Buildings/Recipe_TruckStation.Recipe_TruckStation_C'}},mIsInLoadMode:{value:false}},transform:{translation:{x:1,y:2,z:3}},components:[{pathName:'belt-connection'}]};
+const source={name:'Smelter Factory',objects:[station,{instanceName:'belt',properties:{peer:'station'}}],header:{recipeReferences:[{pathName:station.properties.mBuiltWithRecipe.value.pathName}]},config:{description:'user description'}};
+const before=JSON.stringify(source);const converted=convert(source);
+assert.equal(JSON.stringify(source),before);assert.equal(converted.category,'Smelting');assert.equal(converted.bp.name,'FILN - Smelter Factory');
+assert.deepStrictEqual(converted.bp.objects[0].transform,station.transform);assert.deepStrictEqual(converted.bp.objects[0].components,station.components);assert.equal(converted.bp.objects[0].properties.mIsInLoadMode.value,false);assert.deepStrictEqual(converted.bp.objects[0].properties.FilterItem.values,[]);assert.deepStrictEqual(converted.bp.objects[1],source.objects[1]);
+const depot=convert({...source,name:'Truck Rest Depot'});assert.equal(depot.bp.objects[0].typePath,ORIGINAL);assert(depot.bp.objects[0].properties.mBuiltWithRecipe.value.pathName.includes('FILNRestStop'));assert.equal(depot.category,'Depots');
+assert.equal(group('Road - Truck Station'),'Truck Stations');assert.equal(group('Constructor Factory'),'Constructors');assert.equal(group('Assembler Station'),'Assemblers');assert.equal(group('Station Floor'),'Factory Modules');
+console.log('Blueprint copy conversion checks passed: original immutability, mode/layout/reference preservation, empty filters, depot recipe and grouping.');

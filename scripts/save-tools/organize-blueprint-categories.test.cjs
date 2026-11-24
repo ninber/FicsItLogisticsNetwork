@@ -1,0 +1,7 @@
+const assert=require('assert'),{organize}=require('./organize-blueprint-categories.cjs');
+const prop={values:[{properties:{CategoryName:{value:'Factories'},IconID:{value:7},MenuPriority:{value:10},IsUndefined:{value:false},SubCategoryRecords:{values:[{properties:{SubCategoryName:{value:'Originals'},MenuPriority:{value:1},IsUndefined:{type:'ByteProperty',value:{value:0}},BlueprintNames:{values:['Original factory']},LastEditedBy:{value:{serviceProvider:6,playerInfoTableIndex:0}}}}]}}}]};
+const manifest={entries:[{name:'FILN - Smelter',category:'Smelting'},{name:'FILN - Depot',category:'Depots'}]};const original=JSON.stringify(prop),result=organize(prop,manifest);
+assert.equal(JSON.stringify(prop),original);assert.deepStrictEqual(result.values[0],prop.values[0]);assert.equal(result.values[1].properties.CategoryName.value,'FILN');
+const subs=result.values[1].properties.SubCategoryRecords.values;assert.equal(subs.length,2);assert.equal(subs[0].properties.MenuPriority.value,0);assert.equal(subs[1].properties.MenuPriority.value,1);assert.equal(result.values[1].properties.MenuPriority.value,1);assert.deepStrictEqual(subs[0].properties.IsUndefined.value,{value:0});assert.deepStrictEqual(subs[0].properties.BlueprintNames.values,['FILN - Smelter']);
+assert.deepStrictEqual(organize(result,manifest),result);assert.throws(()=>organize(prop,{entries:[{name:'Original factory',category:'Smelting'}]}));
+console.log('Offline blueprint category checks passed: original records and byte wrappers preserved, copy membership, idempotence and invalid input.');
