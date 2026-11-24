@@ -102,3 +102,8 @@ Win64 cook/package/static artifact checks passed. Two actual headless inventory
 cases FAILED on generated SDK Resize(2) returning 0 slots. No assertions weakened.
 See ../../../specs/014-native-completion/local-verification.md for receipt, fixes
 and remaining actual-game acceptance. No live game/save/deployment actions occurred.
+
+
+## Disposable native runtime test: failed acceptance
+
+SML 3.12.1 / FILN 0.1.0 loaded in the isolated FILN_Native_Test_20261124T222333Z session with actual player DefaultImaginati. User reported severe periodic stalls. External conversion of 217 stations roundtripped, but native resource registration failed/skipped; the migration is incomplete. Automatic dispatch remained disabled. Native-only performance isolation and actual cargo/filter acceptance remain pending. External test harness disabled for next launch; no automatic shutdown. Original City save and durable backup preserved. Evidence: workspace/test-results/native-runtime-20261124T222333Z/runtime-incident.md. Do not promote this test save to production.

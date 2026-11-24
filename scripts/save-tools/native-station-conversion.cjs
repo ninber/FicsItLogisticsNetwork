@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 'use strict';
 const assert=require('node:assert/strict');
+const {isDeepStrictEqual}=require('node:util');
+const {cloneSave}=require('./clone-save.cjs');
 const {references}=require('./legacy-references.cjs');
 const {ORDINARY,PROGRAMMABLE,FILN,cargoItems}=require('./station-migration.cjs');
 const VANILLA='/Game/FactoryGame/Recipes/Buildings/Recipe_TruckStation.Recipe_TruckStation_C';
@@ -15,7 +17,7 @@ function guid(value) {
 function convert(save,selection) {
  assert(Array.isArray(selection)&&selection.length>0&&selection.length<=512,'Explicit selection of 1..512 stations required');
  // Never mutate source, including when a later row fails validation.
- const next=structuredClone(save);
+ const next=cloneSave(save);
  const objects=Object.values(next.levels).flatMap(l=>l.objects),by=new Map(objects.map(o=>[o.instanceName,o]));
  assert.equal(by.size,objects.length,'Ambiguous object identities');
  const seen=new Set(),nodes=new Set(),rows=['FILN_NATIVE_STATIONS_V1'],changes=[];
@@ -47,18 +49,18 @@ function convert(save,selection) {
     assert(stock.every(x=>x.item===item),'Cargo differs from explicit legacy filter');
    }
   }
-  changes.push({path,oldClass:station.typePath,oldRecipe:recipe,oldFilter:structuredClone(props.FilterItem),identifier:id.instanceName,node:node.instanceName,guid:key,mode,item,depot,role});
+  changes.push({path,oldClass:station.typePath,oldRecipe:recipe,oldFilter:cloneSave(props.FilterItem),identifier:id.instanceName,node:node.instanceName,guid:key,mode,item,depot,role});
   station.typePath=ORDINARY;props.mBuiltWithRecipe.value.pathName=VANILLA;delete props.FilterItem;
   rows.push([role,key,item,mode].join('\t'));
  }
  // Invert precisely the three declared edits, and compare the full parsed body.
- const restored=structuredClone(next);
+ const restored=cloneSave(next);
  const undo=new Map(Object.values(restored.levels).flatMap(l=>l.objects).map(o=>[o.instanceName,o]));
  for(const c of changes) {
   const o=undo.get(c.path);o.typePath=c.oldClass;o.properties.mBuiltWithRecipe.value.pathName=c.oldRecipe;
   if(c.oldFilter!==undefined)o.properties.FilterItem=c.oldFilter;
  }
- assert.deepEqual(restored.levels,save.levels,'Unexpected body changes');
+ assert(isDeepStrictEqual(restored.levels,save.levels),'Unexpected body changes');
  // Do not certify removal of dependencies: schematic/descriptor/custom component
  // references elsewhere must be reviewed, not blindly stripped.
  const residual=objects.filter(o=>references(o).length>0).map(o=>o.instanceName);
