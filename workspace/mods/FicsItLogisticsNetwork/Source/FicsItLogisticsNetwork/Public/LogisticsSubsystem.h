@@ -9,6 +9,7 @@
 #include "FILNDispatchPolicy.h"
 #include "FILNRecovery.h"
 #include "FILNFuelPolicy.h"
+#include "FILNIdlePolicy.h"
 #include "LogisticsSubsystem.generated.h"
 class AFGWheeledVehicleIdentifier;
 class AFGDockingStationIdentifier;
@@ -148,6 +149,8 @@ private:
  void Recover(FFILNRegistration& R, const FString& Why);
  bool RemoveLostRegistration(int32 Index);
  void AuditLostRegistrations();
+ void AuditIdleFleet();
+ int32 IdleCursor=0;
  int32 LostCursor=0;
  bool Pair(AFGWheeledVehicleIdentifier* Vehicle, AFGDockingStationIdentifier* Home);
  bool Dispatch(FFILNRegistration& R, AFGDockingStationIdentifier* Provider, AFGDockingStationIdentifier* Requester);

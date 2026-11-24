@@ -82,3 +82,6 @@
 
 - [x] T068 Implement copy-only inverse legacy class/recipe/filter conversion, exact selection/hash guards, inverse body comparison, roundtrip check and native resource/depot manifest import.
 - [ ] T069 Verify actual parser serialization and independent disposable load; resolve residual legacy schematic/component references and unsupported classes. Active depot conversion remains restricted to quiescent saves.
+
+- [x] T070 Port bounded idle home-only vehicle reconciliation: release stale holds, observe native return, retry exact empty home-only route with verified native roads, restore hold only at home.
+- [ ] T071 Verify home-only native retry, actual docking and hold after moving/reloading an enrolled truck. Unmanaged or AP-off trucks are not automatically enrolled.

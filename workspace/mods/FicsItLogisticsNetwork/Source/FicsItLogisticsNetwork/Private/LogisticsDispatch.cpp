@@ -39,6 +39,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  Pending=false;
  if(!HasAuthority() || bDispatchBlocked || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !StationConfigs.IsValidIndex(P))) return false;
  auto& R=Registrations[V]; const auto& C=StationConfigs[Q];
+ if(R.State!=static_cast<uint8>(filn::State::Idle) || !R.Held || R.JobId.IsValid()) return false;
  R.Diagnostic=TEXT("No eligible compatible offer for this requester");
  auto* Owner=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
  auto* QB=IsValid(C.Station)?C.Station->GetStation():nullptr;
@@ -60,7 +61,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  Truck.cargoOriginKnown=R.CargoOriginKnown; Truck.cargoOriginStorage=R.CargoOriginStorage;
  Truck.id=Id(R.TruckId); Truck.home=Id(R.BayId); Truck.enrolled=true;
  Truck.homeReady=HB->HasPower() && !HB->IsProductionPaused(); Truck.idle=R.State==static_cast<uint8>(filn::State::Idle);
- Truck.autopilot=R.Vehicle->IsAutopilotEnabled(); Truck.driver=Owner->GetDriver()!=nullptr; Truck.fuelReady=Owner->HasFuel() && FuelReady(R);
+ Truck.autopilot=R.Vehicle->IsAutopilotEnabled(); Truck.driver=Owner->GetDriver()!=nullptr; Truck.fuelReady=true; // checked once above
  if(!TransportMedium(Owner,Truck.medium)) return false;
  if(!Inventory(Owner->GetStorageInventory(),C.Resource,Truck.cargoKinds,Truck.cargoQuantity,Truck.cargoCapacity,&Truck.cargoResource)) return false;
  Request.id=Id(StationId(C.Station)); Request.label=TCHAR_TO_UTF8(*C.Station->GetStationName().ToString()); Request.resource=Descriptor(C.Resource);

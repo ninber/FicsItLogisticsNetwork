@@ -39,3 +39,7 @@ trap 'rm -rf -- "$build_dir"' EXIT
 "${CXX:-g++}" -std=c++20 -Wall -Wextra -Wpedantic -Werror -O2 \
  -I"$plugin/Source/FicsItLogisticsNetwork/Public" "$plugin/tests/fuel_tests.cpp" -o "$build_dir/fuel_tests"
 "$build_dir/fuel_tests"
+
+"${CXX:-g++}" -std=c++20 -Wall -Wextra -Wpedantic -Werror -O2 \
+ -I"$plugin/Source/FicsItLogisticsNetwork/Public" "$plugin/tests/idle_tests.cpp" -o "$build_dir/idle_tests"
+"$build_dir/idle_tests"

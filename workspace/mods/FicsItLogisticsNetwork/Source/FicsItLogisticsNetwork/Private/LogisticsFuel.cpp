@@ -40,7 +40,7 @@ FFuelSnapshot Inspect(const FFILNRegistration& R,double Now) {
  Result.Item=Carried?Carried:Supplied;
  if(!Result.Item) return Result;
  F.sameFuel=!Carried || !Supplied || Carried==Supplied;
- F.supplied=Supplied!=nullptr; F.pending=R.FuelPending; F.cooldown=Now<R.FuelRetryAt;
+ F.supplied=static_cast<bool>(Supplied); F.pending=R.FuelPending; F.cooldown=Now<R.FuelRetryAt;
  F.quantity=Target->GetNumItems(Result.Item);
  int64 Capacity=0;
  if(Target->GetSizeLinear()>4096) return Result;

@@ -412,6 +412,7 @@ bool ALogisticsSubsystem::Dispatch(FFILNRegistration& R,AFGDockingStationIdentif
 void ALogisticsSubsystem::Observe() {
  check(IsInGameThread());
  AuditLostRegistrations();
+ AuditIdleFleet();
  ServiceFuel();
  // Bounded round-robin across active jobs only. Recovery and idle records are not scanned.
  const int32 Budget=FMath::Min(16,Active.Num());
@@ -582,7 +583,7 @@ void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& 
   if(Command==TEXT("dispatch") && Args.Num()==3) Ok=Dispatch(R,FindStation(Args[1]),FindStation(Args[2]));
   if(Command==TEXT("reset") && Args.Num()==1 && SchemaVersion==1 && Parked(R) && ValidHome(R.Home)) {
    Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.RouteIntent.Empty(); R.Provider=nullptr; R.Requester=nullptr;
-   R.JobId.Invalidate(); R.Diagnostic=TEXT("Operator confirmed home reset"); Active.Remove(*I); Ok=true;
+   R.JobId.Invalidate(); R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate(); R.AbortReturn=false; R.LegacyDelivery=false; R.Held=false; R.NavigationRetry.Reset(); R.TravelProgress.Reset(); R.Diagnostic=TEXT("Operator confirmed home reset"); Active.Remove(*I); Ok=true;
   }
  }
  UE_LOG(LogFILN,Log,TEXT("%s: %s"),*Command,Ok?TEXT("accepted"):TEXT("rejected; inspect filn.status and preconditions"));

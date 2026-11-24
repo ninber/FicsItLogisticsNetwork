@@ -4,6 +4,7 @@
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
 #include "Buildables/FGBuildableDockingStation.h"
+#include "WheeledVehicles/FGVehiclePathNode.h"
 #include "FGInventoryComponent.h"
 #include "Engine/World.h"
 
@@ -140,4 +141,54 @@ bool ALogisticsSubsystem::TryAbortToHome(FFILNRegistration& R,double Now) {
  R.TravelProgress.Reset(); R.Elapsed=0;
  R.Diagnostic=TEXT("Aborted shipment: native return route read back; cargo and leases retained until home");
  return true;
+}
+
+void ALogisticsSubsystem::AuditIdleFleet() {
+ check(IsInGameThread());
+ if(!HasAuthority() || bDispatchBlocked) return;
+ const double Now=GetWorld()->GetTimeSeconds();
+ for(int32 Count=0,Budget=FMath::Min(4,Registrations.Num());Count<Budget;++Count) {
+  IdleCursor%=Registrations.Num(); auto& R=Registrations[IdleCursor++];
+  if(R.State!=static_cast<uint8>(filn::State::Idle)) continue;
+  auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
+  auto* H=IsValid(R.Home)?R.Home->GetStation():nullptr;
+  if(!IsValid(O) || !IsValid(H) || !H->GetDockingPathNode() || !O->GetStorageInventory()) { R.Held=false; continue; }
+  const FGuid Home=R.Home->GetPathNodeGUID();
+  const TArray<FGuid> Route={Home};
+  const FVector Delta=O->GetVehicleLocation()-H->GetDockingPathNode()->GetActorLocation();
+  const bool Near=FMath::Abs(Delta.Z)<=250.f && Delta.SizeSquared()<=FMath::Square(800.f);
+  const bool Owned=Home.IsValid() && R.IdleRoute==Route && V->GetVehicleRoute()==Route && !R.JobId.IsValid();
+  const bool Docked=H->GetDockedActor()==O;
+  const bool HomeValid=ValidHome(R.Home) && (!H->GetDockedActor() || Docked);
+  const bool Fault=V->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None;
+  const filn::idle::Snapshot Facts{Owned,true,V->IsAutopilotEnabled(),O->GetDriver()!=nullptr,HomeValid,
+    Near,FMath::Abs(O->GetForwardSpeed())<=1.f,Docked,R.Held,O->GetStorageInventory()->IsEmpty(),Fault,O->HasFuel()};
+  const auto Action=filn::idle::Evaluate(Facts);
+  if(Action==filn::idle::Action::Hold) {
+   if(!R.Held) R.Diagnostic=TEXT("Idle home-only vehicle returned to its own depot; hold restored");
+   R.Held=true; R.NavigationRetry.Reset(); continue;
+  }
+  R.Held=false;
+  if(Action==filn::idle::Action::Release) { R.NavigationRetry.Reset(); continue; }
+  // Native AP remains in control, without re-enabling it or inventing a trip.
+  // Carrying cargo is never a reason to rewrite an orphan's route.
+  if(Action!=filn::idle::Action::RetryEmptyReturn) continue;
+  auto& Clock=R.NavigationRetry;
+  if(!Clock.Due(Now) || V->IsCurrentlyDocking()) continue;
+  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); auto* Preset=O->GetVehiclePathPreset();
+  const FGuid From=V->GetCurrentToPathNodeGUID();
+  if(!VS || !Preset || !From.IsValid()) { Clock.Attempt(Now); continue; }
+  double Cost=-1;
+  if(!RoadCache.Distance(VS,From,Home,Preset,Cost)) continue;
+  Clock.Attempt(Now);
+  if(Cost<0) { R.Diagnostic=TEXT("Idle home return: road unreachable; retry scheduled"); continue; }
+  if(O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=Route ||
+     V->IsCurrentlyDocking() || !O->GetStorageInventory()->IsEmpty()) continue;
+  V->SetVehicleRoute(Route);
+  if(V->GetVehicleRoute()!=Route || !V->IsAutopilotEnabled() || O->GetDriver()) {
+   R.Diagnostic=TEXT("Idle home return: route readback failed; operator inspection required"); continue;
+  }
+  V->SetCurrentTargetWaypoint(0);
+  R.Diagnostic=V->GetCurrentTargetWaypointIndex()==0?TEXT("Idle home-only route reapplied; actual arrival pending"):TEXT("Idle home return: target readback failed");
+ }
 }
