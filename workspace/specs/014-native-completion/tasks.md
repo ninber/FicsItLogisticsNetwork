@@ -138,3 +138,6 @@
 - [x] T106 Make normal station interaction expose a compact FILN registration entry; add administrator parked unregistration, job/road diagnostics and avoid graph ranking for irrelevant cargo. Preserve ordinary switch labels.
 - [x] T107 Remove retired canonical importer sources from generated StarterProject copies on installation; update the current native README instead of retaining contradictory prototype instructions.
 - [ ] T108 Verify actual UI attachment/layout, unregistration, provider ranking performance and the refreshed build copy with current Unreal SDK.
+
+- [x] T109 Port the proved Lua home-only TooFewStations eligibility and five-second activation grace, distinguish initial retained-cargo home docking from premature return, reconcile same-identifier actor/inventory replacement against measured cargo, bridge missed departure observations only with matching reserved transfer events, and hold final physical home arrival pending watchdog reconciliation.
+- [ ] T110 Verify native AP state transition, proxy/significance actor changes, short docking intervals and final home hold under actual gameplay. No portable test establishes engine hook semantics.

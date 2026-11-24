@@ -15,9 +15,18 @@ bool ALogisticsSubsystem::HoldVehicle(AFGWheeledVehicleIdentifier* V) {
  const auto* Index=ByVehicle.Find(V); if(!Index || !Registrations.IsValidIndex(*Index)) return false;
  auto& R=Registrations[*Index]; auto* Owner=IsValid(V)?V->GetOwnerVehicle():nullptr;
  auto* Home=IsValid(R.Home)?R.Home->GetStation():nullptr;
- if(!R.Held || R.State!=static_cast<uint8>(filn::State::Idle) || R.JobId.IsValid()) return false;
- if(!IsValid(Owner) || Owner->GetDriver() || !V->IsAutopilotEnabled() || !IsValid(Home) || !Home->GetDockingPathNode() ||
-    V->GetVehicleRoute()!=R.IdleRoute || R.IdleRoute.Num()!=1 || R.IdleRoute[0]!=R.Home->GetPathNodeGUID()) { R.Held=false; return false; }
+ const auto Phase=static_cast<filn::State>(R.State);
+ const bool Arrival=R.JobId.IsValid() && R.Automatic && IsValid(Home) &&
+  filn::recovery::CanFinalizeHome(Phase==filn::State::Returning,Phase==filn::State::Unloading,R.DeliveredCargo>0,R.AbortReturn,Home->GetDockedActor()==Owner);
+ const bool Idle=R.Held && Phase==filn::State::Idle && !R.JobId.IsValid();
+ if(!Idle && !Arrival) return false;
+ if(!IsValid(Owner) || Owner->GetDriver() || !V->IsAutopilotEnabled() || !IsValid(Home) || !Home->GetDockingPathNode()) { R.Held=false; return false; }
+ if(Arrival) {
+  // Hold a verified physical home arrival until the bounded watchdog reads
+  // the final cargo ledger and restores the home-only route. Do not let
+  // the native cyclic route depart for another pickup between observations.
+  if(R.RouteIntent.IsEmpty() || V->GetVehicleRoute()!=R.RouteIntent) return false;
+ } else if(V->GetVehicleRoute()!=R.IdleRoute || R.IdleRoute.Num()!=1 || R.IdleRoute[0]!=R.Home->GetPathNodeGUID()) { R.Held=false; return false; }
  // O(1) for a held truck, with no road or world queries in the tick hook.
  // A vehicle moved away from its bay must not remain frozen by a saved Held bit.
  const FVector Delta=Owner->GetVehicleLocation()-Home->GetDockingPathNode()->GetActorLocation();
@@ -32,8 +41,8 @@ void ALogisticsSubsystem::InstallParkingHook() {
   auto* V=Cast<AFGWheeledVehicle>(Component->GetOwner()); if(!V || !V->HasAuthority()) return;
   auto* World=V->GetWorld(); auto* Manager=World?World->GetSubsystem<USubsystemActorManager>():nullptr;
   auto* Logistics=Manager?Manager->GetSubsystemActor<ALogisticsSubsystem>():nullptr;
-  // Only explicitly enrolled idle vehicles held at their home are excluded. Their
-  // valid native route and AP setting are preserved, and released by job reservation.
+  // Only registered parked vehicles or measured final home arrivals are held.
+  // Preserve the native route/AP until the authoritative watchdog reconciles it.
   // No per-frame world scan, path query, synthetic path or control-input injection.
   if(Logistics && Logistics->HoldVehicle(V->GetVehicleIdentifier())) Scope.Override(false);
  });

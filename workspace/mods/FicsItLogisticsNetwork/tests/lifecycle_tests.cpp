@@ -16,5 +16,11 @@ int main(){ int n=0; Progress p;
  for(unsigned mask=0;mask<64;++mask) {
   CHECK(CanAbortToHome(mask&1,mask&2,mask&4,mask&8,mask&16,mask&32)==(mask==51));
  }
+ CHECK(IdleRouteFaultAllowed(true,false)); CHECK(IdleRouteFaultAllowed(false,true)); CHECK(!IdleRouteFaultAllowed(false,false));
+ CHECK(ActivationGrace(true,100,105)); CHECK(!ActivationGrace(true,105,105)); CHECK(!ActivationGrace(false,100,105)); CHECK(!ActivationGrace(true,0,0));
+ CHECK(CanBridgePickupDeparture(true,false,100,100));
+ CHECK(!CanBridgePickupDeparture(true,true,100,100)); CHECK(!CanBridgePickupDeparture(true,false,0,100)); CHECK(!CanBridgePickupDeparture(false,false,100,100));
+ CHECK(CanFinalizeHome(true,false,true,false,true)); CHECK(CanFinalizeHome(true,false,false,true,true)); CHECK(CanFinalizeHome(false,true,true,false,true));
+ CHECK(!CanFinalizeHome(false,true,false,false,true)); CHECK(!CanFinalizeHome(true,false,true,false,false)); CHECK(!CanFinalizeHome(false,false,true,false,true));
  std::cout<<n<<" lifecycle checks passed\n";
 }

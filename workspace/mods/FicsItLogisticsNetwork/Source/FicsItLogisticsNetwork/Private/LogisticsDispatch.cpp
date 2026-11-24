@@ -62,8 +62,10 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  if(!ExactFilter(QB->GetInventory(),C.Resource)) { R.Diagnostic=TEXT("Requester native filter no longer matches FILN resource"); return false; }
  // Automatic scheduling never opts a truck back in after a player disables autopilot.
  // Existing vanilla valid route and a native home docking observation are prerequisites.
- if(!R.Vehicle->IsAutopilotEnabled() || Owner->GetDriver() || !R.Vehicle->CanEnableAutopilot() ||
-    R.Vehicle->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None || !HB->GetDockingPathNode()) return false;
+ const auto Error=R.Vehicle->GetAutopilotErrorStatus();
+ if(!R.Vehicle->IsAutopilotEnabled() || Owner->GetDriver() ||
+    !filn::recovery::IdleRouteFaultAllowed(Error==EVehicleAutopilotErrorStatus::None,Error==EVehicleAutopilotErrorStatus::TooFewStations) ||
+    !HB->GetDockingPathNode()) return false;
  const FVector Delta=Owner->GetVehicleLocation()-HB->GetDockingPathNode()->GetActorLocation();
  const TArray<FGuid> HomeRoute={R.Home->GetPathNodeGUID()};
  if(!HomeRoute[0].IsValid() || R.IdleRoute!=HomeRoute || R.Vehicle->GetVehicleRoute()!=HomeRoute ||
@@ -224,7 +226,7 @@ bool ALogisticsSubsystem::CommitOffer(int32 V,int32 Q,int32 P) {
   Reservations.AcquireDelivery(Id(Job),Id(R.TruckId),Id(StationId(Requester)));
  if(!Acquired) return false;
  R.Held=false; R.IdleRoute.Empty();
- R.JobId=Job; R.Provider=Provider; R.Requester=Requester; R.AbortReturn=false;
+ R.JobId=Job; R.Provider=Provider; R.Requester=Requester; R.AbortReturn=false; R.DepartedHome=false;
  R.ProviderLease=Provider?StationId(Provider):FGuid(); R.RequesterLease=StationId(Requester); R.RetainedCargo=Provider==nullptr; R.Automatic=true;
  R.Resource=StationConfigs[Q].Resource; R.ExpectedCargo=Choice->amount; R.LastCargo=Offer.vehicle.cargoQuantity; R.LoadedCargo=0; R.DeliveredCargo=0;
  R.State=static_cast<uint8>(filn::State::Reserved); if(Provider) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; } R.Elapsed=0; R.LastObserved=GetWorld()->GetTimeSeconds(); R.NavigationRetry.Reset(); R.TravelProgress.Reset();
@@ -244,6 +246,7 @@ bool ALogisticsSubsystem::CommitOffer(int32 V,int32 Q,int32 P) {
   Recover(R,TEXT("Native route/target/autopilot readback failed; reservations retained")); return false;
  }
  R.State=static_cast<uint8>(Provider?filn::State::ToProvider:filn::State::ToRequester);
+ R.RouteActivationDeadline=GetWorld()->GetTimeSeconds()+5.;
  Active.AddUnique(V); R.Diagnostic=TEXT("Native automatic route committed; awaiting measured transfer");
  UE_LOG(LogFILN,Log,TEXT("AUTO job=%s retained=%d resource=%s amount=%d road=%f"),*Job.ToString(),R.RetainedCargo,*R.Resource->GetPathName(),R.ExpectedCargo,Choice->roadDistance);
  return true;

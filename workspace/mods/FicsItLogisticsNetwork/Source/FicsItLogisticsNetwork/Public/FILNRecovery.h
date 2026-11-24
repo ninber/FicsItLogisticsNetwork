@@ -28,6 +28,22 @@ struct Progress {
  }
  void Reset(){ *this=Progress{}; }
 };
+// A deliberately parked, AP-on one-station route can have TooFewStations.
+// This is not permission to accept unrelated navigation errors.
+inline bool IdleRouteFaultAllowed(bool noFault,bool tooFewStations) {
+ return noFault || tooFewStations;
+}
+inline bool ActivationGrace(bool tooFewStations,double now,double deadline) {
+ return tooFewStations && std::isfinite(now) && std::isfinite(deadline) && deadline>0 && now<deadline;
+}
+// Transfer events from the exact reserved requester can bridge a missed
+// polling transition only after a measured pickup and actual source departure.
+inline bool CanBridgePickupDeparture(bool loading,bool sourceDocked,int loaded,int cargo) {
+ return loading && !sourceDocked && loaded>0 && cargo>0;
+}
+inline bool CanFinalizeHome(bool returning,bool unloading,bool delivered,bool aborted,bool homeDocked) {
+ return homeDocked && ((returning && (delivered || aborted)) || (unloading && delivered));
+}
 inline bool SafeHomeCompletion(bool authority,bool ownedRoute,bool autopilot,bool driver,bool docked,bool stopped,bool cargoVerified) {
  return authority&&ownedRoute&&autopilot&&!driver&&docked&&stopped&&cargoVerified;
 }

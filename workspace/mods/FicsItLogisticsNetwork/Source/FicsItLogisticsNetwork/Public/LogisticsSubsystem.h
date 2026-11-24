@@ -53,6 +53,7 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) bool CargoOriginStorage = false;
  UPROPERTY(SaveGame) bool Automatic = false;
  UPROPERTY(SaveGame) bool AbortReturn = false;
+ UPROPERTY(SaveGame) bool DepartedHome = false;
  // Stable reservation identities survive endpoint destruction and save/load.
  UPROPERTY(SaveGame) FGuid ProviderLease;
  UPROPERTY(SaveGame) FGuid RequesterLease;
@@ -64,6 +65,7 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) int32 DeliveredCargo = 0;
  UPROPERTY(SaveGame) int32 LastCargo = 0;
  double LastObserved = 0;
+ double RouteActivationDeadline = 0;
  // Runtime-only clock: saved journey identity and phase remain authoritative on reload.
  filn::recovery::RetryClock NavigationRetry;
  filn::recovery::Progress TravelProgress;

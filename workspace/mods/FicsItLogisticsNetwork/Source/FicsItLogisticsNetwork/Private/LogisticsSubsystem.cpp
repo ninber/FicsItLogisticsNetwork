@@ -505,7 +505,7 @@ void ALogisticsSubsystem::Observe() {
   if(!IsValid(R.Vehicle) || !IsValid(R.Vehicle->GetOwnerVehicle()) || !IsValid(HB) || !ValidHome(R.Home)) {
    Recover(R,TEXT("Vehicle or home destroyed/unavailable")); ++Cursor; continue;
   }
-  if(!HasTransferObserver(R)) {
+  if(!HasTransferObserver(R) && !WatchTransfers(R)) {
    R.CargoOriginKnown=false; R.CargoOriginStorage=false;
    Recover(R,TEXT("Cargo observer no longer matches the native vehicle inventory")); ++Cursor; continue;
   }
@@ -520,6 +520,7 @@ void ALogisticsSubsystem::Observe() {
   if(Owner->GetDriver() || !R.Vehicle->IsAutopilotEnabled()) { Recover(R,TEXT("Player control or autopilot disabled; leave vehicle state untouched")); ++Cursor; continue; }
   const bool AtP=IsValid(PB) && PB->GetDockedActor()==Owner, AtQ=IsValid(QB) && QB->GetDockedActor()==Owner, AtH=HB->GetDockedActor()==Owner;
   const S Before=StateOf(R); S Next=Before;
+  if(AtP || AtQ || (!AtH && HB->GetDockingPathNode() && FVector::DistSquared(Owner->GetVehicleLocation(),HB->GetDockingPathNode()->GetActorLocation())>FMath::Square(800.f))) R.DepartedHome=true;
   if(R.Automatic) {
    auto* Cargo=Owner->GetStorageInventory();
    if(!Cargo || !R.Resource) { Recover(R,TEXT("Cargo inventory/resource missing")); ++Cursor; continue; }
@@ -544,7 +545,10 @@ void ALogisticsSubsystem::Observe() {
   const bool Docking=!Travelling || AtP || AtQ || AtH || R.Vehicle->IsCurrentlyDocking();
   if(Moved || Docking) { R.ProgressLocation=Location; R.ProgressWaypoint=Waypoint; }
   const bool Stalled=R.TravelProgress.Sample(Now,Moved,Docking);
-  if((Stalled || R.Vehicle->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None) && !Docking) {
+  const auto Error=R.Vehicle->GetAutopilotErrorStatus();
+  const bool Grace=filn::recovery::ActivationGrace(Error==EVehicleAutopilotErrorStatus::TooFewStations,Now,R.RouteActivationDeadline);
+  if(Error==EVehicleAutopilotErrorStatus::None) R.RouteActivationDeadline=0;
+  if((Stalled || (Error!=EVehicleAutopilotErrorStatus::None && !Grace)) && !Docking) {
    if(!R.Automatic || !RetryNavigation(R,Now,Stalled)) Recover(R,FString::Printf(TEXT("Native autopilot error=%d; automatic retry is unsafe"),static_cast<int32>(R.Vehicle->GetAutopilotErrorStatus())));
    ++Cursor; continue;
   }
@@ -556,17 +560,17 @@ void ALogisticsSubsystem::Observe() {
   if(Before==S::ToProvider && AtP) Next=filn::Advance(Before,filn::Event::ProviderDock);
   else if(Before==S::Loading && !AtP) Next=filn::Advance(Before,filn::Event::ProviderLeave);
   else if(Before==S::ToRequester && AtQ) Next=filn::Advance(Before,filn::Event::RequesterDock);
-  else if(Before==S::Unloading && !AtQ) Next=filn::Advance(Before,filn::Event::RequesterLeave);
-  else if(Before==S::Returning && AtH) {
+  else if(Before==S::Unloading && !AtQ && !AtH) Next=filn::Advance(Before,filn::Event::RequesterLeave);
+  else if((Before==S::Returning || (Before==S::Unloading && !AtQ && R.DeliveredCargo>0)) && AtH) {
    if(!R.Automatic) R.Vehicle->SetAutopilotEnabled(false);
    auto* Cargo=Owner->GetStorageInventory();
    if(!Cargo || (!R.Automatic && !Cargo->IsEmpty()) || (R.Automatic && R.DeliveredCargo<=0 && !R.AbortReturn)) { Recover(R,TEXT("Returned with cargo: incomplete unload requires operator recovery")); ++Cursor; continue; }
    if(R.Automatic && FMath::Abs(Owner->GetForwardSpeed())<=1.f) {
     if(!RestoreHomeRoute(R)) { Recover(R,TEXT("Home route restoration failed; reservations retained")); ++Cursor; continue; }
-    Next=filn::Advance(Before,filn::Event::HomeStopped);
+    Next=filn::Advance(S::Returning,filn::Event::HomeStopped);
    } else if(!R.Automatic && Parked(R)) Next=filn::Advance(Before,filn::Event::HomeStopped);
   }
-  else if((Before==S::ToProvider && AtQ) || (Before==S::ToRequester && AtH) || (Before==S::Returning && AtP)) Next=S::Recovery;
+  else if((Before==S::ToProvider && AtQ) || (Before==S::ToRequester && AtH && R.DepartedHome) || (Before==S::Returning && AtP)) Next=S::Recovery;
   if(Next==S::Recovery) Recover(R,TEXT("Out-of-order docking observed; journey cannot be proven"));
   else if(Next!=Before) {
    SetState(R,Next);
@@ -575,7 +579,7 @@ void ALogisticsSubsystem::Observe() {
     if(!Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { Recover(R,TEXT("Completion lease ownership mismatch")); bDispatchBlocked=true; ++Cursor; continue; }
     Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
     if(R.AbortReturn) R.Diagnostic=FString::Printf(TEXT("Aborted shipment returned home; delivered=%d retained=%d; no delivery success inferred"),R.DeliveredCargo,R.LastCargo);
-    R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.AbortReturn=false;
+    R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.AbortReturn=false; R.DepartedHome=false; R.RouteActivationDeadline=0;
     R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate();
     R.NavigationRetry.Reset(); R.TravelProgress.Reset();
     Active.RemoveAtSwap(Cursor); continue;
