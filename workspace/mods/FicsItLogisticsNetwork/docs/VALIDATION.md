@@ -1,3 +1,20 @@
+# Continuation verification (2026-11-24)
+
+[Current implementation and blockers](../../../specs/014-native-completion/continuation.md).
+Authoritative snapshots, shared automatic dispatcher, native directed-road cache, transfer
+observers, native parking hook, saved recovery, settings migration and server-validated station
+controls are now implemented in source. Actual game and release acceptance remain unresolved.
+Historical reports below are retained; use Spec Kit continuation evidence for current status.
+
+# Current verification — native completion (2026-11-24)
+
+See [current Spec Kit evidence](../../../specs/014-native-completion/validation.md)
+and [traceability](../../../specs/014-native-completion/traceability.md). Linux
+StarterProject and station-adapter UHT/C++/link have passed on installed SML 3.12.1.
+Win64 Turnkey SDK detection now passes. Portable tests: 3245 core + 67 policy checks
+on GCC/Clang. No completed Win64 package or runtime acceptance is claimed.
+Historical entries below describe prior environments and are superseded by this report.
+
 # Validation report — 2026-10-23
 
 ## Release preparation — 2026-11-24
@@ -63,3 +80,15 @@ Author custom ALTNParkingBay assets, compile/resolve UHT and linkage issues in t
 engine, then execute docs/IN_GAME_TEST.md. Add an audited dock/undock event bridge before
 fleet-scale use. Implement destroyed-actor cleanup/administrative recovery before production.
 M2 automatic scheduler, M3 lazy cache, M4 telemetry and M5 FIN adapter remain deferred.
+
+## Native continuation: parked recovery and transfer ledger (2026-11-24)
+- Branch commit d04ec71: the exact FILNCore.h, FILNRehomePolicy.h and rehome_tests.cpp blobs were compiled in an independent Linux container using GCC 14.2 and Clang 17, C++20 -O2 -Wall -Wextra -Wpedantic -Werror. Each run printed 2,056 checks passed. Git blob hashes matched the committed sources.
+- Branch commit 769058d: exact FILNTransferLedger.h and transfer_ledger_tests.cpp blobs compiled with the same options/compilers; each printed 20 checks passed. Git blob hashes matched.
+- These are portable policy results only. The Unreal adapters, migration source, native API semantics and all 22 runtime/release acceptance gates remain unverified after these changes. Earlier build evidence predates the continuation; do not treat it as current-head compilation.
+- No game, installed mod or live save was changed. Explicit rehome requires a docked, stationary, AP-off registered truck and valid designated depot. Conflicting or unresolved ownership remains blocked, not automatically repaired.
+
+## Native dispatch continuation
+At b695eccd84126e910cc24e8bdf0a9e4f07ecdfeb, exact FILNDispatchPolicy.h (blob 7a494e1f9687da5bc0672b4a5540d37c17267347) and provider_discovery_tests.cpp (blob bf6cd121f52ae1b5d05a645f71cbe77bcc8b279e) compiled with GCC 14.2 and Clang 17, C++20 -O2 -Wall -Wextra -Wpedantic -Werror. Both runs printed 26 checks passed. The full portable suite and current Unreal adapters are not verified by these runs.
+
+## Native registry and lifecycle continuation
+At c16b81332eeced1baf7887dc1a610f093ce8e581, the exact FILNRegistryPolicy.h (6eaa62859075946911570c806b950c9e00016e4b), registry_tests.cpp (dc2c0bc478948ed9b6d5632b03aa4931265e64e5) and FILNCore.h (e67ac1b96e0645a384e8308c4daccb09b070b445) were compiled locally with GCC 14.2 and Clang 17 using C++20 -O2 -Wall -Wextra -Wpedantic -Werror. Both runs passed 528 policy checks. The same unchanged, hash-matched rehome and transfer ledger tests were rerun at 557cf30: 2056 and 20 checks passed per compiler. Including provider discovery (26), four portable suites passed 2630 assertions per compiler. Full portable test script, UHT/UBT, actual actor destruction/streaming, native save/load and package remain unverified on the current branch. No legacy migration work or game/save modification in this continuation.

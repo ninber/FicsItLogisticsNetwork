@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#include "FILNIdlePolicy.h"
+#include <cstdlib>
+#include <iostream>
+using namespace filn::idle;
+#define CHECK(x) do { ++n; if(!(x)) { std::cerr<<__LINE__<<": "<<#x<<'\n'; return EXIT_FAILURE; } } while(false)
+int main(){
+ int n=0; Snapshot s{true,true,true,false,true,true,true,true,false,true,false,true};
+ CHECK(Evaluate(s)==Action::Hold);
+ s.docked=false; CHECK(Evaluate(s)==Action::NativeReturn);
+ s.held=true; CHECK(Evaluate(s)==Action::Hold);
+ s.near=false; CHECK(Evaluate(s)==Action::NativeReturn);
+ s.fault=true; CHECK(Evaluate(s)==Action::RetryEmptyReturn);
+ s.empty=false; CHECK(Evaluate(s)==Action::NativeReturn);
+ s.empty=true; s.fuel=false; CHECK(Evaluate(s)==Action::NativeReturn);
+ s.fuel=true;
+ for(auto field:{&Snapshot::owned,&Snapshot::idle,&Snapshot::autopilot,&Snapshot::homeValid}) {
+  auto bad=s; bad.*field=false; CHECK(Evaluate(bad)==Action::Release);
+ }
+ s.driver=true; CHECK(Evaluate(s)==Action::Release);
+ std::cout<<n<<" idle recovery checks passed\n";
+}

@@ -28,6 +28,14 @@ int main() {
  CHECK(r.Size()==3);
  r.Release("j1");
  CHECK(r.Acquire("j7", "t1", "p", "q"));
+ filn::Reservations retained;
+ CHECK(retained.AcquireDelivery("cargo","truck","requester"));
+ CHECK(retained.StationBusy("requester"));
+ CHECK(!retained.Acquire("pickup","other","provider","requester"));
+ CHECK(!retained.AcquireDelivery("other","truck","other-requester"));
+ retained.Release("cargo");
+ CHECK(!retained.StationBusy("requester"));
+ CHECK(retained.Acquire("pickup","other","provider","requester"));
  using S=filn::State; using E=filn::Event;
  CHECK(filn::Advance(S::ToProvider,E::RequesterDock)==S::Recovery);
  CHECK(filn::Advance(S::ToProvider,E::ProviderDock)==S::Loading);
