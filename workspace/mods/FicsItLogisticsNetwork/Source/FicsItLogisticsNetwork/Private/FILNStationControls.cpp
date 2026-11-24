@@ -12,9 +12,15 @@
 #include "Registry/RemoteCallObjectRegistry.h"
 #include "Subsystem/SubsystemActorManager.h"
 #include "UI/FGInteractWidget.h"
+#include "UI/FGGameUI.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/ActorComponent.h"
 #include "Components/HorizontalBox.h"
 #include "Components/Button.h"
 #include "Components/ComboBoxString.h"
@@ -278,9 +284,24 @@ void UFILNStationWindow::NativeConstruct() {
  Super::NativeConstruct();
  auto* Target=Cast<AFGBuildableDockingStation>(mInteractObject); if(Target && Controls) Controls->SetContext(Target,this);
 }
+void UFILNStationControls::ClearContext() {
+ RestoreLabels();
+ if(auto* R=Remote(); R && R->Receiver.Get()==this) R->Receiver.Reset();
+ Station=nullptr; Resources.Empty(); VehicleChoices.Empty();
+ if(Selector) Selector->ClearOptions();
+ if(Vehicles) Vehicles->ClearOptions();
+ if(Panel) Panel->SetVisibility(ESlateVisibility::Collapsed);
+ if(OpenButton) OpenButton->SetVisibility(ESlateVisibility::Collapsed);
+ SetVisibility(ESlateVisibility::Collapsed);
+}
+void UFILNStationControls::NativeDestruct() {
+ ClearContext();
+ Super::NativeDestruct();
+}
 void UFILNStationControls::SetContext(AFGBuildableDockingStation* Target,UUserWidget* Vanilla) {
  // Pooled interaction widgets may later serve an ordinary station: restore exact original text first.
- RestoreLabels(); OverviewPage=0; OverviewPages=1; Overview->SetText(FText::GetEmpty()); Station=Target; Resources.Empty(); Selector->ClearOptions();
+ ClearContext(); if(!IsValid(Target) || !Panel || !OpenButton || !Overview || !Selector || !Vehicles) return;
+ SetVisibility(ESlateVisibility::Visible); OverviewPage=0; OverviewPages=1; Overview->SetText(FText::GetEmpty()); Station=Target;
  if(Vanilla && Vanilla->WidgetTree) Vanilla->WidgetTree->ForEachWidget([this](UWidget* Widget) {
   auto* Text=Cast<UTextBlock>(Widget); if(!Text) return;
   const FString* Source=FTextInspector::GetSourceString(Text->GetText());
@@ -290,6 +311,17 @@ void UFILNStationControls::SetContext(AFGBuildableDockingStation* Target,UUserWi
    Text->TextDelegate.BindDynamic(Binding,&UFILNLabelBinding::Read); Text->SynchronizeProperties(); LabelBindings.Add(Binding);
   }
  });
+ // Ordinary stations keep their original switch and layout, with only a
+ // collapsed FILN entry point. Do not issue an RPC until the player opens it.
+ const bool Show=Target && (Target->FindComponentByClass<UFILNStationMarker>() || Cast<UFILNStationWindow>(Vanilla));
+ Panel->SetVisibility(Show?ESlateVisibility::Visible:ESlateVisibility::Collapsed);
+ OpenButton->SetVisibility(Show?ESlateVisibility::Collapsed:ESlateVisibility::Visible);
+ if(Show) OpenPanel();
+}
+void UFILNStationControls::PopulateChoices() {
+ auto* Target=Station.Get();
+ if(!IsValid(Target)) return;
+ Resources.Empty(); Selector->ClearOptions();
  if(auto* Recipes=AFGRecipeManager::Get(GetWorld())) for(const auto& Resource:Recipes->GetAllAvailableItemDescriptors()) {
   if(!Compatible(Resource,Target)) continue;
   FString Name=UFGItemDescriptor::GetItemName(Resource).ToString();
@@ -303,15 +335,10 @@ void UFILNStationControls::SetContext(AFGBuildableDockingStation* Target,UUserWi
    VehicleChoices.Add(Vehicle); Vehicles->AddOption(FString::Printf(TEXT("%s (%d)"),*Vehicle->GetVehicleName().ToString(),VehicleChoices.Num()));
   }
  }
- // Ordinary stations keep their original switch and layout, with only a
- // collapsed FILN entry point. Do not issue an RPC until the player opens it.
- const bool Show=Target && (Target->FindComponentByClass<UFILNStationMarker>() || Cast<UFILNStationWindow>(Vanilla));
- Panel->SetVisibility(Show?ESlateVisibility::Visible:ESlateVisibility::Collapsed);
- OpenButton->SetVisibility(Show?ESlateVisibility::Collapsed:ESlateVisibility::Visible);
- if(Show) OpenPanel();
 }
 void UFILNStationControls::OpenPanel() {
  if(!IsValid(Station)) return;
+ PopulateChoices();
  Panel->SetVisibility(ESlateVisibility::Visible); OpenButton->SetVisibility(ESlateVisibility::Collapsed);
  Feedback->SetText(NSLOCTEXT("FILN","Loading","Reading station state from server"));
  if(auto* R=Remote()) { R->Receiver=this; R->QueryStation(Station); }
@@ -351,21 +378,97 @@ void UFILNStationControls::RegisterDepot() { if(auto* R=Remote()) { R->Receiver=
 void UFILNStationControls::RemoveDepot() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,9); } }
 void UFILNStationControls::ToggleDispatcher() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,0); } }
 void UFILNStationControls::PrepareUninstall() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,3); } }
+namespace {
+// Resolve only actual interaction references; no station enumeration, names
+// as identity, proximity guessing or external browser invocation.
+AFGBuildableDockingStation* ResolveStation(UObject* Object) {
+ if(!IsValid(Object)) return nullptr;
+ if(auto* Station=Cast<AFGBuildableDockingStation>(Object)) return Station;
+ if(auto* ID=Cast<AFGDockingStationIdentifier>(Object)) return ID->GetStation();
+ if(auto* Component=Cast<UActorComponent>(Object)) return Cast<AFGBuildableDockingStation>(Component->GetOwner());
+ if(auto* Hit=Cast<UFGHitResultWrapper>(Object)) return Cast<AFGBuildableDockingStation>(Hit->mHitResult.GetActor());
+ return nullptr;
+}
+UFILNStationControls* FindControls(UFGInteractWidget* Widget) {
+ UFILNStationControls* Found=nullptr;
+ if(IsValid(Widget) && Widget->WidgetTree) Widget->WidgetTree->ForEachWidget([&](UWidget* Child) {
+  if(auto* Controls=Cast<UFILNStationControls>(Child)) Found=Controls;
+ });
+ return Found;
+}
+bool IsModeLabel(UWidget* Widget) {
+ auto* Label=Cast<UTextBlock>(Widget); if(!Label) return false;
+ const FText Value=Label->GetText();
+ const FString* Source=FTextInspector::GetSourceString(Value);
+ const FString Text=Source?*Source:Value.ToString();
+ return Text.Equals(TEXT("LOAD"),ESearchCase::IgnoreCase) || Text.Equals(TEXT("UNLOAD"),ESearchCase::IgnoreCase);
+}
+// Add to a live panel, not a replacement WidgetTree root. UMG's AddChild
+// updates an existing panel's Slate representation as well as the UObject
+// tree. Prefer a vertical container containing the vanilla mode switch.
+UPanelWidget* FindAttachmentPanel(UFGInteractWidget* Widget) {
+ UVerticalBox* ModePanel=nullptr;
+ Widget->WidgetTree->ForEachWidget([&](UWidget* Child) {
+  if(ModePanel || !IsModeLabel(Child)) return;
+  for(UPanelWidget* Parent=Child->GetParent();Parent;Parent=Parent->GetParent()) {
+   if(auto* Box=Cast<UVerticalBox>(Parent)) { ModePanel=Box; break; }
+  }
+ });
+ if(ModePanel) return ModePanel;
+ auto* Root=Widget->WidgetTree->RootWidget.Get();
+ if(auto* Box=Cast<UVerticalBox>(Root)) return Box;
+ if(auto* Overlay=Cast<UOverlay>(Root)) return Overlay;
+ if(auto* Canvas=Cast<UCanvasPanel>(Root)) return Canvas;
+ return nullptr;
+}
+void AttachControls(UFGInteractWidget* Widget,UObject* Object,const TCHAR* Stage) {
+ if(!IsInGameThread() || !IsValid(Widget) || Widget->IsA<UFILNStationWindow>() || !Widget->WidgetTree) return;
+ auto* PC=Widget->GetOwningPlayer();
+ if(!IsValid(PC) || !PC->IsLocalController()) return;
+ auto* Target=ResolveStation(Object);
+ auto* Controls=FindControls(Widget);
+ if(!IsValid(Target) || Target->GetWorld()!=Widget->GetWorld()) {
+  if(Controls) Controls->ClearContext();
+  // Only log unresolved station-like widgets, once per interaction callback.
+  if(Widget->GetClass()->GetName().Contains(TEXT("Truck")) || Widget->GetClass()->GetName().Contains(TEXT("Docking")))
+   UE_LOG(LogFILN,Log,TEXT("UI %s unresolved: widget=%s object=%s"),Stage,*Widget->GetClass()->GetPathName(),*GetNameSafe(Object?Object->GetClass():nullptr));
+  return;
+ }
+ if(Controls && Controls->HasContext(Target)) return;
+ if(!Controls) {
+  auto* Parent=FindAttachmentPanel(Widget);
+  if(!Parent) {
+   UE_LOG(LogFILN,Warning,TEXT("UI %s: no supported live panel; widget=%s root=%s object=%s"),Stage,*Widget->GetClass()->GetPathName(),*GetNameSafe(Widget->WidgetTree->RootWidget.Get()),*GetNameSafe(Object->GetClass()));
+   return;
+  }
+  Controls=CreateWidget<UFILNStationControls>(PC); if(!Controls) return;
+  UPanelSlot* Slot=nullptr;
+  if(auto* Box=Cast<UVerticalBox>(Parent)) Slot=Box->AddChildToVerticalBox(Controls);
+  else if(auto* Overlay=Cast<UOverlay>(Parent)) {
+   auto* OverlaySlot=Overlay->AddChildToOverlay(Controls); Slot=OverlaySlot;
+   if(OverlaySlot) { OverlaySlot->SetHorizontalAlignment(HAlign_Right); OverlaySlot->SetVerticalAlignment(VAlign_Bottom); }
+  } else if(auto* Canvas=Cast<UCanvasPanel>(Parent)) {
+   auto* CanvasSlot=Canvas->AddChildToCanvas(Controls); Slot=CanvasSlot;
+   if(CanvasSlot) { CanvasSlot->SetAnchors(FAnchors(1.f,1.f)); CanvasSlot->SetAlignment(FVector2D(1.f,1.f)); CanvasSlot->SetPosition(FVector2D(-16.f,-16.f)); CanvasSlot->SetAutoSize(true); CanvasSlot->SetZOrder(1); }
+  }
+  if(!Slot) { UE_LOG(LogFILN,Warning,TEXT("UI %s: live panel attachment rejected"),Stage); return; }
+  UE_LOG(LogFILN,Log,TEXT("UI %s attached: widget=%s panel=%s object=%s station=%s"),Stage,*Widget->GetClass()->GetPathName(),*Parent->GetClass()->GetName(),*Object->GetClass()->GetPathName(),*Target->GetPathName());
+ }
+ Controls->SetContext(Target,Widget);
+}
+}
 void UFILNStationControls::InstallHook() {
  if(WITH_EDITOR) return;
- SUBSCRIBE_METHOD_AFTER(AFGHUD::RequestInteractWidget,[](UFGInteractWidget* Widget,AFGHUD* HUD,TSubclassOf<UFGInteractWidget>,UObject* Object) {
-  if(Widget && Widget->IsA<UFILNStationWindow>()) return;
-  auto* Target=Cast<AFGBuildableDockingStation>(Object);
-  if(!Widget || !Widget->WidgetTree || !Target || !HUD->GetOwningPlayerController()) return;
-  UFILNStationControls* Controls=nullptr;
-  Widget->WidgetTree->ForEachWidget([&](UWidget* Child){if(auto* Existing=Cast<UFILNStationControls>(Child)) Controls=Existing;});
-  if(!Controls) {
-   Controls=CreateWidget<UFILNStationControls>(HUD->GetOwningPlayerController()); if(!Controls) return;
-   auto* Root=Widget->WidgetTree->RootWidget.Get();
-   auto* Wrapper=Widget->WidgetTree->ConstructWidget<UVerticalBox>(); Widget->WidgetTree->RootWidget=Wrapper;
-   if(Root) Wrapper->AddChildToVerticalBox(Root)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-   Wrapper->AddChildToVerticalBox(Controls);
-  }
-  Controls->SetContext(Target,Widget);
+ UE_LOG(LogFILN,Log,TEXT("Installing FILN native interaction lifecycle hooks"));
+ SUBSCRIBE_METHOD_AFTER(AFGHUD::RequestInteractWidget,[](UFGInteractWidget* Widget,AFGHUD*,TSubclassOf<UFGInteractWidget>,UObject* Object) {
+  AttachControls(Widget,Object,TEXT("RequestInteractWidget"));
+ });
+ // Native_Init is a second opportunity after the interaction object is bound;
+ // a cached Slate tree is handled by live panel insertion, not root replacement.
+ SUBSCRIBE_METHOD_AFTER(UFGInteractWidget::Native_Init,[](UFGInteractWidget* Widget) {
+  if(IsValid(Widget)) AttachControls(Widget,Widget->mInteractObject.Get(),TEXT("Native_Init"));
+ });
+ SUBSCRIBE_METHOD_AFTER(UFGGameUI::RemoveInteractWidget,[](UFGGameUI*,UFGInteractWidget* Widget) {
+  if(auto* Controls=FindControls(Widget)) Controls->ClearContext();
  });
 }

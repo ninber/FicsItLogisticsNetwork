@@ -141,3 +141,6 @@
 
 - [x] T109 Port the proved Lua home-only TooFewStations eligibility and five-second activation grace, distinguish initial retained-cargo home docking from premature return, reconcile same-identifier actor/inventory replacement against measured cargo, bridge missed departure observations only with matching reserved transfer events, and hold final physical home arrival pending watchdog reconciliation.
 - [ ] T110 Verify native AP state transition, proxy/significance actor changes, short docking intervals and final home hold under actual gameplay. No portable test establishes engine hook semantics.
+
+- [x] T111 Address reported missing native interaction controls: resolve actual interaction object (station, identifier, component, hit wrapper); attach to existing live UMG panel rather than replace root; retry on Native_Init; clear pooled context on removal/destruct; defer descriptor/vehicle enumeration until panel opens. Add bounded interaction diagnostics.
+- [ ] T112 Reconcile with local verification commit b4bfb3e (not pushed), compile/package and manually inspect real station UI in a disposable native-only session. Missing UI is an observed failure; exact original cause remains unconfirmed. External migration stays outside plugin. No continuous polling or test harness redeployment.
