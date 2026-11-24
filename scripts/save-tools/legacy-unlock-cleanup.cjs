@@ -10,24 +10,11 @@ const MANAGERS=[
  '/TruckStationSettings/Schematic_SmarterTrucks.Schematic_SmarterTrucks_C',
  '/KDataForge/Gen/FILNStations.Gen_FILNStations_Schematic_LogisticsStation']}
 ];
-const legacy=/\/(?:KDataForge\/Gen\/FILN|TruckStationSettings\/)/;
-// Walk parsed values instead of JSON.stringify: save stats may contain BigInt.
-function references(value,path=[],out=[]) {
- if(typeof value==='string' && legacy.test(value)) out.push({path:[...path],value});
- else if(value && typeof value==='object') {
-  if(ArrayBuffer.isView(value)||value instanceof ArrayBuffer) return out;
-  if(value instanceof Map) {let i=0;for(const [k,v] of value) {references(k,[...path,'map-key',i],out);references(v,[...path,'map-value',i++],out);}}
-  else for(const [k,v] of Object.entries(value)) {
-   if(legacy.test(k))out.push({path:[...path,k],value:k});
-   references(v,[...path,k],out);
-  }
- }
- return out;
-}
+const {references}=require('./legacy-references.cjs');
 function cleanupUnlocks(save) {
  const next=structuredClone(save);
  const objects=Object.values(next.levels).flatMap(l=>l.objects);
- const edits=[],undo=[];
+ const edits=[];
  for(const spec of MANAGERS) {
   const matches=objects.filter(o=>o.typePath===spec.type&&o.instanceName==='Persistent_Level:PersistentLevel.'+spec.name);
   assert.equal(matches.length,1,'Expected exactly one native '+spec.name);
@@ -40,7 +27,7 @@ function cleanupUnlocks(save) {
    removed.push({index,ref:structuredClone(entry)});return false;
   });
   if(removed.length) {
-   undo.push({prop,values:prop.values}); prop.values=kept;
+   prop.values=kept;
    edits.push({manager:spec.name,property:spec.property,removed,before:kept.length+removed.length,after:kept.length});
   }
  }

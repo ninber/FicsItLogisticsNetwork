@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 'use strict';
 const assert=require('node:assert/strict');
+const {references}=require('./legacy-references.cjs');
 const {ORDINARY,PROGRAMMABLE,FILN,cargoItems}=require('./station-migration.cjs');
 const VANILLA='/Game/FactoryGame/Recipes/Buildings/Recipe_TruckStation.Recipe_TruckStation_C';
 const REST='/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop';
@@ -60,7 +61,7 @@ function convert(save,selection) {
  assert.deepEqual(restored.levels,save.levels,'Unexpected body changes');
  // Do not certify removal of dependencies: schematic/descriptor/custom component
  // references elsewhere must be reviewed, not blindly stripped.
- const residual=objects.filter(o=>/\/KDataForge\/Gen\/FILN|\/TruckStationSettings\//.test(JSON.stringify(o))).map(o=>o.instanceName);
+ const residual=objects.filter(o=>references(o).length>0).map(o=>o.instanceName);
  assert(Buffer.byteLength(rows.join('\n')+'\n','utf8')<=262144,'Manifest exceeds native import size limit');
  return {save:next,manifest:rows.join('\n')+'\n',changes,residual};
 }

@@ -111,3 +111,6 @@
 
 - [x] T088 Decode actual unlock arrays; implement opt-in exact legacy unlock cleanup on offline copies with inverse comparison, fail closed on remaining actor/asset use, report other dependencies.
 - [ ] T089 Verify parser roundtrip and resolve the remaining historical construction-statistics class key before independent legacy-disabled load. Do not discard statistics or unrelated mod data.
+
+- [x] T090 Share typed residual dependency scanning between conversion and unlock cleanup; preserve BigInt/Map statistics without JSON serialization failure.
+- [ ] T091 Establish explicit statistics migration semantics for CurrentMax and typed parser representation; preserve history and block dependency-free claims until then.

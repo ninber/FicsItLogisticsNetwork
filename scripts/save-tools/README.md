@@ -88,3 +88,8 @@ those six asset paths elsewhere. Other references, including construction
 statistics and header mod metadata, remain unchanged and are reported where
 visible in parsed values. This is not a dependency-free certification.
 Run `node --test scripts/save-tools/legacy-unlock-cleanup.test.cjs`.
+
+The dependency scanner walks typed values and map keys rather than serializing
+whole objects to JSON (64-bit counters can be BigInt). Native construction
+statistics in `mActorsBuiltCount` are intentionally preserved and reported;
+merging historical maxima for different classes would be an approximation.
