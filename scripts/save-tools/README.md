@@ -78,3 +78,13 @@ Malformed, multi-resource or contradictory explicit filters still fail closed.
 Native `mForceVehicleFuelType` is a vanilla docking-station property and is preserved.
 Actual legacy recipe/schematic dependencies must be audited separately; do not
 remove KDataForge or TruckStationSettings based solely on station conversion.
+
+### Optional legacy unlock cleanup
+
+Append `--cleanup-unlocks` to preview or write. This removes only the six exact
+FILN/Smarter Trucks unlock asset references from the observed native recipe and
+schematic manager arrays. It rejects remaining programmable actors or uses of
+those six asset paths elsewhere. Other references, including construction
+statistics and header mod metadata, remain unchanged and are reported where
+visible in parsed values. This is not a dependency-free certification.
+Run `node --test scripts/save-tools/legacy-unlock-cleanup.test.cjs`.

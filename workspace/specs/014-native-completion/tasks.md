@@ -108,3 +108,6 @@
 
 - [x] T086 Extend conversion/manifest import to 512 rows, support absent/empty programmable filters as ordinary vanilla stations without demand inference, and preserve the verified native force-fuel property. Add synthetic city-scale regression matching observed record counts.
 - [ ] T087 Execute full parser roundtrip on a disposable real city copy; resolve exact per-actor filters, cargo, docking and residual schematic/recipe dependencies. Raw compressed-record inspection is not a full object parser.
+
+- [x] T088 Decode actual unlock arrays; implement opt-in exact legacy unlock cleanup on offline copies with inverse comparison, fail closed on remaining actor/asset use, report other dependencies.
+- [ ] T089 Verify parser roundtrip and resolve the remaining historical construction-statistics class key before independent legacy-disabled load. Do not discard statistics or unrelated mod data.

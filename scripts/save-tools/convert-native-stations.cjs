@@ -4,8 +4,9 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const {Parser}=require(process.env.FILN_SAVE_PARSER||'@etothepii/satisfactory-file-parser');
 const {convert}=require('./native-station-conversion.cjs');
+const {cleanupUnlocks}=require('./legacy-unlock-cleanup.cjs');
 const [input,output,selectionFile,...flags]=process.argv.slice(2);
-assert(input&&output&&selectionFile&&flags.every(x=>x==='--write'),'Usage: convert-native-stations.cjs INPUT OUTPUT SELECTION.json [--write]');
+assert(input&&output&&selectionFile&&flags.every(x=>['--write','--cleanup-unlocks'].includes(x)),'Usage: convert-native-stations.cjs INPUT OUTPUT SELECTION.json [--write] [--cleanup-unlocks]');
 const src=fs.realpathSync(input),dir=fs.realpathSync(path.dirname(output)),dst=path.join(dir,path.basename(output));
 assert(src!==dst&&!fs.existsSync(dst),'Never overwrite source/existing save');
 assert(!dir.split(path.sep).some(x=>x.toLowerCase()==='savegames'),'Output must be outside live SaveGames');
@@ -14,7 +15,9 @@ const sha=crypto.createHash('sha256').update(bytes).digest('hex');
 assert.equal(selection.sha256,sha,'Input save hash mismatch');
 const parsed=Parser.ParseSave(path.basename(src,'.sav'),new Uint8Array(bytes).buffer);
 const converted=convert(parsed,selection.stations);
-const report={source_sha256:sha,changes:converted.changes,residual_mod_references:converted.residual,scope:'copy-only conversion; independent native load not verified',written:false};
+const unlocks=flags.includes('--cleanup-unlocks')?cleanupUnlocks(converted.save):null;
+if(unlocks) converted.save=unlocks.save;
+const report={unlock_cleanup:unlocks?.edits??[],remaining_typed_references:unlocks?.residual??null,dependency_removal_verified:false,source_sha256:sha,changes:converted.changes,residual_mod_references:converted.residual,scope:'copy-only conversion; independent native load not verified',written:false};
 if(flags.includes('--write')) {
  const manifest=dst+'.native.tsv',receipt=dst+'.report.json';
  assert(!fs.existsSync(manifest)&&!fs.existsSync(receipt),'Output receipt already exists');
