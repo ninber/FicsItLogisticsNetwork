@@ -95,6 +95,8 @@ private:
  UFUNCTION() void NextPage();
  UFUNCTION() void PreviousPage();
  UFUNCTION() void EnrollVehicle();
+ UFUNCTION() void RegisterDepot();
+ UFUNCTION() void RemoveDepot();
  UFUNCTION() void ToggleDispatcher();
  UFUNCTION() void PreviewLegacy();
  UFUNCTION() void ImportLegacy();

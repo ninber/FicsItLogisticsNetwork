@@ -39,6 +39,9 @@ void ALogisticsSubsystem::ImportLegacy(bool Apply) {
    int32 Claims=0; AFGWheeledVehicleIdentifier* Match=nullptr;
    const auto Node=Station->GetPathNodeGUID();
    for(auto* V:VS->GetAllVehicles()) if(IsValid(V) && V->GetVehicleRoute().Contains(Node)) { ++Claims; Match=V; }
+   if(Apply && ValidHome(Station) && !HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station))) {
+    if(SetDepot(Station,false)) Report.Add(Station->GetPathName()+TEXT(": persistent rest-stop role imported"));
+   }
    if(Claims==1 && AdoptLegacyHome(Match,Station,false)) {
     const bool Ok=!Apply || AdoptLegacyHome(Match,Station,true);
     Report.Add(Station->GetPathName()+(Ok?TEXT(": legacy idle depot ownership compatible; original recipe dependency retained"):TEXT(": depot adoption rejected")));
@@ -195,7 +198,7 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename,bool Apply
    Reservations.Release(TCHAR_TO_UTF8(*R.JobId.ToString())); MigrationReport.Add(Home+TEXT(": ownership conflict; untouched")); continue;
   }
   R.Diagnostic=TEXT("Legacy route adopted; only future native transfer events counted");
-  HomeStations.Add(H); const int32 Index=Registrations.Add(R); ByVehicle.Add(Candidate,Index); WatchTransfers(Registrations[Index]); Active.AddUnique(Index);
+  HomeStations.Add(H); TrackDepot(H); const int32 Index=Registrations.Add(R); ByVehicle.Add(Candidate,Index); WatchTransfers(Registrations[Index]); Active.AddUnique(Index);
   ResetScan(); MigrationReport.Add(Home+TEXT(": active legacy delivery/return adopted without native route or cargo write"));
  }
  for(const auto& Line:MigrationReport) UE_LOG(LogFILN,Log,TEXT("JOURNAL %s"),*Line);
@@ -238,7 +241,7 @@ void ALogisticsSubsystem::ImportConvertedStations(bool Apply) {
   const auto* Existing=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
   if(Existing && Existing->Resource!=Resource) return;
   auto* Inventory=B->GetInventory();
-  if(!Inventory || B->GetDockedActor() || HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(ID))) return;
+  if(!Inventory || B->GetDockedActor() || IsDepot(ID)) return;
   TArray<FInventoryStack> Stacks; Inventory->GetInventoryStacks(Stacks);
   for(const auto& Stack:Stacks) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=Resource) return;
   for(int32 Slot=0;Slot<Inventory->GetSizeLinear();++Slot) {
@@ -256,8 +259,9 @@ void ALogisticsSubsystem::ImportConvertedStations(bool Apply) {
    for(auto* Candidate:VS->GetAllVehicles()) if(IsValid(Candidate) && Candidate->GetVehicleRoute().Contains(Row.Station->GetPathNodeGUID())) { V=Candidate; ++Claims; }
    const TArray<FGuid> Route={Row.Station->GetPathNodeGUID()};
    const bool Compatible=Claims==1 && IsValid(V) && V->IsAutopilotEnabled() && V->GetVehicleRoute()==Route;
-   const bool Ok=Compatible && (!Apply || Pair(V,Row.Station));
-   MigrationReport.Add(Row.Station->GetPathName()+(Ok?TEXT(": compatible converted depot"):TEXT(": no safe idle depot adoption; untouched")));
+   const bool Adopted=Compatible && (!Apply || Pair(V,Row.Station));
+   const bool Designated=Adopted || !Apply || SetDepot(Row.Station,false);
+   MigrationReport.Add(Row.Station->GetPathName()+(Adopted?TEXT(": compatible converted depot and idle vehicle"):Designated?TEXT(": depot role compatible; no safe idle vehicle adoption"):TEXT(": depot role rejected")));
   } else {
    const auto* Existing=StationConfigs.FindByPredicate([&Row](const FFILNStationConfig& C){return C.Station==Row.Station;});
    const bool Ok=Existing || !Apply || ConfigureStation(Row.Station,Row.Resource,true);

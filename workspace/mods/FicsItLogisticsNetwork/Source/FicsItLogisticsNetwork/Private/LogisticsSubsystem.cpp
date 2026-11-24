@@ -2,6 +2,7 @@
 #include "LogisticsSubsystem.h"
 #include "FILNDispatchPolicy.h"
 #include "FILNEnrollment.h"
+#include "FILNDepotPolicy.h"
 #include "FILNRestore.h"
 #include "FILNStationControls.h"
 #include "FILNTransferObserver.h"
@@ -73,7 +74,7 @@ void ALogisticsSubsystem::Rebuild() {
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
  TransferObservers.Empty();
  Ownership=filn::Ownership(); Reservations=filn::Reservations();
- HomeStations.Empty();
+ HomeStations.Empty(); DepotIndex.Empty();
  ByVehicle.Empty(); StationIds.Empty(); Active.Empty(); Cursor=0;
  RoadCache.Clear(); ResetScan();
  bDispatchBlocked=SchemaVersion!=1;
@@ -83,11 +84,17 @@ void ALogisticsSubsystem::Rebuild() {
   if(!E.InstanceId.IsValid() || (IsValid(E.Station) && StationIds.Contains(E.Station))) bDispatchBlocked=true;
   else if(IsValid(E.Station)) StationIds.Add(E.Station,E.InstanceId);
  }
+ for(const auto& Depot:DepotStations) if(IsValid(Depot)) {
+  const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(Depot.Get());
+  if(DepotIndex.Contains(Ref)) bDispatchBlocked=true;
+  DepotIndex.Add(Ref);
+  if(auto* B=Building(Depot); IsValid(B) && !B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
+ }
  for(int32 I=0;I<Registrations.Num();++I) {
   auto& R=Registrations[I];
   if(TruckIdentities.Contains(R.TruckId) || BayIdentities.Contains(R.BayId) || (IsValid(R.Home) && HomeActors.Contains(R.Home))) bDispatchBlocked=true;
   TruckIdentities.Add(R.TruckId); BayIdentities.Add(R.BayId);
-  if(IsValid(R.Home)) { HomeActors.Add(R.Home); HomeStations.Add(R.Home.Get()); }
+  if(IsValid(R.Home)) { HomeActors.Add(R.Home); HomeStations.Add(R.Home.Get()); TrackDepot(R.Home); }
   if(!R.TruckId.IsValid() || !R.BayId.IsValid() || !Ownership.Pair(Key(R.TruckId),Key(R.BayId))) bDispatchBlocked=true;
   if(IsValid(R.Vehicle)) {
    if(ByVehicle.Contains(R.Vehicle)) bDispatchBlocked=true;
@@ -105,7 +112,7 @@ void ALogisticsSubsystem::Rebuild() {
   }
  }
  for(const auto& C:StationConfigs) if(IsValid(C.Station)) {
-  if(!ApplyStationFilter(C)) bDispatchBlocked=true;
+  if(IsDepot(C.Station) || !ApplyStationFilter(C)) bDispatchBlocked=true;
   else if(auto* B=Building(C.Station); B && !B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
  }
  if(bDispatchBlocked) UE_LOG(LogFILN,Error,TEXT("Dispatch locked: unsupported schema, missing endpoints or conflicting saved identities/reservations. Restore infrastructure/save; do not discard reservations."));
@@ -227,16 +234,50 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
  for(const auto& C:StationConfigs) if(auto* B=Building(C.Station); IsValid(B)) {
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
- StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); Rebuild();
+ for(const auto& Depot:DepotStations) if(auto* B=Building(Depot); IsValid(B)) {
+  if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
+ }
+ StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty(); Rebuild();
  return true;
 }
 bool ALogisticsSubsystem::IsDepot(AFGDockingStationIdentifier* Station) const {
  if(!IsValid(Station)) return false;
- if(HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station))) return true;
+ if(HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station)) || DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station))) return true;
  // Unclaimed legacy rest stops are not providers, even before fleet adoption.
  auto* B=Building(Station);
  const auto Recipe=IsValid(B)?B->GetBuiltWithRecipe():TSubclassOf<UFGRecipe>();
  return Recipe && Recipe->GetPathName()==TEXT("/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop");
+}
+void ALogisticsSubsystem::TrackDepot(AFGDockingStationIdentifier* Station) {
+ if(!IsValid(Station)) return;
+ const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(Station);
+ if(!DepotIndex.Contains(Ref)) { DepotIndex.Add(Ref); DepotStations.Add(Station); }
+ if(auto* B=Building(Station); IsValid(B) && !B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
+}
+bool ALogisticsSubsystem::SetDepot(AFGDockingStationIdentifier* Station,bool Remove) {
+ check(IsInGameThread());
+ if(!HasAuthority() || bDispatchBlocked || !IsValid(Station) || Station->GetWorld()!=GetWorld()) return false;
+ auto* B=Building(Station); if(!IsValid(B)) return false;
+ const auto Recipe=B->GetBuiltWithRecipe();
+ const bool Legacy=Recipe && Recipe->GetPathName()==TEXT("/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop");
+ const bool Claimed=HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station));
+ const bool Configured=StationConfigs.ContainsByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
+ const bool Reserved=Reservations.StationBusy(Key(StationId(Station)));
+ const filn::depot::Snapshot Facts{true,Station->GetPathNodeGUID().IsValid() && ValidHome(Station),Reserved,Configured,Claimed,B->GetDockedActor()!=nullptr,Legacy};
+ if(Remove) {
+  if(!filn::depot::CanRemove(Facts)) return false;
+  DepotIndex.Remove(TWeakObjectPtr<AFGDockingStationIdentifier>(Station));
+  DepotStations.RemoveAll([Station](const auto& D){return D==Station;});
+  if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
+ } else {
+  if(!filn::depot::CanDesignate(Facts)) return false;
+  if(Claimed && B->GetDockedActor()) {
+   const auto* R=Registrations.FindByPredicate([Station](const FFILNRegistration& E){return E.Home==Station;});
+   if(!R || !IsValid(R->Vehicle) || R->Vehicle->GetOwnerVehicle()!=B->GetDockedActor()) return false;
+  }
+  TrackDepot(Station);
+ }
+ ResetScan(); return true;
 }
 bool ALogisticsSubsystem::ValidHome(AFGDockingStationIdentifier* Home) const {
  auto* B=Building(Home);
@@ -302,7 +343,7 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
   if(!IsValid(Other) || Other==H) continue;
   if(Other->GetPathNodeGUID()==Node) { UniqueHome=false; break; }
   auto* B=Building(Other);
-  if(IsValid(B) && ValidHome(Other) && B->GetDockingPathNode() && Near(Position,B->GetDockingPathNode()->GetActorLocation())) {
+  if(IsValid(B) && IsDepot(Other) && ValidHome(Other) && B->GetDockingPathNode() && Near(Position,B->GetDockingPathNode()->GetActorLocation())) {
    UniqueHome=false; break;
   }
  }
@@ -356,7 +397,7 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) { Rollback(); return false; }
  R.Held=true; R.IdleRoute=Intended;
  R.Diagnostic=TEXT("Explicit home-only enrollment; native route and autopilot read back");
- HomeStations.Add(H);
+ HomeStations.Add(H); TrackDepot(H);
  ByVehicle.Add(V,Registrations.Add(R)); WatchTransfers(Registrations.Last()); ResetScan();
  UE_LOG(LogFILN,Log,TEXT("PAIRED truck=%s bay=%s home-only/AP enabled"),*R.TruckId.ToString(),*R.BayId.ToString());
  return true;
@@ -557,6 +598,12 @@ void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& 
  if(Command==TEXT("convertedStations") && Args.Num()==1 && (Args[0]==TEXT("preview") || Args[0]==TEXT("import"))) { ImportConvertedStations(Args[0]==TEXT("import")); return; }
  if(Command==TEXT("legacyJournal") && Args.Num()==2 && (Args[0]==TEXT("preview") || Args[0]==TEXT("import"))) { ImportLegacyJournal(Args[1],Args[0]==TEXT("import")); return; }
  if(Command==TEXT("legacy") && Args.Num()==1 && (Args[0]==TEXT("preview") || Args[0]==TEXT("import"))) { ImportLegacy(Args[0]==TEXT("import")); return; }
+ if(Command==TEXT("depot") && Args.Num()==2 && (Args[0]==TEXT("register") || Args[0]==TEXT("remove"))) {
+  for(auto* Station:VS->GetDockingStations()) if(IsValid(Station) && Station->GetPathName()==Args[1]) {
+   const bool Ok=SetDepot(Station,Args[0]==TEXT("remove"));
+   UE_LOG(LogFILN,Log,TEXT("Depot role: %s"),Ok?TEXT("accepted"):TEXT("rejected")); return;
+  }
+ }
  if(Command==TEXT("removeStation") && Args.Num()==1) {
   for(auto* Station:VS->GetDockingStations()) if(IsValid(Station) && Station->GetPathName()==Args[0]) { RemoveStation(Station); return; }
  }

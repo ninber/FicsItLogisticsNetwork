@@ -88,7 +88,7 @@ void UFILNRemoteControl::QueryStation_Implementation(AFGBuildableDockingStation*
  auto* S=Subsystem(GetWorld()); if(!S) return;
  const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
  TArray<FText> Lines;
- Lines.Add(C?NSLOCTEXT("FILN","Enrolled","FILN station enrolled"):NSLOCTEXT("FILN","SelectResource","Choose a resource and register this station with FILN"));
+ Lines.Add(S->IsDepot(Target->GetStationIdentifier())?NSLOCTEXT("FILN","DepotRole","FILN rest stop — fuel only"):C?NSLOCTEXT("FILN","Enrolled","FILN station enrolled"):NSLOCTEXT("FILN","SelectResource","Choose a resource and register this station with FILN"));
  if(C && S->Reservations.StationBusy(TCHAR_TO_UTF8(*S->StationId(C->Station).ToString()))) Lines.Add(NSLOCTEXT("FILN","ReservedLocked","Active logistics reservation; resource changes locked"));
  Lines.Add(FText::Format(NSLOCTEXT("FILN","StationSummary","Dispatcher: {0} | Registered vehicles: {1} | Active deliveries: {2}"),
   Enabled(S->bAutoDispatchEnabled),FText::AsNumber(S->Registrations.Num()),FText::AsNumber(S->Active.Num())));
@@ -112,7 +112,9 @@ void UFILNRemoteControl::NetworkOverview_Implementation(AFGBuildableDockingStati
  if(!ValidateContext(Target) || Page<0) return;
  auto* S=Subsystem(GetWorld()); if(!S) return;
  constexpr int32 PageSize=32;
- const int32 Total=S->StationConfigs.Num()+S->Registrations.Num();
+ TArray<AFGDockingStationIdentifier*> Unclaimed;
+ for(const auto& D:S->DepotStations) if(IsValid(D) && !S->HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(D.Get()))) Unclaimed.Add(D.Get());
+ const int32 Total=S->StationConfigs.Num()+S->Registrations.Num()+Unclaimed.Num();
  const int32 Pages=FMath::Max(1,FMath::DivideAndRoundUp(Total,PageSize));
  Page=FMath::Clamp(Page,0,Pages-1);
  TArray<FText> Lines;
@@ -130,12 +132,15 @@ void UFILNRemoteControl::NetworkOverview_Implementation(AFGBuildableDockingStati
     C.Resource?UFGItemDescriptor::GetItemName(C.Resource):NSLOCTEXT("FILN","MissingResource","Missing resource"),
     FText::AsNumber(C.Resource && B->GetInventory()?B->GetInventory()->GetNumItems(C.Resource):0),
     Reserved?NSLOCTEXT("FILN","Reserved","Reserved"):NSLOCTEXT("FILN","Unreserved","Unreserved")));
-  } else {
+  } else if(Row<S->StationConfigs.Num()+S->Registrations.Num()) {
    const auto& R=S->Registrations[Row-S->StationConfigs.Num()]; auto* Owner=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
    if(!IsValid(Owner)) { Lines.Add(NSLOCTEXT("FILN","VehicleMissing","Registered vehicle removed or unavailable")); continue; }
    Lines.Add(FText::Format(NSLOCTEXT("FILN","VehicleRow","{0} | Home: {1} | {2} | Autopilot: {3} | Fuel available: {4} | Driver present: {5} | Held: {6} | Delivered: {7}\n  {8}"),
     R.Vehicle->GetVehicleName(),IsValid(R.Home)?R.Home->GetStationName():NSLOCTEXT("FILN","MissingHome","Missing depot"),StateLabel(R.State),
     Enabled(R.Vehicle->IsAutopilotEnabled()),YesNo(Owner->HasFuel()),YesNo(Owner->GetDriver()!=nullptr),YesNo(R.Held),FText::AsNumber(R.DeliveredCargo),FText::FromString(R.Diagnostic)));
+  } else {
+   auto* D=Unclaimed[Row-S->StationConfigs.Num()-S->Registrations.Num()];
+   Lines.Add(FText::Format(NSLOCTEXT("FILN","UnclaimedDepot","{0} | Unclaimed rest stop | Eligible: {1}"),D->GetStationName(),YesNo(S->ValidHome(D))));
   }
  }
  const FText Text=JoinLines(Lines);
@@ -166,6 +171,10 @@ void UFILNRemoteControl::AdminAction_Implementation(AFGBuildableDockingStation* 
  FText Message;
  if(Action==0) { S->bAutoDispatchEnabled=!S->bAutoDispatchEnabled; S->ResetScan(); Message=FText::Format(NSLOCTEXT("FILN","DispatcherChanged","Automatic dispatcher: {0}; existing deliveries continue"),Enabled(S->bAutoDispatchEnabled)); }
  else if(Action==3) Message=S->PrepareStationsForUninstall()?NSLOCTEXT("FILN","UninstallPrepared","Restrictions restored. Save required; mod-disabled load still needs independent verification"):NSLOCTEXT("FILN","UninstallRejected","Preparation rejected: active jobs or station/filter conflict");
+ else if(Action==8 || Action==9) {
+  const bool Ok=S->SetDepot(Target->GetStationIdentifier(),Action==9);
+  Message=Ok?NSLOCTEXT("FILN","DepotUpdated","Rest-stop role updated"):NSLOCTEXT("FILN","DepotRejected","Rest-stop role rejected: cargo, connection, docking or ownership conflict");
+ }
  else if(Action==1 || Action==2 || (Action>=4 && Action<=7)) {
   S->MigrationReport.Empty();
   if(S->bAutoDispatchEnabled || S->Reservations.Size()!=0 || !S->Active.IsEmpty()) Message=NSLOCTEXT("FILN","MigrationBusy","Disable dispatch and finish active jobs before migration.");
@@ -200,6 +209,8 @@ void UFILNStationControls::NativeOnInitialized() {
  auto AddAction=[&](const FText& Text) {
   auto* Button=WidgetTree->ConstructWidget<UButton>(); auto* Label=WidgetTree->ConstructWidget<UTextBlock>(); Label->SetText(Text); Button->AddChild(Label); Box->AddChildToVerticalBox(Button); return Button;
  };
+ AddAction(NSLOCTEXT("FILN","RegisterDepot","Designate this station as a rest stop (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::RegisterDepot);
+ AddAction(NSLOCTEXT("FILN","RemoveDepot","Remove rest-stop role (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::RemoveDepot);
  AddAction(NSLOCTEXT("FILN","EnrollVehicle","Register selected vehicle at this depot"))->OnClicked.AddDynamic(this,&UFILNStationControls::EnrollVehicle);
  AddAction(NSLOCTEXT("FILN","ToggleDispatcher","Enable / disable automatic dispatch (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ToggleDispatcher);
  AddAction(NSLOCTEXT("FILN","PreviewLegacy","Preview legacy settings import (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviewLegacy);
@@ -296,6 +307,8 @@ void UFILNStationControls::EnrollVehicle() {
  const int32 Index=Vehicles->GetSelectedIndex();
  if(auto* R=Remote(); R && VehicleChoices.IsValidIndex(Index)) { R->Receiver=this; R->RegisterVehicle(Station,VehicleChoices[Index]); }
 }
+void UFILNStationControls::RegisterDepot() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,8); } }
+void UFILNStationControls::RemoveDepot() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,9); } }
 void UFILNStationControls::ToggleDispatcher() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,0); } }
 void UFILNStationControls::PreviewLegacy() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,1); } }
 void UFILNStationControls::ImportLegacy() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,2); } }

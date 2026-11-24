@@ -94,6 +94,7 @@ private:
  UPROPERTY(SaveGame) int32 SchemaVersion = 1;
  UPROPERTY(SaveGame) TArray<FFILNStation> Stations;
  UPROPERTY(SaveGame) TArray<FFILNStationConfig> StationConfigs;
+ UPROPERTY(SaveGame) TArray<TObjectPtr<AFGDockingStationIdentifier>> DepotStations;
  UPROPERTY(SaveGame) TArray<FFILNRegistration> Registrations;
  UPROPERTY(SaveGame) int32 LegacyImportVersion = 0;
  UPROPERTY(SaveGame) TArray<FString> MigrationReport;
@@ -103,6 +104,9 @@ private:
  void WatchTransfers(FFILNRegistration& R);
  void Transfer(AFGWheeledVehicleIdentifier* Vehicle,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,class UFGInventoryComponent* Other,bool Added);
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> HomeStations;
+ TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> DepotIndex;
+ void TrackDepot(AFGDockingStationIdentifier* Station);
+ bool SetDepot(AFGDockingStationIdentifier* Station,bool Remove);
  uint64 ScanRoadRevision=0;
  int32 FuelCursor=0;
  void ImportLegacy(bool Apply);

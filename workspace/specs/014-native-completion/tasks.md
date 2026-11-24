@@ -92,3 +92,6 @@
 
 - [x] T075 Discover ordinary LOAD providers from native station roster, rank directed compatible candidates, revalidate actual matching single cargo and exclude both registered and unclaimed legacy depots. Demand remains explicitly configured.
 - [ ] T076 Verify ordinary solid/fluid provider dispatch, native filter behavior and station roster changes under real runtime load.
+
+- [x] T077 Persist explicit native rest-stop designation independently of truck ownership; expose admin management, migrate unclaimed depots, exclude them from cargo scheduling and restore vanilla behavior during uninstall.
+- [ ] T078 Verify role markers, management access, saved unclaimed depots and actual fuel-only behavior in game. A distinct cooked build-menu recipe/descriptor is not implemented; vanilla actor designation is the current native alternative.
