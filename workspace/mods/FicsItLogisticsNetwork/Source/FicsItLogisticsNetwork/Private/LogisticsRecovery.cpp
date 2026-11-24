@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
+#include "FILNRehomePolicy.h"
 #include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
@@ -191,4 +192,58 @@ void ALogisticsSubsystem::AuditIdleFleet() {
   V->SetCurrentTargetWaypoint(0);
   R.Diagnostic=V->GetCurrentTargetWaypointIndex()==0?TEXT("Idle home-only route reapplied; actual arrival pending"):TEXT("Idle home return: target readback failed");
  }
+}
+
+bool ALogisticsSubsystem::RehomeParkedVehicle(int32 Index,AFGDockingStationIdentifier* Home) {
+ check(IsInGameThread());
+ using S=filn::State;
+ if(!HasAuthority() || bDispatchBlocked || SchemaVersion!=1 || !Registrations.IsValidIndex(Index) ||
+    !IsValid(Home) || Home->GetWorld()!=GetWorld() || !IsDepot(Home) || !ValidHome(Home)) return false;
+ auto& R=Registrations[Index];
+ auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
+ auto* H=Home->GetStation(); auto* VS=AFGVehicleSubsystem::Get(GetWorld());
+ if(!IsValid(O) || !O->HasAuthority() || !IsValid(H) || !VS || !O->GetStorageInventory()) return false;
+ const auto Node=Home->GetPathNodeGUID(); if(!Node.IsValid()) return false;
+ const auto Id=[](const FGuid& G){ return std::string(TCHAR_TO_UTF8(*G.ToString())); };
+ const auto Truck=Id(R.TruckId), OldBay=Id(R.BayId);
+ const FGuid Bay=StationId(Home);
+ const auto NewBay=Id(Bay),Job=Id(R.JobId);
+ bool Exclusive=Ownership.CanMove(Truck,OldBay,NewBay) && !Reservations.StationBusy(NewBay);
+ for(const auto& Other:Registrations) if(&Other!=&R && Other.Home==Home) Exclusive=false;
+ for(auto* Other:VS->GetAllVehicles()) if(IsValid(Other) && Other!=V && Other->GetVehicleRoute().Contains(Node)) Exclusive=false;
+ for(auto* Other:VS->GetDockingStations()) if(IsValid(Other) && Other!=Home && Other->GetPathNodeGUID()==Node) Exclusive=false;
+ const auto Phase=static_cast<S>(R.State);
+ const bool LeaseOwned=R.JobId.IsValid()?Reservations.OwnsJob(Job,Truck):Phase==S::Idle;
+ const filn::rehome::Snapshot Facts{true,true,Phase==S::Idle||Phase==S::Recovery,
+   true,Exclusive,V->IsAutopilotEnabled(),O->GetDriver()!=nullptr,H->GetDockedActor()==O,
+   FMath::Abs(O->GetForwardSpeed())<=1.f,LeaseOwned,true};
+ if(!filn::rehome::Allowed(Facts)) return false;
+ // Explicit administrator action after physical relocation. Never take a moving
+ // truck or auto-enable AP. Cargo remains untouched and provenance is revoked.
+ const TArray<FGuid> Before=V->GetVehicleRoute(), Intent={Node};
+ V->SetVehicleRoute(Intent);
+ if(V->GetVehicleRoute()!=Intent || V->IsAutopilotEnabled() || O->GetDriver() || H->GetDockedActor()!=O) {
+  if(!V->IsAutopilotEnabled() && !O->GetDriver() && V->GetVehicleRoute()==Intent) V->SetVehicleRoute(Before);
+  if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()) bDispatchBlocked=true;
+  R.Diagnostic=TEXT("Explicit rehome route readback failed; original ownership and leases retained");
+  return false;
+ }
+ if(!Ownership.Move(Truck,OldBay,NewBay)) {
+  V->SetVehicleRoute(Before);
+  if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()) bDispatchBlocked=true;
+  return false;
+ }
+ if(IsValid(R.Home)) HomeStations.Remove(TWeakObjectPtr<AFGDockingStationIdentifier>(R.Home.Get()));
+ R.Home=Home; R.BayId=Bay; HomeStations.Add(Home); TrackDepot(Home);
+ if(R.JobId.IsValid()) Reservations.Release(Job);
+ R.JobId.Invalidate(); R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate();
+ R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.IdleRoute=Intent;
+ R.State=static_cast<uint8>(S::Idle); R.Held=false; R.Automatic=false;
+ R.CargoOriginKnown=false; R.CargoOriginStorage=false; R.RetainedCargo=false;
+ R.LegacyDelivery=false; R.AbortReturn=false; R.Resource=nullptr;
+ R.ExpectedCargo=R.LoadedCargo=R.DeliveredCargo=R.LastCargo=0;
+ R.NavigationRetry.Reset(); R.TravelProgress.Reset(); R.FuelPending=false; R.ObservedFuel=nullptr;
+ Active.Remove(Index); ResetScan();
+ R.Diagnostic=TEXT("Explicit parked recovery: home ownership and route restored; AP remains off; cargo preserved");
+ return true;
 }

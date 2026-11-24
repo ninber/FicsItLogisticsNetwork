@@ -95,3 +95,6 @@
 
 - [x] T077 Persist explicit native rest-stop designation independently of truck ownership; expose admin management, migrate unclaimed depots, exclude them from cargo scheduling and restore vanilla behavior during uninstall.
 - [ ] T078 Verify role markers, management access, saved unclaimed depots and actual fuel-only behavior in game. A distinct cooked build-menu recipe/descriptor is not implemented; vanilla actor designation is the current native alternative.
+
+- [x] T079 Implement explicit parked rehome/recovery with exclusive ownership move, owned-lease release, home-only route readback, cargo preservation and AP-off preservation. Replace unsafe unrestricted reset path.
+- [ ] T080 Verify operator-parked recovery to replacement depot after home destruction, save/reload and explicit AP opt-in. Fully automatic reassignment is intentionally not performed.

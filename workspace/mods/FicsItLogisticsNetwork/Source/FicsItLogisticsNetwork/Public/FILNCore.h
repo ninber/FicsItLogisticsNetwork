@@ -25,6 +25,16 @@ public:
   if(Bays.contains(bay)) return false;
   Trucks.emplace(truck,bay); Bays.emplace(bay,truck); return true;
  }
+ bool CanMove(const std::string& truck,const std::string& oldBay,const std::string& newBay) const {
+  const auto t=Trucks.find(truck), b=Bays.find(oldBay);
+  if(newBay.empty() || t==Trucks.end() || b==Bays.end() || t->second!=oldBay || b->second!=truck) return false;
+  return newBay==oldBay || !Bays.contains(newBay);
+ }
+ bool Move(const std::string& truck,const std::string& oldBay,const std::string& newBay) {
+  if(!CanMove(truck,oldBay,newBay)) return false;
+  if(oldBay==newBay) return true;
+  Bays.emplace(newBay,truck); Trucks.at(truck)=newBay; Bays.erase(oldBay); return true;
+ }
  bool Unpair(const std::string& truck,const std::string& bay) {
   auto t=Trucks.find(truck), b=Bays.find(bay);
   if(t==Trucks.end()||b==Bays.end()||t->second!=bay||b->second!=truck) return false;

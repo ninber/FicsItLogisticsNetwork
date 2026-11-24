@@ -150,6 +150,7 @@ private:
  void Observe();
  bool RetryNavigation(FFILNRegistration& R, double Now, bool Stalled=false);
  bool RestoreHomeRoute(FFILNRegistration& R);
+ bool RehomeParkedVehicle(int32 Index,AFGDockingStationIdentifier* Home);
  bool TryAbortToHome(FFILNRegistration& R,double Now);
  bool RestoreJobReservation(FFILNRegistration& R);
  void Recover(FFILNRegistration& R, const FString& Why);
