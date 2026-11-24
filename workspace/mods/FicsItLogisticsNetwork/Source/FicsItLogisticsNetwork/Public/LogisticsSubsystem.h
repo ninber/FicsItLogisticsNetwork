@@ -51,6 +51,10 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) bool Automatic = false;
  // Imported cargo is observed, never credited as a historical transfer.
  UPROPERTY(SaveGame) bool LegacyDelivery = false;
+ UPROPERTY(SaveGame) bool AbortReturn = false;
+ // Stable reservation identities survive endpoint destruction and save/load.
+ UPROPERTY(SaveGame) FGuid ProviderLease;
+ UPROPERTY(SaveGame) FGuid RequesterLease;
  UPROPERTY(SaveGame) bool Held = false;
  UPROPERTY(SaveGame) TArray<FGuid> IdleRoute;
  UPROPERTY(SaveGame) TSubclassOf<UFGItemDescriptor> Resource;
@@ -131,6 +135,8 @@ private:
  void Observe();
  bool RetryNavigation(FFILNRegistration& R, double Now, bool Stalled=false);
  bool RestoreHomeRoute(FFILNRegistration& R);
+ bool TryAbortToHome(FFILNRegistration& R,double Now);
+ bool RestoreJobReservation(FFILNRegistration& R);
  void Recover(FFILNRegistration& R, const FString& Why);
  bool RemoveLostRegistration(int32 Index);
  void AuditLostRegistrations();

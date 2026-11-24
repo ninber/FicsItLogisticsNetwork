@@ -31,6 +31,11 @@ struct Progress {
 inline bool SafeHomeCompletion(bool authority,bool ownedRoute,bool autopilot,bool driver,bool docked,bool stopped,bool cargoVerified) {
  return authority&&ownedRoute&&autopilot&&!driver&&docked&&stopped&&cargoVerified;
 }
+// A failed shipment may return to its assigned home with its cargo intact.
+// Never infer a delivery from a route change or an empty inventory.
+inline bool CanAbortToHome(bool owned,bool ap,bool driver,bool docking,bool cargoVerified,bool homeValid) {
+ return owned && ap && !driver && !docking && cargoVerified && homeValid;
+}
 enum class Action { Stop, DriverWait, FuelWait, RetryWait, Replan, Resume };
 struct Snapshot {
  bool autopilot=false, driver=false, routeMatches=false, travelling=false;

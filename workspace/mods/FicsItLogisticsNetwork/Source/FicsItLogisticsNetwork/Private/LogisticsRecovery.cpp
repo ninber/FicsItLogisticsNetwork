@@ -85,3 +85,59 @@ bool ALogisticsSubsystem::RestoreHomeRoute(FFILNRegistration& R) {
  R.RouteIntent=HomeRoute; R.IdleRoute=HomeRoute; R.Held=true;
  return true;
 }
+
+bool ALogisticsSubsystem::TryAbortToHome(FFILNRegistration& R,double Now) {
+ check(IsInGameThread());
+ if(!HasAuthority() || bDispatchBlocked || !R.Automatic || !R.JobId.IsValid() ||
+    !IsValid(R.Vehicle) || !IsValid(R.Home) || !R.Resource || !ValidHome(R.Home)) return false;
+ auto* V=R.Vehicle.Get(); auto* O=V->GetOwnerVehicle(); auto* H=R.Home->GetStation();
+ if(!IsValid(O) || !IsValid(H) || !O->GetStorageInventory()) return false;
+ auto* Cargo=O->GetStorageInventory();
+ bool Verified=Cargo->GetNumItems(R.Resource)==R.LastCargo;
+ TArray<FInventoryStack> Stacks; Cargo->GetInventoryStacks(Stacks);
+ for(const auto& Stack:Stacks) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=R.Resource) Verified=false;
+ bool Docking=V->IsCurrentlyDocking();
+ for(auto* ID:{R.Provider.Get(),R.Requester.Get(),R.Home.Get()})
+  if(IsValid(ID) && IsValid(ID->GetStation()) && ID->GetStation()->GetDockedActor()==O) Docking=true;
+ if(!filn::recovery::CanAbortToHome(V->GetVehicleRoute()==R.RouteIntent,V->IsAutopilotEnabled(),O->GetDriver()!=nullptr,Docking,Verified,true)) return false;
+ if(!Reservations.OwnsJob(TCHAR_TO_UTF8(*R.JobId.ToString()),TCHAR_TO_UTF8(*R.TruckId.ToString()))) return false;
+ if(!R.ProviderLease.IsValid() && IsValid(R.Provider)) R.ProviderLease=StationId(R.Provider);
+ if(!R.RequesterLease.IsValid() && IsValid(R.Requester)) R.RequesterLease=StationId(R.Requester);
+ if(!R.RequesterLease.IsValid() || (!R.RetainedCargo && !R.ProviderLease.IsValid())) return false;
+ auto& Clock=R.NavigationRetry;
+ if(!O->HasFuel()) { R.Diagnostic=TEXT("Abort return waiting for native fuel"); return true; }
+ if(!Clock.Due(Now)) return true;
+ auto* VS=AFGVehicleSubsystem::Get(GetWorld()); auto* Preset=O->GetVehiclePathPreset();
+ const auto From=V->GetCurrentToPathNodeGUID(), Home=R.Home->GetPathNodeGUID();
+ double Cost=-1;
+ if(!RoadCache.Distance(VS,From,Home,Preset,Cost)) return true;
+ Clock.Attempt(Now);
+ if(Cost<0) { R.Diagnostic=TEXT("Abort return: home road unreachable; retry scheduled"); return true; }
+ // A distinct second depot is a native route anchor, not a cargo endpoint.
+ // Select only another registered, valid home with a proved round trip.
+ // No cargo station is ever used as an anchor.
+ AFGDockingStationIdentifier* Anchor=nullptr;
+ int32 Examined=0;
+ for(const auto& Entry:Registrations) {
+  if(++Examined>128) break;
+  auto* ID=Entry.Home.Get();
+  if(!IsValid(ID) || ID==R.Home || !ValidHome(ID)) continue;
+  double Out=-1,Back=-1;
+  if(!RoadCache.Distance(VS,Home,ID->GetPathNodeGUID(),Preset,Out) ||
+     !RoadCache.Distance(VS,ID->GetPathNodeGUID(),Home,Preset,Back)) {
+   Clock.next=Now; return true;
+  }
+  if(Out>=0 && Back>=0) { Anchor=ID; break; }
+ }
+ if(!Anchor) { R.Diagnostic=TEXT("Abort return: no proved alternate depot anchor; retry scheduled"); return true; }
+ if(O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.RouteIntent || V->IsCurrentlyDocking()) return false;
+ const TArray<FGuid> Intent={Home,Anchor->GetPathNodeGUID()};
+ V->SetVehicleRoute(Intent);
+ if(V->GetVehicleRoute()!=Intent) return false;
+ R.RouteIntent=Intent; R.AbortReturn=true; R.State=static_cast<uint8>(filn::State::Returning);
+ V->SetCurrentTargetWaypoint(0);
+ if(V->GetCurrentTargetWaypointIndex()!=0 || !V->IsAutopilotEnabled() || O->GetDriver()) return false;
+ R.TravelProgress.Reset(); R.Elapsed=0;
+ R.Diagnostic=TEXT("Aborted shipment: native return route read back; cargo and leases retained until home");
+ return true;
+}

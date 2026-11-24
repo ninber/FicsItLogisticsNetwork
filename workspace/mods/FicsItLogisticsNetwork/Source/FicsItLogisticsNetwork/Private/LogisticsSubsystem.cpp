@@ -58,6 +58,16 @@ FGuid ALogisticsSubsystem::StationId(AFGDockingStationIdentifier* Station) {
  FFILNStation Entry; Entry.InstanceId=FGuid::NewGuid(); Entry.Station=Station;
  Stations.Add(Entry); StationIds.Add(Station,Entry.InstanceId); return Entry.InstanceId;
 }
+bool ALogisticsSubsystem::RestoreJobReservation(FFILNRegistration& R) {
+ if(!R.JobId.IsValid() || !R.TruckId.IsValid()) return false;
+ if(!R.ProviderLease.IsValid() && IsValid(R.Provider)) R.ProviderLease=StationId(R.Provider);
+ if(!R.RequesterLease.IsValid() && IsValid(R.Requester)) R.RequesterLease=StationId(R.Requester);
+ if(R.RequesterLease.IsValid()) {
+  if(R.RetainedCargo) return Reservations.AcquireDelivery(Key(R.JobId),Key(R.TruckId),Key(R.RequesterLease));
+  if(R.ProviderLease.IsValid()) return Reservations.Acquire(Key(R.JobId),Key(R.TruckId),Key(R.ProviderLease),Key(R.RequesterLease));
+ }
+ return false; // old incomplete records require explicit reconciliation, not guessed leases
+}
 void ALogisticsSubsystem::Rebuild() {
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
  TransferObservers.Empty();
@@ -85,17 +95,12 @@ void ALogisticsSubsystem::Rebuild() {
   if(StateOf(R)!=S::Idle) {
    const bool Resume=R.Automatic && R.Resource && R.ExpectedCargo>0 && R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning) &&
     IsValid(R.Vehicle) && IsValid(R.Vehicle->GetOwnerVehicle()) && !R.Vehicle->GetOwnerVehicle()->GetDriver() && R.Vehicle->IsAutopilotEnabled() &&
-    R.Vehicle->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home) && IsValid(R.Requester) && (R.RetainedCargo || IsValid(R.Provider));
+    R.Vehicle->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home) && (R.AbortReturn || (IsValid(R.Requester) && (R.RetainedCargo || IsValid(R.Provider))));
    if(Resume) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
    else SetState(R,S::Recovery);
    if(!Resume && IsValid(R.Vehicle) && IsValid(R.Vehicle->GetOwnerVehicle()) && !R.Vehicle->GetOwnerVehicle()->GetDriver() &&
       !R.RouteIntent.IsEmpty() && R.Vehicle->GetVehicleRoute()==R.RouteIntent && R.Vehicle->IsAutopilotEnabled()) R.Vehicle->SetAutopilotEnabled(false);
-   bool Reserved=false;
-   if(R.JobId.IsValid() && IsValid(R.Requester)) {
-    if(R.RetainedCargo) Reserved=Reservations.AcquireDelivery(Key(R.JobId),Key(R.TruckId),Key(StationId(R.Requester)));
-    else if(IsValid(R.Provider)) Reserved=Reservations.Acquire(Key(R.JobId),Key(R.TruckId),Key(StationId(R.Provider)),Key(StationId(R.Requester)));
-   }
-   if(!Reserved) bDispatchBlocked=true;
+   if(!RestoreJobReservation(R)) bDispatchBlocked=true;
   }
  }
  for(const auto& C:StationConfigs) if(IsValid(C.Station)) {
@@ -416,15 +421,19 @@ void ALogisticsSubsystem::Observe() {
   const double Now=GetWorld()->GetTimeSeconds();
   R.Elapsed+=static_cast<float>(FMath::Max(0.0,Now-R.LastObserved)); R.LastObserved=Now;
   auto* PB=Building(R.Provider); auto* QB=Building(R.Requester); auto* HB=Building(R.Home);
-  if(!IsValid(R.Vehicle) || !IsValid(R.Vehicle->GetOwnerVehicle()) || (!R.RetainedCargo && !IsValid(PB)) || !IsValid(QB) || !IsValid(HB)) {
-   Recover(R,TEXT("Vehicle or station destroyed/unavailable")); ++Cursor; continue;
+  if(!IsValid(R.Vehicle) || !IsValid(R.Vehicle->GetOwnerVehicle()) || !IsValid(HB) || !ValidHome(R.Home)) {
+   Recover(R,TEXT("Vehicle or home destroyed/unavailable")); ++Cursor; continue;
   }
-  if(!ValidHome(R.Home) || (!R.RetainedCargo && !PB->GetIsInLoadMode()) || QB->GetIsInLoadMode() || R.Vehicle->GetVehicleRoute()!=R.RouteIntent) {
-   Recover(R,TEXT("Home cargo/mode, endpoint mode or route changed")); ++Cursor; continue;
+  if(!R.AbortReturn && ((!R.RetainedCargo && (!IsValid(PB) || !PB->GetIsInLoadMode())) || !IsValid(QB) || QB->GetIsInLoadMode())) {
+   if(!R.Automatic || !TryAbortToHome(R,Now)) Recover(R,TEXT("Endpoint unavailable; safe return not established"));
+   ++Cursor; continue;
+  }
+  if(R.Vehicle->GetVehicleRoute()!=R.RouteIntent) {
+   Recover(R,TEXT("Native route changed outside FILN")); ++Cursor; continue;
   }
   auto* Owner=R.Vehicle->GetOwnerVehicle();
   if(Owner->GetDriver() || !R.Vehicle->IsAutopilotEnabled()) { Recover(R,TEXT("Player control or autopilot disabled; leave vehicle state untouched")); ++Cursor; continue; }
-  const bool AtP=PB && PB->GetDockedActor()==Owner, AtQ=QB->GetDockedActor()==Owner, AtH=HB->GetDockedActor()==Owner;
+  const bool AtP=PB && PB->GetDockedActor()==Owner, AtQ=IsValid(QB) && QB->GetDockedActor()==Owner, AtH=HB->GetDockedActor()==Owner;
   const S Before=StateOf(R); S Next=Before;
   if(R.Automatic) {
    auto* Cargo=Owner->GetStorageInventory();
@@ -467,7 +476,7 @@ void ALogisticsSubsystem::Observe() {
   else if(Before==S::Returning && AtH) {
    if(!R.Automatic) R.Vehicle->SetAutopilotEnabled(false);
    auto* Cargo=Owner->GetStorageInventory();
-   if(!Cargo || (!R.Automatic && !Cargo->IsEmpty()) || (R.Automatic && R.DeliveredCargo<=0 && !(R.LegacyDelivery && Cargo->IsEmpty()))) { Recover(R,TEXT("Returned with cargo: incomplete unload requires operator recovery")); ++Cursor; continue; }
+   if(!Cargo || (!R.Automatic && !Cargo->IsEmpty()) || (R.Automatic && R.DeliveredCargo<=0 && !R.AbortReturn && !(R.LegacyDelivery && Cargo->IsEmpty()))) { Recover(R,TEXT("Returned with cargo: incomplete unload requires operator recovery")); ++Cursor; continue; }
    if(R.Automatic && FMath::Abs(Owner->GetForwardSpeed())<=1.f) {
     if(!RestoreHomeRoute(R)) { Recover(R,TEXT("Home route restoration failed; reservations retained")); ++Cursor; continue; }
     Next=filn::Advance(Before,filn::Event::HomeStopped);
@@ -480,7 +489,9 @@ void ALogisticsSubsystem::Observe() {
    UE_LOG(LogFILN,Log,TEXT("job=%s state=%d; docking observation only, transfer unverified"),*R.JobId.ToString(),R.State);
    if(Next==S::Completed) {
     Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
-    R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.LegacyDelivery=false;
+    if(R.AbortReturn) R.Diagnostic=FString::Printf(TEXT("Aborted shipment returned home; delivered=%d retained=%d; no delivery success inferred"),R.DeliveredCargo,R.LastCargo);
+    R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.LegacyDelivery=false; R.AbortReturn=false;
+    R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate();
     R.NavigationRetry.Reset(); R.TravelProgress.Reset();
     Active.RemoveAtSwap(Cursor); continue;
    }

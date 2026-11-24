@@ -180,7 +180,7 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename,bool Apply
   if(!Apply) { MigrationReport.Add(Home+TEXT(": compatible active delivery/return adoption available")); continue; }
   FFILNRegistration R;
   R.TruckId=FGuid::NewGuid(); R.BayId=StationId(H); R.JobId=FGuid::NewGuid();
-  R.Vehicle=Candidate; R.Home=H; R.Requester=Q; R.Resource=Config->Resource;
+  R.Vehicle=Candidate; R.Home=H; R.Requester=Q; R.Resource=Config->Resource; R.RequesterLease=StationId(Q);
   R.Automatic=true; R.RetainedCargo=true; R.LegacyDelivery=true; R.RouteIntent=Current;
   R.ExpectedCargo=FMath::Max(1,Quantity); R.LastCargo=Quantity; R.LastObserved=GetWorld()->GetTimeSeconds();
   R.State=static_cast<uint8>(Decision==filn::legacy::RestoreAction::Deliver?filn::State::ToRequester:filn::State::Returning);

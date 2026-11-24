@@ -71,3 +71,7 @@
 - [x] T059 Implement shared transactional station filter restoration and guarded uninstall preflight; rollback owned writes on failure and retain conflicting state.
 - [x] T060 Implement bounded cleanup for positively observed destroyed vehicle identifiers; release only that registration's owned leases and repair indices.
 - [ ] T061 Verify destruction lifecycle and independent uninstall/save load; unresolved references and surviving vehicles with missing endpoints remain fail-closed.
+
+- [x] T062 Implement guarded abort-to-home routing using a distinct validated depot anchor and preserve cargo/leases until actual home arrival.
+- [x] T063 Save stable reservation endpoint identities for new automatic and imported jobs; restore leases even when endpoint references are missing.
+- [ ] T064 Verify native route writes, abort return, anchor behavior and save/reload in game. Recovery after native auto-sanitization of the old route and missing homes remains unresolved.

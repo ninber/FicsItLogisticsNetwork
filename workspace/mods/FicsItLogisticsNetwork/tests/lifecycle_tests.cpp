@@ -13,5 +13,8 @@ int main(){ int n=0; Progress p;
   bool a=mask&1,b=mask&2,c=mask&4,d=mask&8,e=mask&16,f=mask&32,g=mask&64;
   CHECK(SafeHomeCompletion(a,b,c,d,e,f,g)==(mask==119));
  }
+ for(unsigned mask=0;mask<64;++mask) {
+  CHECK(CanAbortToHome(mask&1,mask&2,mask&4,mask&8,mask&16,mask&32)==(mask==51));
+ }
  std::cout<<n<<" lifecycle checks passed\n";
 }
