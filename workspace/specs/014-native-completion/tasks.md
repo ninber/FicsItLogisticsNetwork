@@ -120,3 +120,6 @@
 
 - [x] T094 Remove separate AP-enabling/manual unmeasured dispatch path; use common native offer/commit path. Verify live slot filters and medium, protect reserved route writes against reentrant state change, compare equal nearest-provider distances by empty leg, unify parked radius/vertical/foreign-dock checks.
 - [ ] T095 Verify actual native dispatch, road ties, live filter changes and route setter reentrancy in runtime; portable checks do not prove game API behavior.
+
+- [x] T096 Preflight native saved registry identities, endpoint leases, states and configuration before native route/filter reconciliation; reject duplicate IDs, live mismatches, and unknown phases; preserve unresolved endpoint IDs and revoke inconsistent idle provenance.
+- [ ] T097 Verify current-head native save/load with valid and conflicting own-state fixtures, missing endpoints and AP-on/off vehicles; no legacy save migration involved.

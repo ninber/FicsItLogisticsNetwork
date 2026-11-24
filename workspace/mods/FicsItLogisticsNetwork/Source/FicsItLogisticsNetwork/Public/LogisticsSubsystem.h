@@ -111,7 +111,9 @@ private:
  filn::Ownership Ownership;
  filn::Reservations Reservations;
  TMap<AFGWheeledVehicleIdentifier*, int32> ByVehicle;
- TMap<AFGDockingStationIdentifier*, FGuid> StationIds;
+ TMap<TWeakObjectPtr<AFGDockingStationIdentifier>, FGuid> StationIds;
+ TSet<FGuid> StationIdentityIndex;
+ bool bRegistryValidated=false;
  // Contains only jobs that need observation, not idle fleet members.
  TArray<int32> Active;
  int32 Cursor = 0;

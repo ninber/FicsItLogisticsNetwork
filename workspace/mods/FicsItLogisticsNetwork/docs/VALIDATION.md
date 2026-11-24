@@ -86,3 +86,6 @@ M2 automatic scheduler, M3 lazy cache, M4 telemetry and M5 FIN adapter remain de
 - Branch commit 769058d: exact FILNTransferLedger.h and transfer_ledger_tests.cpp blobs compiled with the same options/compilers; each printed 20 checks passed. Git blob hashes matched.
 - These are portable policy results only. The Unreal adapters, migration source, native API semantics and all 22 runtime/release acceptance gates remain unverified after these changes. Earlier build evidence predates the continuation; do not treat it as current-head compilation.
 - No game, installed mod or live save was changed. Explicit rehome requires a docked, stationary, AP-off registered truck and valid designated depot. Conflicting or unresolved ownership remains blocked, not automatically repaired.
+
+## Native dispatch continuation
+At b695eccd84126e910cc24e8bdf0a9e4f07ecdfeb, exact FILNDispatchPolicy.h (blob 7a494e1f9687da5bc0672b4a5540d37c17267347) and provider_discovery_tests.cpp (blob bf6cd121f52ae1b5d05a645f71cbe77bcc8b279e) compiled with GCC 14.2 and Clang 17, C++20 -O2 -Wall -Wextra -Wpedantic -Werror. Both runs printed 26 checks passed. The full portable suite and current Unreal adapters are not verified by these runs.

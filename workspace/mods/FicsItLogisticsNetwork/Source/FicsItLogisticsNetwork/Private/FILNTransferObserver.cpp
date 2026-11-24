@@ -30,7 +30,7 @@ void ALogisticsSubsystem::WatchTransfers(FFILNRegistration& R) {
  auto* Observer=NewObject<UFILNTransferObserver>(this); Observer->Bind(this,V,Owner->GetStorageInventory()); TransferObservers.Add(Observer);
 }
 void ALogisticsSubsystem::Transfer(AFGWheeledVehicleIdentifier* V,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other,bool Added) {
- if(!HasAuthority() || !IsInGameThread() || Amount<=0) return;
+ if(!HasAuthority() || !IsInGameThread() || !bRegistryValidated || Amount<=0) return;
  const auto* Index=ByVehicle.Find(V); if(!Index || !Registrations.IsValidIndex(*Index)) return; auto& R=Registrations[*Index];
  using S=filn::State; const auto State=static_cast<S>(R.State);
  if(State==S::Idle || State==S::Recovery || !R.Automatic) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; return; }
