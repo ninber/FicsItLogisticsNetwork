@@ -450,6 +450,7 @@ void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& 
   for(auto* H:VS->GetDockingStations()) if(IsValid(H)) UE_LOG(LogFILN,Log,TEXT("station %s name=%s node=%s"),*H->GetPathName(),*H->GetStationName().ToString(),*H->GetPathNodeGUID().ToString());
   return;
  }
+ if(Command==TEXT("legacyJournal") && Args.Num()==1) { ImportLegacyJournal(Args[0]); return; }
  if(Command==TEXT("legacy") && Args.Num()==1 && (Args[0]==TEXT("preview") || Args[0]==TEXT("import"))) { ImportLegacy(Args[0]==TEXT("import")); return; }
  if(Command==TEXT("removeStation") && Args.Num()==1) {
   for(auto* Station:VS->GetDockingStations()) if(IsValid(Station) && Station->GetPathName()==Args[0]) { RemoveStation(Station); return; }

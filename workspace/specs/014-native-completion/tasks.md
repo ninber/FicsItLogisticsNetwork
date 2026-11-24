@@ -58,3 +58,6 @@
 
 - [x] T051 Port explicit Lua depot enrollment: reject ambiguous homes/trucks and unrelated routes, assign/read back home-only/AP-on, guard rollback and audit native fuel connections.
 - [ ] T052 Verify real native home-only AP acceptance (including initially unfueled trucks), rollback, exclusive ownership, hold/fuel behavior, legacy manual pair workflow and explicit registration UI in disposable game.
+
+- [x] T053 Add legacy recipe-based idle depot adoption and strict bounded Lua dispatch journal parser/route matching preview.
+- [ ] T054 Complete active journal job restoration and physical class/recipe conversion; verify actual migration and save reload. Journal preview is not job migration.

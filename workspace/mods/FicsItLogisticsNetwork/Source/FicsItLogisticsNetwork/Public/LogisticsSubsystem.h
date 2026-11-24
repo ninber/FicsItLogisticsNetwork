@@ -90,6 +90,8 @@ private:
  uint64 ScanRoadRevision=0;
  int32 FuelCursor=0;
  void ImportLegacy(bool Apply);
+ void ImportLegacyJournal(const FString& Filename);
+ bool AdoptLegacyHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Home,bool Apply);
  bool RemoveStation(AFGDockingStationIdentifier* Station);
  void ServiceFuel();
  filn::Ownership Ownership;
