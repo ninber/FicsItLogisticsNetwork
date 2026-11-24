@@ -30,5 +30,22 @@ class NativePackageVerifierTests(unittest.TestCase):
         result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(meta),'Binaries/Win64/FactoryGame-FicsItLogisticsNetwork-Win64-Shipping.dll':b'not a PE'})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Invalid PE', result.stderr)
+    def test_signature_only_dll_is_rejected(self):
+        meta = {'SemVersion':'0.1.0','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'}]}
+        data = bytearray(128)
+        data[:2] = b'MZ'
+        data[60:64] = (64).to_bytes(4, 'little')
+        data[64:70] = b'PE\0\0d\x86'
+        result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(meta),'Binaries/Win64/FactoryGame-FicsItLogisticsNetwork-Win64-Shipping.dll':data})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Invalid x64 PE DLL structure', result.stderr)
+    def test_case_colliding_paths_are_rejected(self):
+        result = self.probe({'Config/test.ini':'a','config/Test.ini':'b'})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('case-colliding', result.stderr)
+    def test_windows_drive_path_is_rejected(self):
+        result = self.probe({'C:/outside':'bad'})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Unsafe archive path', result.stderr)
 if __name__ == '__main__':
     unittest.main()

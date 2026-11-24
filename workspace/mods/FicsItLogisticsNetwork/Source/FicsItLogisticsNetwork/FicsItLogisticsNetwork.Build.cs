@@ -7,6 +7,8 @@ public class FicsItLogisticsNetwork : ModuleRules
 	public FicsItLogisticsNetwork(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+		// Keep this module independent of shared PCHs built through other engine paths.
+		PrivatePCHHeaderFile = "Private/FILNPrivatePCH.h";
 		CppStandard = CppStandardVersion.Cpp20;
 
 		// FactoryGame transitive dependencies

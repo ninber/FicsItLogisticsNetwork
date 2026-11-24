@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#define near // Win32 headers define this legacy keyword macro.
 #include "FILNIdlePolicy.h"
+#undef near
 #include <cstdlib>
 #include <iostream>
 using namespace filn::idle;
@@ -9,7 +11,7 @@ int main(){
  CHECK(Evaluate(s)==Action::Hold);
  s.docked=false; CHECK(Evaluate(s)==Action::NativeReturn);
  s.held=true; CHECK(Evaluate(s)==Action::Hold);
- s.near=false; CHECK(Evaluate(s)==Action::NativeReturn);
+ s.homeNearby=false; CHECK(Evaluate(s)==Action::NativeReturn);
  s.fault=true; CHECK(Evaluate(s)==Action::RetryEmptyReturn);
  s.empty=false; CHECK(Evaluate(s)==Action::NativeReturn);
  s.empty=true; s.fuel=false; CHECK(Evaluate(s)==Action::NativeReturn);

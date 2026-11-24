@@ -92,3 +92,13 @@ At b695eccd84126e910cc24e8bdf0a9e4f07ecdfeb, exact FILNDispatchPolicy.h (blob 7a
 
 ## Native registry and lifecycle continuation
 At c16b81332eeced1baf7887dc1a610f093ce8e581, the exact FILNRegistryPolicy.h (6eaa62859075946911570c806b950c9e00016e4b), registry_tests.cpp (dc2c0bc478948ed9b6d5632b03aa4931265e64e5) and FILNCore.h (e67ac1b96e0645a384e8308c4daccb09b070b445) were compiled locally with GCC 14.2 and Clang 17 using C++20 -O2 -Wall -Wextra -Wpedantic -Werror. Both runs passed 528 policy checks. The same unchanged, hash-matched rehome and transfer ledger tests were rerun at 557cf30: 2056 and 20 checks passed per compiler. Including provider discovery (26), four portable suites passed 2630 assertions per compiler. Full portable test script, UHT/UBT, actual actor destruction/streaming, native save/load and package remain unverified on the current branch. No legacy migration work or game/save modification in this continuation.
+
+
+## Current GitHub main verification
+
+Baseline 9623afb: 14 portable suites / 7846 checks passed on each GCC and Clang;
+113 Python and 27 JavaScript tests passed. Linux UHT/compile/link and EGS/Steam
+Win64 cook/package/static artifact checks passed. Two actual headless inventory
+cases FAILED on generated SDK Resize(2) returning 0 slots. No assertions weakened.
+See ../../../specs/014-native-completion/local-verification.md for receipt, fixes
+and remaining actual-game acceptance. No live game/save/deployment actions occurred.

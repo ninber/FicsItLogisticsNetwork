@@ -13,14 +13,14 @@
 bool ALogisticsSubsystem::HoldVehicle(AFGWheeledVehicleIdentifier* V) {
  if(!HasAuthority() || !IsInGameThread() || !bRegistryValidated || bPreparingUninstall) return false;
  const auto* Index=ByVehicle.Find(V); if(!Index || !Registrations.IsValidIndex(*Index)) return false;
- auto& R=Registrations[*Index]; auto* Owner=IsValid(V)?V->GetOwnerVehicle():nullptr;
+ auto& R=Registrations[*Index]; auto* VehicleActor=IsValid(V)?V->GetOwnerVehicle():nullptr;
  auto* Home=IsValid(R.Home)?R.Home->GetStation():nullptr;
  const auto Phase=static_cast<filn::State>(R.State);
  const bool Arrival=R.JobId.IsValid() && R.Automatic && IsValid(Home) &&
-  filn::recovery::CanFinalizeHome(Phase==filn::State::Returning,Phase==filn::State::Unloading,R.DeliveredCargo>0,R.AbortReturn,Home->GetDockedActor()==Owner);
+  filn::recovery::CanFinalizeHome(Phase==filn::State::Returning,Phase==filn::State::Unloading,R.DeliveredCargo>0,R.AbortReturn,Home->GetDockedActor()==VehicleActor);
  const bool Idle=R.Held && Phase==filn::State::Idle && !R.JobId.IsValid();
  if(!Idle && !Arrival) return false;
- if(!IsValid(Owner) || Owner->GetDriver() || !V->IsAutopilotEnabled() || !IsValid(Home) || !Home->GetDockingPathNode()) { R.Held=false; return false; }
+ if(!IsValid(VehicleActor) || VehicleActor->GetDriver() || !V->IsAutopilotEnabled() || !IsValid(Home) || !Home->GetDockingPathNode()) { R.Held=false; return false; }
  if(Arrival) {
   // Hold a verified physical home arrival until the bounded watchdog reads
   // the final cargo ledger and restores the home-only route. Do not let
@@ -29,8 +29,8 @@ bool ALogisticsSubsystem::HoldVehicle(AFGWheeledVehicleIdentifier* V) {
  } else if(V->GetVehicleRoute()!=R.IdleRoute || R.IdleRoute.Num()!=1 || R.IdleRoute[0]!=R.Home->GetPathNodeGUID()) { R.Held=false; return false; }
  // O(1) for a held truck, with no road or world queries in the tick hook.
  // A vehicle moved away from its bay must not remain frozen by a saved Held bit.
- const FVector Delta=Owner->GetVehicleLocation()-Home->GetDockingPathNode()->GetActorLocation();
- if(!filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,Owner->GetForwardSpeed(),Home->GetDockedActor() && Home->GetDockedActor()!=Owner)) { R.Held=false; return false; }
+ const FVector Delta=VehicleActor->GetVehicleLocation()-Home->GetDockingPathNode()->GetActorLocation();
+ if(!filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,VehicleActor->GetForwardSpeed(),Home->GetDockedActor() && Home->GetDockedActor()!=VehicleActor)) { R.Held=false; return false; }
  return true;
 }
 void ALogisticsSubsystem::InstallParkingHook() {

@@ -25,7 +25,7 @@
 - [ ] T023 Implement complete disable/uninstall semantics and save without FILN acceptance.
 - [ ] T024 Implement native management UI and validated multiplayer server commands.
 - [ ] T025 Run Unreal integration suite and isolated solid/fluid/recovery acceptance.
-- [ ] T026 Execute headless cook/Alpakit Win64 packaging and inspect actual generated artifact.
+- [x] T026 Execute headless cook/Alpakit Win64 packaging and inspect actual generated artifact. Evidence: local-verification.md.
 - [ ] T027 Verify SMM installation/layout and independent mod-disabled disposable save load.
 - [ ] T028 Update draft PR only after reviewable tested changes; keep draft until acceptance.
 
@@ -116,7 +116,7 @@
 - **T091 — external/superseded:** Establish explicit statistics migration semantics for CurrentMax and typed parser representation; preserve history and block dependency-free claims until then. (Not a native release task.)
 
 - [x] T092 Remove embedded legacy importers, saved import metadata, legacy recipe detection, migration console/RPC/UI actions and importer policy tests. Keep general native enrollment, recovery and uninstall. External save tools are not shipped in the mod.
-- [ ] T093 Verify the standalone native package has no legacy import or save-specific dependency; rerun current-head tests/build.
+- [x] T093 Verify the standalone native package has no legacy import or save-specific dependency; rerun current-head tests/build. Static source/package/import inspection and both portable compilers/native targets passed; runtime acceptance stays open.
 
 - [x] T094 Remove separate AP-enabling/manual unmeasured dispatch path; use common native offer/commit path. Verify live slot filters and medium, protect reserved route writes against reentrant state change, compare equal nearest-provider distances by empty leg, unify parked radius/vertical/foreign-dock checks.
 - [ ] T095 Verify actual native dispatch, road ties, live filter changes and route setter reentrancy in runtime; portable checks do not prove game API behavior.
