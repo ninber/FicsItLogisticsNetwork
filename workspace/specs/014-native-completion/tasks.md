@@ -98,3 +98,7 @@
 
 - [x] T079 Implement explicit parked rehome/recovery with exclusive ownership move, owned-lease release, home-only route readback, cargo preservation and AP-off preservation. Replace unsafe unrestricted reset path.
 - [ ] T080 Verify operator-parked recovery to replacement depot after home destruction, save/reload and explicit AP opt-in. Fully automatic reassignment is intentionally not performed.
+
+- [x] T081 Use signed bounded transfer-event ledger independent of delegate mutation timing, reconcile against authoritative inventory snapshots, and require route/AP/lease ownership at transfer and completion.
+- [x] T082 Expose explicit parked recovery through admin-validated native UI RPC.
+- [ ] T083 Verify actual native delegate order, duplicate/missing events, recovery RPC and save consistency in real game; portable accounting tests do not establish delegate behavior.

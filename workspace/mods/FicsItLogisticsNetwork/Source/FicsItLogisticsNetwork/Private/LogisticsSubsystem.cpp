@@ -4,6 +4,7 @@
 #include "FILNEnrollment.h"
 #include "FILNDepotPolicy.h"
 #include "FILNRestore.h"
+#include "FILNTransferLedger.h"
 #include "FILNStationControls.h"
 #include "FILNTransferObserver.h"
 #include "Resources/FGItemDescriptor.h"
@@ -483,7 +484,7 @@ void ALogisticsSubsystem::Observe() {
   }
   auto* Owner=R.Vehicle->GetOwnerVehicle();
   if(Owner->GetDriver() || !R.Vehicle->IsAutopilotEnabled()) { Recover(R,TEXT("Player control or autopilot disabled; leave vehicle state untouched")); ++Cursor; continue; }
-  const bool AtP=PB && PB->GetDockedActor()==Owner, AtQ=IsValid(QB) && QB->GetDockedActor()==Owner, AtH=HB->GetDockedActor()==Owner;
+  const bool AtP=IsValid(PB) && PB->GetDockedActor()==Owner, AtQ=IsValid(QB) && QB->GetDockedActor()==Owner, AtH=HB->GetDockedActor()==Owner;
   const S Before=StateOf(R); S Next=Before;
   if(R.Automatic) {
    auto* Cargo=Owner->GetStorageInventory();
@@ -491,8 +492,7 @@ void ALogisticsSubsystem::Observe() {
    TArray<FInventoryStack> Stacks; Cargo->GetInventoryStacks(Stacks); bool Mixed=false;
    for(const auto& Stack:Stacks) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=R.Resource) Mixed=true;
    const int32 Quantity=Cargo->GetNumItems(R.Resource);
-   const int32 Delta=Quantity-R.LastCargo;
-   if(Mixed || Delta!=0) {
+   if(!filn::transfer::Reconciled({R.LastCargo,R.LoadedCargo,R.DeliveredCargo},Quantity,Mixed)) {
     R.CargoOriginKnown=false; R.CargoOriginStorage=false;
     Recover(R,TEXT("Cargo reconciliation disagrees with native source/target transfer events; no inferred transfer credited")); ++Cursor; continue;
    }
@@ -538,6 +538,7 @@ void ALogisticsSubsystem::Observe() {
    SetState(R,Next);
    UE_LOG(LogFILN,Log,TEXT("job=%s state=%d; docking observation only, transfer unverified"),*R.JobId.ToString(),R.State);
    if(Next==S::Completed) {
+    if(!Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { Recover(R,TEXT("Completion lease ownership mismatch")); bDispatchBlocked=true; ++Cursor; continue; }
     Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
     if(R.LegacyDelivery && R.DeliveredCargo==0) R.Diagnostic=TEXT("Legacy empty return confirmed; no historical delivery credited");
     if(R.AbortReturn) R.Diagnostic=FString::Printf(TEXT("Aborted shipment returned home; delivered=%d retained=%d; no delivery success inferred"),R.DeliveredCargo,R.LastCargo);

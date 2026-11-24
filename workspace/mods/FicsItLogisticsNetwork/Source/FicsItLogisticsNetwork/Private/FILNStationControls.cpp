@@ -156,6 +156,20 @@ void UFILNRemoteControl::RegisterVehicle_Implementation(AFGBuildableDockingStati
  const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
  StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Accepted?NSLOCTEXT("FILN","VehicleRegistered","Vehicle registered: native home-only route and autopilot enabled"):NSLOCTEXT("FILN","VehicleRejected","Enrollment rejected: needs a unique unclaimed empty LOAD depot and empty stopped undriven truck within 8 m; existing non-home or disabled routes are not changed"));
 }
+void UFILNRemoteControl::RehomeVehicle_Implementation(AFGBuildableDockingStation* Target,AFGWheeledVehicleIdentifier* Vehicle) {
+ if(!ValidateContext(Target) || !IsValid(Vehicle) || Vehicle->GetWorld()!=GetWorld()) return;
+ auto* S=Subsystem(GetWorld()); if(!S) return;
+ auto* Mode=GetWorld()->GetAuthGameMode<AGameMode>();
+ auto* Session=Mode?Cast<AFGGameSession>(Mode->GameSession):nullptr;
+ const bool Admin=Session && Session->IsPlayerAdmin(GetOwnerPlayerController());
+ const auto* Index=S->ByVehicle.Find(Vehicle);
+ const bool Accepted=Admin && Index && S->RehomeParkedVehicle(*Index,Target->GetStationIdentifier());
+ const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& E){return IsValid(E.Station) && E.Station->GetStation()==Target;});
+ StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),
+  !Admin?NSLOCTEXT("FILN","AdminRequired","Server administrator permission required"):
+  Accepted?NSLOCTEXT("FILN","RehomeAccepted","Recovery accepted. Cargo preserved; autopilot remains off."):
+  NSLOCTEXT("FILN","RehomeRejected","Recovery rejected. Use a designated unclaimed rest stop, dock the registered truck, stop and disable autopilot first."));
+}
 void UFILNRemoteControl::AdminAction_Implementation(AFGBuildableDockingStation* Target,uint8 Action) {
  if(!ValidateContext(Target)) return;
  auto* Mode=GetWorld()->GetAuthGameMode<AGameMode>();
@@ -212,6 +226,7 @@ void UFILNStationControls::NativeOnInitialized() {
  AddAction(NSLOCTEXT("FILN","RegisterDepot","Designate this station as a rest stop (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::RegisterDepot);
  AddAction(NSLOCTEXT("FILN","RemoveDepot","Remove rest-stop role (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::RemoveDepot);
  AddAction(NSLOCTEXT("FILN","EnrollVehicle","Register selected vehicle at this depot"))->OnClicked.AddDynamic(this,&UFILNStationControls::EnrollVehicle);
+ AddAction(NSLOCTEXT("FILN","RecoverVehicle","Recover selected parked truck at this rest stop (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::RecoverVehicle);
  AddAction(NSLOCTEXT("FILN","ToggleDispatcher","Enable / disable automatic dispatch (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ToggleDispatcher);
  AddAction(NSLOCTEXT("FILN","PreviewLegacy","Preview legacy settings import (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviewLegacy);
  AddAction(NSLOCTEXT("FILN","ImportLegacy","Import compatible legacy settings (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ImportLegacy);
@@ -306,6 +321,10 @@ void UFILNStationControls::PreviousPage() { if(OverviewPage>0) { --OverviewPage;
 void UFILNStationControls::EnrollVehicle() {
  const int32 Index=Vehicles->GetSelectedIndex();
  if(auto* R=Remote(); R && VehicleChoices.IsValidIndex(Index)) { R->Receiver=this; R->RegisterVehicle(Station,VehicleChoices[Index]); }
+}
+void UFILNStationControls::RecoverVehicle() {
+ const int32 Index=Vehicles->GetSelectedIndex();
+ if(auto* R=Remote(); R && VehicleChoices.IsValidIndex(Index)) { R->Receiver=this; R->RehomeVehicle(Station,VehicleChoices[Index]); }
 }
 void UFILNStationControls::RegisterDepot() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,8); } }
 void UFILNStationControls::RemoveDepot() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,9); } }

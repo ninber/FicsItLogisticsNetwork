@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "FILNTransferObserver.h"
 #include "LogisticsSubsystem.h"
+#include "FILNTransferLedger.h"
 #include "FGInventoryComponent.h"
 #include "Resources/FGItemDescriptor.h"
 #include "Buildables/FGBuildableDockingStation.h"
@@ -33,8 +34,12 @@ void ALogisticsSubsystem::Transfer(AFGWheeledVehicleIdentifier* V,TSubclassOf<UF
  const auto* Index=ByVehicle.Find(V); if(!Index || !Registrations.IsValidIndex(*Index)) return; auto& R=Registrations[*Index];
  using S=filn::State; const auto State=static_cast<S>(R.State);
  if(State==S::Idle || State==S::Recovery || !R.Automatic) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; return; }
- if(!R.Automatic || State==S::Idle || State==S::Recovery || !IsValid(V->GetOwnerVehicle())) return;
- if(V->GetOwnerVehicle()->GetDriver()) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; Recover(R,TEXT("Player took control; leave cargo untouched")); return; }
+ if(!IsValid(V->GetOwnerVehicle())) return;
+ if(V->GetOwnerVehicle()->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.RouteIntent ||
+    !Reservations.OwnsJob(TCHAR_TO_UTF8(*R.JobId.ToString()),TCHAR_TO_UTF8(*R.TruckId.ToString()))) {
+  R.CargoOriginKnown=false; R.CargoOriginStorage=false;
+  Recover(R,TEXT("Cargo event outside owned AP-on journey; leave cargo untouched")); return;
+ }
  auto* Provider=IsValid(R.Provider)?R.Provider->GetStation():nullptr;
  auto* Requester=IsValid(R.Requester)?R.Requester->GetStation():nullptr;
  const bool AtSource=Added && !R.RetainedCargo && IsValid(Provider) && Provider->GetDockedActor()==V->GetOwnerVehicle() &&
@@ -42,7 +47,14 @@ void ALogisticsSubsystem::Transfer(AFGWheeledVehicleIdentifier* V,TSubclassOf<UF
  const bool AtTarget=!Added && IsValid(Requester) && Requester->GetDockedActor()==V->GetOwnerVehicle() &&
   Other==Requester->GetInventory() && (State==S::ToRequester || State==S::Unloading);
  if(Item!=R.Resource || (!AtSource && !AtTarget)) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; Recover(R,TEXT("Cargo event has no matching reserved native transfer endpoint")); return; }
- if(Added) { R.CargoOriginKnown=true; R.CargoOriginStorage=filn::dispatch::IsStorage(TCHAR_TO_UTF8(*R.Provider->GetStationName().ToString())); R.LoadedCargo=static_cast<int32>(FMath::Min<int64>(MAX_int32,static_cast<int64>(R.LoadedCargo)+Amount)); R.State=static_cast<uint8>(S::Loading); }
- else { R.DeliveredCargo=static_cast<int32>(FMath::Min<int64>(MAX_int32,static_cast<int64>(R.DeliveredCargo)+Amount)); R.State=static_cast<uint8>(S::Unloading); }
- R.LastCargo=V->GetOwnerVehicle()->GetStorageInventory()->GetNumItems(R.Resource);
+ // Delegate timing (before/after inventory mutation) must not decide the ledger.
+ // Reconcile the signed event total with the next authoritative inventory snapshot.
+ filn::transfer::Ledger Ledger{R.LastCargo,R.LoadedCargo,R.DeliveredCargo};
+ if(!filn::transfer::Record(Ledger,Amount,Added)) {
+  R.CargoOriginKnown=false; R.CargoOriginStorage=false;
+  Recover(R,TEXT("Native transfer event exceeds the observed cargo ledger")); return;
+ }
+ R.LastCargo=Ledger.cargo; R.LoadedCargo=Ledger.loaded; R.DeliveredCargo=Ledger.delivered;
+ if(Added) { R.CargoOriginKnown=true; R.CargoOriginStorage=filn::dispatch::IsStorage(TCHAR_TO_UTF8(*R.Provider->GetStationName().ToString())); R.State=static_cast<uint8>(S::Loading); }
+ else { R.State=static_cast<uint8>(S::Unloading); if(!R.LastCargo) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; } }
 }

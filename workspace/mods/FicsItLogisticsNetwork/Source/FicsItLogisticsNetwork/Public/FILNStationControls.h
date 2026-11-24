@@ -54,6 +54,7 @@ public:
  UFUNCTION(Server,Reliable) void NetworkOverview(AFGBuildableDockingStation* Station,int32 Page);
  UFUNCTION(Client,Reliable) void OverviewReply(AFGBuildableDockingStation* Station,int32 Page,int32 Pages,const FText& Text);
  UFUNCTION(Server,Reliable) void RegisterVehicle(AFGBuildableDockingStation* Station,AFGWheeledVehicleIdentifier* Vehicle);
+ UFUNCTION(Server,Reliable) void RehomeVehicle(AFGBuildableDockingStation* Station,AFGWheeledVehicleIdentifier* Vehicle);
  UFUNCTION(Server,Reliable) void AdminAction(AFGBuildableDockingStation* Station,uint8 Action);
  UFUNCTION(Client,Reliable) void StationReply(AFGBuildableDockingStation* Station,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message);
  TWeakObjectPtr<UFILNStationControls> Receiver;
@@ -95,6 +96,7 @@ private:
  UFUNCTION() void NextPage();
  UFUNCTION() void PreviousPage();
  UFUNCTION() void EnrollVehicle();
+ UFUNCTION() void RecoverVehicle();
  UFUNCTION() void RegisterDepot();
  UFUNCTION() void RemoveDepot();
  UFUNCTION() void ToggleDispatcher();
