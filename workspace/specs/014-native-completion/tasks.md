@@ -105,3 +105,6 @@
 
 - [x] T084 Adopt exact pre-pickup legacy routes only for empty trucks and still-eligible full-load providers/empty requesters with native directed remaining legs, both endpoint leases, and no route/cargo writes. Permit explicitly designated converted depots in journal import.
 - [ ] T085 Verify migration of pre-pickup and post-conversion journeys in real game, including native path semantics and duplicate prevention; reject ambiguous/docking routes.
+
+- [x] T086 Extend conversion/manifest import to 512 rows, support absent/empty programmable filters as ordinary vanilla stations without demand inference, and preserve the verified native force-fuel property. Add synthetic city-scale regression matching observed record counts.
+- [ ] T087 Execute full parser roundtrip on a disposable real city copy; resolve exact per-actor filters, cargo, docking and residual schematic/recipe dependencies. Raw compressed-record inspection is not a full object parser.

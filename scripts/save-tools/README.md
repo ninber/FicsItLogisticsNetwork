@@ -68,3 +68,13 @@ is deliberately not adopted; finish legacy jobs before conversion.
 Preview is not a guarantee of native setter acceptance. No game process is
 started or stopped by these tools. Test with
 `node --test scripts/save-tools/native-station-conversion.test.cjs`.
+
+### City-scale conversion and unconfigured templates
+
+The manifest accepts up to 512 explicitly selected stations and 256 KiB.
+A missing or empty legacy FilterItem is converted to an ordinary vanilla station
+and recorded as an `ordinary` row, not a FILN requester. No resource is inferred.
+Malformed, multi-resource or contradictory explicit filters still fail closed.
+Native `mForceVehicleFuelType` is a vanilla docking-station property and is preserved.
+Actual legacy recipe/schematic dependencies must be audited separately; do not
+remove KDataForge or TruckStationSettings based solely on station conversion.

@@ -12,7 +12,7 @@ function guid(value) {
  assert(!/^0+$/.test(key),'Zero road GUID');return key;
 }
 function convert(save,selection) {
- assert(Array.isArray(selection)&&selection.length>0&&selection.length<=128,'Explicit selection of 1..128 stations required');
+ assert(Array.isArray(selection)&&selection.length>0&&selection.length<=512,'Explicit selection of 1..512 stations required');
  // Never mutate source, including when a later row fails validation.
  const next=structuredClone(save);
  const objects=Object.values(next.levels).flatMap(l=>l.objects),by=new Map(objects.map(o=>[o.instanceName,o]));
@@ -31,18 +31,24 @@ function convert(save,selection) {
   const mode=props.mIsInLoadMode?.value===false?'UNLOAD':'LOAD';
   const stock=cargoItems(by,station);assert(stock,'Cargo inventory cannot be verified');
   assert(!props.mDockedActor?.value?.pathName,'Docked station is not eligible for offline conversion');
-  let item='-';
+  let item='-',role=depot?'depot':'station';
   if(depot) {
    assert(mode==='LOAD'&&stock.length===0&&!props.FilterItem,'Depot cargo/mode/filter conflict');
   } else {
    const filter=props.FilterItem?.values;
-   assert(Array.isArray(filter)&&filter.length===1&&resource.test(filter[0]?.pathName||''),'Exactly one explicit vanilla resource required');
-   item=filter[0].pathName;
-   assert(stock.every(x=>x.item===item),'Cargo differs from explicit legacy filter');
+   if(props.FilterItem===undefined || (Array.isArray(filter)&&filter.length===0)) {
+    // Blank programmable station templates are present in real cities. Convert
+    // to vanilla, not to a guessed FILN requester. Preserve even mixed cargo.
+    role='ordinary';
+   } else {
+    assert(Array.isArray(filter)&&filter.length===1&&resource.test(filter[0]?.pathName||''),'Exactly one explicit vanilla resource or an absent/empty filter required');
+    item=filter[0].pathName;
+    assert(stock.every(x=>x.item===item),'Cargo differs from explicit legacy filter');
+   }
   }
-  changes.push({path,oldClass:station.typePath,oldRecipe:recipe,oldFilter:structuredClone(props.FilterItem),identifier:id.instanceName,node:node.instanceName,guid:key,mode,item,depot});
+  changes.push({path,oldClass:station.typePath,oldRecipe:recipe,oldFilter:structuredClone(props.FilterItem),identifier:id.instanceName,node:node.instanceName,guid:key,mode,item,depot,role});
   station.typePath=ORDINARY;props.mBuiltWithRecipe.value.pathName=VANILLA;delete props.FilterItem;
-  rows.push([depot?'depot':'station',key,item,mode].join('\t'));
+  rows.push([role,key,item,mode].join('\t'));
  }
  // Invert precisely the three declared edits, and compare the full parsed body.
  const restored=structuredClone(next);
@@ -55,6 +61,7 @@ function convert(save,selection) {
  // Do not certify removal of dependencies: schematic/descriptor/custom component
  // references elsewhere must be reviewed, not blindly stripped.
  const residual=objects.filter(o=>/\/KDataForge\/Gen\/FILN|\/TruckStationSettings\//.test(JSON.stringify(o))).map(o=>o.instanceName);
+ assert(Buffer.byteLength(rows.join('\n')+'\n','utf8')<=262144,'Manifest exceeds native import size limit');
  return {save:next,manifest:rows.join('\n')+'\n',changes,residual};
 }
 module.exports={convert,guid,VANILLA,REST,PROGRAM_RECIPE};

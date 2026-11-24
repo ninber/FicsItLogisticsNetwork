@@ -273,11 +273,11 @@ void ALogisticsSubsystem::ImportConvertedStations(bool Apply) {
  const FString Path=FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("FILN"),TEXT("converted-stations.tsv"));
  const int64 Size=IFileManager::Get().FileSize(*Path);
  FString Data;
- if(Size<0 || Size>65536 || !FFileHelper::LoadFileToString(Data,*Path)) return;
+ if(Size<0 || Size>262144 || !FFileHelper::LoadFileToString(Data,*Path)) return;
  TArray<FString> Lines; Data.ParseIntoArrayLines(Lines,false);
- if(Lines.IsEmpty() || Lines[0]!=TEXT("FILN_NATIVE_STATIONS_V1") || Lines.Num()>130) return;
+ if(Lines.IsEmpty() || Lines[0]!=TEXT("FILN_NATIVE_STATIONS_V1") || Lines.Num()>514) return;
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
- struct FRow { AFGDockingStationIdentifier* Station; TSubclassOf<UFGItemDescriptor> Resource; bool Depot; };
+ struct FRow { AFGDockingStationIdentifier* Station; TSubclassOf<UFGItemDescriptor> Resource; bool Depot; bool Ordinary; };
  TArray<FRow> Rows; TSet<FGuid> Seen;
  for(int32 I=1;I<Lines.Num();++I) {
   if(I==Lines.Num()-1 && Lines[I].IsEmpty()) continue;
@@ -297,7 +297,11 @@ void ALogisticsSubsystem::ImportConvertedStations(bool Apply) {
      B->GetIsInLoadMode()!=(Fields[3]==TEXT("LOAD"))) return;
   const auto Recipe=B->GetBuiltWithRecipe();
   if(!Recipe || Recipe->GetPathName()!=TEXT("/Game/FactoryGame/Recipes/Buildings/Recipe_TruckStation.Recipe_TruckStation_C")) return;
-  if(Fields[0]==TEXT("depot") && Fields[2]==TEXT("-") && ValidHome(ID)) { Rows.Add({ID,nullptr,true}); continue; }
+  if(Fields[0]==TEXT("depot") && Fields[2]==TEXT("-") && ValidHome(ID)) { Rows.Add({ID,nullptr,true,false}); continue; }
+  if(Fields[0]==TEXT("ordinary") && Fields[2]==TEXT("-")) {
+   if(IsDepot(ID) || StationConfigs.ContainsByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;})) return;
+   Rows.Add({ID,nullptr,false,true}); continue;
+  }
   if(Fields[0]!=TEXT("station") || !Fields[2].StartsWith(TEXT("/Game/FactoryGame/Resource/"))) return;
   const auto Resource=LoadClass<UFGItemDescriptor>(nullptr,*Fields[2]);
   if(!Resource) return;
@@ -311,11 +315,13 @@ void ALogisticsSubsystem::ImportConvertedStations(bool Apply) {
    auto Filter=Inventory->GetAllowedItemOnIndex(Slot);
    if(Filter && Filter!=Resource) return;
   }
-  Rows.Add({ID,Resource,false});
+  Rows.Add({ID,Resource,false,false});
  }
  MigrationReport.Empty();
  for(const auto& Row:Rows) {
-  if(Row.Depot) {
+  if(Row.Ordinary) {
+   MigrationReport.Add(Row.Station->GetPathName()+TEXT(": ordinary vanilla station retained; no resource inferred or assigned"));
+  } else if(Row.Depot) {
    // A converted depot no longer has legacy recipe identity. Only explicit
    // manifest rows authorize adoption, and Pair revalidates unique ownership.
    AFGWheeledVehicleIdentifier* V=nullptr; int32 Claims=0;
