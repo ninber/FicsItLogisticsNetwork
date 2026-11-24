@@ -94,6 +94,11 @@ struct Choice {
     double emptyDistance;
 };
 
+// Ordinary providers have no explicit filter. Their actual single cargo type
+// must match the explicitly configured requester. Never infer requester identity.
+inline bool ProviderResourceMatches(std::string_view requested,std::string_view observed,int kinds,std::string_view configured) {
+ return !requested.empty() && kinds==1 && observed==requested && (configured.empty() || configured==requested);
+}
 inline bool ValidCost(double cost) { return std::isfinite(cost) && cost >= 0.0; }
 
 inline std::optional<Choice> Evaluate(const Offer& offer) {

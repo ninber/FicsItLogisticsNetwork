@@ -33,11 +33,11 @@ bool TransportMedium(const UObject* Object,filn::dispatch::Medium& Out) {
 }
 }
 void ALogisticsSubsystem::ResetScan() {
- bScanning=false; bCheckingRetained=true; Rankings.Empty(); ScanVehicle=0; ScanProvider=0; BestOffer.reset(); BestVehicle=INDEX_NONE; BestProvider=INDEX_NONE;
+ bScanning=false; bCheckingRetained=true; Rankings.Empty(); ProviderCandidates.Empty(); ScanVehicle=0; ScanProvider=0; BestOffer.reset(); BestVehicle=INDEX_NONE; BestProvider=INDEX_NONE;
 }
 bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Offer& O,bool QueryRoads,bool& Pending) {
  Pending=false;
- if(!HasAuthority() || bDispatchBlocked || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !StationConfigs.IsValidIndex(P))) return false;
+ if(!HasAuthority() || bDispatchBlocked || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !ProviderCandidates.IsValidIndex(P))) return false;
  auto& R=Registrations[V]; const auto& C=StationConfigs[Q];
  if(R.State!=static_cast<uint8>(filn::State::Idle) || !R.Held || R.JobId.IsValid()) return false;
  R.Diagnostic=TEXT("No eligible compatible offer for this requester");
@@ -67,18 +67,22 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  Request.id=Id(StationId(C.Station)); Request.label=TCHAR_TO_UTF8(*C.Station->GetStationName().ToString()); Request.resource=Descriptor(C.Resource);
  Request.explicitFilter=true; Request.loadMode=QB->GetIsInLoadMode(); Request.powered=QB->HasPower(); Request.paused=QB->IsProductionPaused();
  Request.occupied=QB->GetDockedActor()!=nullptr || Reservations.StationBusy(Request.id); if(!TransportMedium(QB,Request.medium)) return false;
- Request.depot=HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(C.Station.Get()));
+ Request.depot=IsDepot(C.Station);
  if(!Inventory(QB->GetInventory(),C.Resource,Request.kinds,Request.quantity,Request.capacity)) return false;
  if(P!=INDEX_NONE) {
-  const auto& PC=StationConfigs[P]; auto* PB=IsValid(PC.Station)?PC.Station->GetStation():nullptr;
-  if(!IsValid(PB) || PC.Resource!=C.Resource) return false;
+  auto* ID=ProviderCandidates[P].Get(); auto* PB=IsValid(ID)?ID->GetStation():nullptr;
+  if(!IsValid(PB) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode()) return false;
+  const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& Entry){return Entry.Station==ID;});
+  if(PC && PC->Resource!=C.Resource) return false;
   filn::dispatch::Station Provider;
-  Provider.id=Id(StationId(PC.Station)); Provider.label=TCHAR_TO_UTF8(*PC.Station->GetStationName().ToString()); Provider.resource=Descriptor(PC.Resource);
+  Provider.id=Id(StationId(ID)); Provider.label=TCHAR_TO_UTF8(*ID->GetStationName().ToString()); Provider.explicitFilter=PC!=nullptr;
   Provider.loadMode=PB->GetIsInLoadMode(); Provider.powered=PB->HasPower(); Provider.paused=PB->IsProductionPaused();
   Provider.occupied=PB->GetDockedActor()!=nullptr || Reservations.StationBusy(Provider.id); if(!TransportMedium(PB,Provider.medium)) return false;
-  Provider.depot=HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(PC.Station.Get()));
+  Provider.depot=IsDepot(ID);
   std::string Actual;
-  if(!Inventory(PB->GetInventory(),C.Resource,Provider.kinds,Provider.quantity,Provider.capacity,&Actual) || Actual!=Request.resource) return false;
+  if(!Inventory(PB->GetInventory(),C.Resource,Provider.kinds,Provider.quantity,Provider.capacity,&Actual) ||
+     !filn::dispatch::ProviderResourceMatches(Request.resource,Actual,Provider.kinds,PC?Descriptor(PC->Resource):std::string())) return false;
+  Provider.resource=Actual;
   O.provider=Provider;
  }
  // Cheap eligibility first; zero values here are local sentinels only, never route evidence.
@@ -95,7 +99,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  if(P==INDEX_NONE) {
   if(!Distance(R.Home->GetPathNodeGUID(),C.Station->GetPathNodeGUID(),O.roads.homeToRequester)) return false;
  } else {
-  auto* Provider=StationConfigs[P].Station.Get();
+  auto* Provider=ProviderCandidates[P].Get();
   if(!Distance(Provider->GetPathNodeGUID(),C.Station->GetPathNodeGUID(),O.roads.providerToRequester) ||
      !Distance(R.Home->GetPathNodeGUID(),Provider->GetPathNodeGUID(),O.roads.homeToProvider)) return false;
  }
@@ -107,7 +111,17 @@ void ALogisticsSubsystem::Schedule() {
  const double Now=GetWorld()->GetTimeSeconds();
  if(!bScanning) {
   if(Now<NextDispatch) return;
-  RequestCursor%=StationConfigs.Num(); ScanRoadRevision=RoadCache.Invalidations; bScanning=true; ScanVehicle=0; ScanProvider=0;
+  RequestCursor%=StationConfigs.Num();
+  const auto& Q=StationConfigs[RequestCursor]; auto* QB=IsValid(Q.Station)?Q.Station->GetStation():nullptr;
+  if(!IsValid(QB) || QB->GetIsInLoadMode() || IsDepot(Q.Station) || !Q.Resource || !QB->GetInventory() || !QB->GetInventory()->IsEmpty()) {
+   ++RequestCursor; if(RequestCursor>=StationConfigs.Num()) {RequestCursor=0; NextDispatch=Now+5.;} return;
+  }
+  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
+  ProviderCandidates.Reset();
+  // Native roster enumeration once per requester scan, never per offer.
+  // Eligibility and inventory are read lazily under the existing work budget.
+  for(auto* ID:VS->GetDockingStations()) if(IsValid(ID)) ProviderCandidates.Add(ID);
+  ScanRoadRevision=RoadCache.Invalidations; bScanning=true; ScanVehicle=0; ScanProvider=0;
  }
  auto Finish=[&]() {
   if(ScanRoadRevision!=RoadCache.Invalidations) { ResetScan(); return; }
@@ -133,11 +147,12 @@ void ALogisticsSubsystem::Schedule() {
    if(!Preset) { ++ScanVehicle; continue; }
    auto& Rank=Rankings.FindOrAdd(Preset);
    if(!Rank.Sorted) {
-    if(Rank.Cursor<StationConfigs.Num()) {
-     const auto& C=StationConfigs[Rank.Cursor]; const auto& Q=StationConfigs[RequestCursor];
-     if(IsValid(C.Station) && C.Resource==Q.Resource && IsValid(Q.Station)) {
+    if(Rank.Cursor<ProviderCandidates.Num()) {
+     auto* ID=ProviderCandidates[Rank.Cursor].Get(); const auto& Q=StationConfigs[RequestCursor];
+     auto* B=IsValid(ID)?ID->GetStation():nullptr;
+     if(IsValid(B) && B->GetIsInLoadMode() && ID!=Q.Station && !IsDepot(ID) && IsValid(Q.Station)) {
       double Cost=-1;
-      if(!RoadCache.Distance(AFGVehicleSubsystem::Get(GetWorld()),C.Station->GetPathNodeGUID(),Q.Station->GetPathNodeGUID(),Preset,Cost)) return;
+      if(!RoadCache.Distance(AFGVehicleSubsystem::Get(GetWorld()),ID->GetPathNodeGUID(),Q.Station->GetPathNodeGUID(),Preset,Cost)) return;
       if(Cost>=0) Rank.Entries.Emplace(Cost,Rank.Cursor);
      }
      ++Rank.Cursor; continue;
@@ -165,7 +180,7 @@ bool ALogisticsSubsystem::CommitOffer(int32 V,int32 Q,int32 P) {
  if(ScanRoadRevision!=RoadCache.Invalidations) return false;
  const auto Choice=filn::dispatch::Evaluate(Offer); if(!Choice) return false;
  auto& R=Registrations[V]; auto* Requester=StationConfigs[Q].Station.Get();
- auto* Provider=P==INDEX_NONE?nullptr:StationConfigs[P].Station.Get();
+ auto* Provider=P==INDEX_NONE?nullptr:ProviderCandidates[P].Get();
  const FGuid Job=FGuid::NewGuid();
  const bool Acquired=Provider?Reservations.Acquire(Id(Job),Id(R.TruckId),Id(StationId(Provider)),Id(StationId(Requester))):
   Reservations.AcquireDelivery(Id(Job),Id(R.TruckId),Id(StationId(Requester)));

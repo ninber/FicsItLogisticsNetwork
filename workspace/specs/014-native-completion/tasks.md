@@ -89,3 +89,6 @@
 - [x] T072 Preserve localizable FText through station/overview RPCs, replace numeric FSM states with stable localization keys, and clamp stale overview pages.
 - [x] T073 Expose converted station and legacy journal preview/import through existing administrator-validated management UI; fixed manifest filenames, no arbitrary client file paths.
 - [ ] T074 Verify localized RPC rendering in actual multiplayer and gather/compile translation catalogs; technical diagnostics remain raw English server log text.
+
+- [x] T075 Discover ordinary LOAD providers from native station roster, rank directed compatible candidates, revalidate actual matching single cargo and exclude both registered and unclaimed legacy depots. Demand remains explicitly configured.
+- [ ] T076 Verify ordinary solid/fluid provider dispatch, native filter behavior and station roster changes under real runtime load.

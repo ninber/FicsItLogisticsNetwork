@@ -13,6 +13,7 @@
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "FGInventoryComponent.h"
+#include "FGRecipe.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "FGFactoryConnectionComponent.h"
 #include "FGPipeConnectionComponent.h"
@@ -140,8 +141,7 @@ bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,
   TArray<FInventoryStack> Contents; Inventory->GetInventoryStacks(Contents);
   for(const auto& Stack:Contents) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=Resource) return false;
  }
- if(Reservations.StationBusy(Key(StationId(Station)))) return false;
- for(const auto& R:Registrations) if(R.Home==Station) return false;
+ if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station)))) return false;
  const auto* FluidProperty=FindFProperty<FBoolProperty>(B->GetClass(),TEXT("mIsFluidStorageInventory"));
  if(!FluidProperty) return false;
  const auto Form=UFGItemDescriptor::GetForm(Resource);
@@ -229,6 +229,14 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
  }
  StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); Rebuild();
  return true;
+}
+bool ALogisticsSubsystem::IsDepot(AFGDockingStationIdentifier* Station) const {
+ if(!IsValid(Station)) return false;
+ if(HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station))) return true;
+ // Unclaimed legacy rest stops are not providers, even before fleet adoption.
+ auto* B=Building(Station);
+ const auto Recipe=IsValid(B)?B->GetBuiltWithRecipe():TSubclassOf<UFGRecipe>();
+ return Recipe && Recipe->GetPathName()==TEXT("/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop");
 }
 bool ALogisticsSubsystem::ValidHome(AFGDockingStationIdentifier* Home) const {
  auto* B=Building(Home);

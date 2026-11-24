@@ -128,6 +128,8 @@ private:
  int32 BestVehicle=INDEX_NONE, BestProvider=INDEX_NONE;
  struct FProviderRanking { int32 Cursor=0; bool Sorted=false; TArray<TPair<double,int32>> Entries; };
  TMap<const UFGVehiclePathPreset*,FProviderRanking> Rankings;
+ // Snapshot native identifiers, not stock. Weak references survive deletion during a scan.
+ TArray<TWeakObjectPtr<AFGDockingStationIdentifier>> ProviderCandidates;
  bool bCheckingRetained=true;
  bool bScanning=false;
  double NextDispatch=0;
@@ -156,6 +158,7 @@ private:
  bool Dispatch(FFILNRegistration& R, AFGDockingStationIdentifier* Provider, AFGDockingStationIdentifier* Requester);
  bool Parked(const FFILNRegistration& R) const;
  bool ValidHome(AFGDockingStationIdentifier* Home) const;
+ bool IsDepot(AFGDockingStationIdentifier* Station) const;
  FGuid StationId(AFGDockingStationIdentifier* Station);
 };
 
