@@ -1,0 +1,318 @@
+{
+  "schema": 1,
+  "scope": "Actual Unreal/game/release acceptance; portable tests do not satisfy these gates",
+  "cases": [
+    {
+      "id": "solid-dispatch",
+      "status": "not-verified",
+      "reason": "Adapter compiled; real game run not performed",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Native automatic scheduler is not implemented"
+        }
+      ],
+      "implementation": "LogisticsDispatch.cpp: BuildOffer/Schedule/CommitOffer",
+      "verification_method": "Isolated solid provider/requester run; observe actual route, docking, transfer and home",
+      "actual_result": "Adapter compiled; real game run not performed"
+    },
+    {
+      "id": "fluid-dispatch",
+      "status": "not-verified",
+      "reason": "Shared adapter compiled; actual fluid behavior not verified",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Fluid quantity/pipe semantics and native scheduler unverified"
+        }
+      ],
+      "implementation": "LogisticsDispatch.cpp + FILNRoadCache.h",
+      "verification_method": "Native Fluid Trucks/stations; actual pipe ingress and inventory units/capacity",
+      "actual_result": "Shared adapter compiled; actual fluid behavior not verified"
+    },
+    {
+      "id": "vehicle-resource-compatibility",
+      "status": "not-verified",
+      "reason": "Portable compatibility tests pass; native runtime not run",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Policy passes; native runtime not run"
+        }
+      ],
+      "implementation": "LogisticsDispatch.cpp + FILNDispatchPolicy.h",
+      "verification_method": "Mixed solid/fluid fleet and descriptors; only matching truck assigned",
+      "actual_result": "Portable compatibility tests pass; native runtime not run"
+    },
+    {
+      "id": "single-resource-ingress",
+      "status": "not-verified",
+      "reason": "Headless automation ran both cases: 0 succeeded, 2 failed; native Resize(2) leaves 0 slots in generated FactoryGame implementation; exit 1",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Native slot filter compiled; conveyor/pipe/docking ingress not run"
+        }
+      ],
+      "implementation": "ConfigureStation + NativeInventoryTests.cpp",
+      "verification_method": "FILN.NativeInventory.Solid/Fluid; then conveyor/pipe/docking ingress in game",
+      "actual_result": "Headless automation ran both cases: 0 succeeded, 2 failed; native Resize(2) leaves 0 slots in generated FactoryGame implementation; exit 1",
+      "evidence": [
+        "logs/continue-native/integration-fixed-fixture.log",
+        "logs/native-integration.AS1DCr/index.json"
+      ]
+    },
+    {
+      "id": "full-vehicle-capacity",
+      "status": "not-verified",
+      "reason": "Native calculation compiled; true game quantities not verified",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Native slot sum compiled; actual solid/fluid capacities not run"
+        }
+      ],
+      "implementation": "LogisticsDispatch.cpp: Inventory",
+      "verification_method": "Native per-slot capacity readback with different trucks and resources",
+      "actual_result": "Native calculation compiled; true game quantities not verified"
+    },
+    {
+      "id": "empty-requester",
+      "status": "not-verified",
+      "reason": "Policy pass; game acceptance not run",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Policy passes; native runtime not run"
+        }
+      ],
+      "implementation": "BuildOffer + dispatch::Evaluate",
+      "verification_method": "Attempt dispatch at 0 and nonzero station cargo",
+      "actual_result": "Policy pass; game acceptance not run"
+    },
+    {
+      "id": "retained-cargo-priority",
+      "status": "not-verified",
+      "reason": "Retained route and reservation adapter compiled; runtime not run",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Policy passes; native retained FSM not implemented"
+        }
+      ],
+      "implementation": "Schedule retained pass + FILNTransferObserver.cpp",
+      "verification_method": "Retained partial cargo competes with full fresh pickup; actual delivery wins",
+      "actual_result": "Retained route and reservation adapter compiled; runtime not run"
+    },
+    {
+      "id": "warehouse-restrictions",
+      "status": "not-verified",
+      "reason": "70 policy checks include storage rules; no game execution",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Policy passes; native runtime not run"
+        }
+      ],
+      "implementation": "FILNDispatchPolicy.h; saved cargo origin flags",
+      "verification_method": "All origin/provider/requester [S] combinations for both media",
+      "actual_result": "70 policy checks include storage rules; no game execution"
+    },
+    {
+      "id": "directed-road-routing",
+      "status": "not-verified",
+      "reason": "1341 portable graph/work checks pass; native world topology test pending",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Reachability compiled; actual road ranking/cache absent"
+        }
+      ],
+      "implementation": "FILNRouting.h + FILNRoadCache.h",
+      "verification_method": "One-way/disconnected/unequal-length native roads and topology edits",
+      "actual_result": "1341 portable graph/work checks pass; native world topology test pending"
+    },
+    {
+      "id": "reservation-conflicts",
+      "status": "not-verified",
+      "reason": "3251 primitive checks pass; game test pending",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Pure primitives pass; authoritative game acceptance not run"
+        }
+      ],
+      "implementation": "FILNCore.h + CommitOffer",
+      "verification_method": "Two eligible trucks race one endpoint; only one committed route",
+      "actual_result": "3251 primitive checks pass; game test pending"
+    },
+    {
+      "id": "concurrent-dispatch",
+      "status": "not-verified",
+      "reason": "Server-thread algorithm compiled; integration pending",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Automatic scheduler not implemented"
+        }
+      ],
+      "implementation": "Schedule + retained/pickup reservations",
+      "verification_method": "Multiple native deliveries; no truck or endpoint overbooking",
+      "actual_result": "Server-thread algorithm compiled; integration pending"
+    },
+    {
+      "id": "player-controlled-exclusion",
+      "status": "not-verified",
+      "reason": "Native guards compiled; actual game not run",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Native guard compiled; runtime not run"
+        }
+      ],
+      "implementation": "BuildOffer + HoldVehicle + Transfer",
+      "verification_method": "Take driver control before dispatch and during transfer/return",
+      "actual_result": "Native guards compiled; actual game not run"
+    },
+    {
+      "id": "autopilot-disabled-exclusion",
+      "status": "not-verified",
+      "reason": "Code preserves AP setting; runtime not run",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Policy passes; automatic native enrollment/dispatch not implemented"
+        }
+      ],
+      "implementation": "BuildOffer + native parking hook",
+      "verification_method": "Disable AP while idle; scheduler never opts vehicle back in",
+      "actual_result": "Code preserves AP setting; runtime not run"
+    },
+    {
+      "id": "fuel-management",
+      "status": "not-verified",
+      "reason": "Native docking request source compiled; transfer/burn proof pending",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Actual native depot/refuel port absent"
+        }
+      ],
+      "implementation": "LogisticsFuel.cpp",
+      "verification_method": "Player-supplied actual home fuel decreases while vehicle fuel increases; no seeding",
+      "actual_result": "Native docking request source compiled; transfer/burn proof pending"
+    },
+    {
+      "id": "depot-return",
+      "status": "not-verified",
+      "reason": "Native hook compiled; physical behavior not verified",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Manual prototype compiled; native rest-stop and runtime not run"
+        }
+      ],
+      "implementation": "Observe + FILNParking.cpp",
+      "verification_method": "Complete route returns to owned home and holds AP on; next job releases hold",
+      "actual_result": "Native hook compiled; physical behavior not verified"
+    },
+    {
+      "id": "save-load-recovery",
+      "status": "not-verified",
+      "reason": "Matching-route recovery implemented; real save/restart not run",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "SaveGame fields compile; real save/restart not run"
+        }
+      ],
+      "implementation": "SaveGame registration fields + PostLoadGame/Rebuild",
+      "verification_method": "Real save/restart mid pickup, unload and return; references/reservations reconcile",
+      "actual_result": "Matching-route recovery implemented; real save/restart not run"
+    },
+    {
+      "id": "lua-to-native-migration",
+      "status": "not-verified",
+      "reason": "Settings importer compiled; actor/depot/job conversion incomplete",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Importer not implemented"
+        }
+      ],
+      "implementation": "LogisticsMigration.cpp",
+      "verification_method": "Preview/import/repeat/rollback plus physical legacy conversion and reload",
+      "actual_result": "Settings importer compiled; actor/depot/job conversion incomplete"
+    },
+    {
+      "id": "native-to-vanilla-migration",
+      "status": "not-verified",
+      "reason": "Preparation compiled; independent runtime comparison not run",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Filter restoration compiled; migration runtime not run"
+        }
+      ],
+      "implementation": "RemoveStation + PrepareStationsForUninstall",
+      "verification_method": "Restore filters, release ownership; compare inventory/connections/routes",
+      "actual_result": "Preparation compiled; independent runtime comparison not run"
+    },
+    {
+      "id": "mod-disabled-save-compatibility",
+      "status": "not-verified",
+      "reason": "Not run; cannot be inferred from preparation source",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Independent prepared-save load without FILN not run"
+        }
+      ],
+      "implementation": "PrepareStationsForUninstall; no runtime marker persistence intended",
+      "verification_method": "Load prepared disposable save with FILN absent; compare infrastructure/resources",
+      "actual_result": "Not run; cannot be inferred from preparation source"
+    },
+    {
+      "id": "management-ui",
+      "status": "not-verified",
+      "reason": "Native selector, original-label proxy, validated controls and paginated network overview compiled; visual/localization/multiplayer not run",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "Native management and resource selector UI not implemented"
+        }
+      ],
+      "implementation": "FILNStationControls.h/.cpp",
+      "verification_method": "Original switch style/labels, selector, registration, admin controls, multiplayer",
+      "actual_result": "Native selector, original-label proxy, validated controls and paginated network overview compiled; visual/localization/multiplayer not run"
+    },
+    {
+      "id": "multiplayer-authority",
+      "status": "not-verified",
+      "reason": "RPC/proximity/admin checks compiled; multiplayer not run",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "No multiplayer game acceptance executed"
+        }
+      ],
+      "implementation": "UFILNRemoteControl validation + authoritative subsystem",
+      "verification_method": "Unauthorized/distant client requests rejected; valid nearby requests applied server-side",
+      "actual_result": "RPC/proximity/admin checks compiled; multiplayer not run"
+    },
+    {
+      "id": "native-package",
+      "status": "not-verified",
+      "reason": "Blocked before entering Distrobox: Podman runtime read-only; exit 1",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "previous_reason": "No verified Win64 archive produced"
+        }
+      ],
+      "implementation": "dev-exec.sh + headless.sh package + verifier",
+      "verification_method": "Real Win64 Alpakit archive and SMM artifact validation",
+      "actual_result": "Blocked before entering Distrobox: Podman runtime read-only; exit 1"
+    }
+  ]
+}

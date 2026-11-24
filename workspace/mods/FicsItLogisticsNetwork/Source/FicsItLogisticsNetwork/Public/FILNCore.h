@@ -39,11 +39,20 @@ public:
   for(const auto& key:keys) if(Occupied.contains(key)) return false;
   Jobs.emplace(job,keys); for(const auto& key:keys) Occupied.emplace(key,job); return true;
  }
+ bool AcquireDelivery(const std::string& job,const std::string& truck,const std::string& requester) {
+  if(job.empty() || truck.empty() || requester.empty() || Jobs.contains(job)) return false;
+  Keys keys={"truck:"+truck,"station:"+requester,""};
+  for(const auto& key:keys) if(!key.empty() && Occupied.contains(key)) return false;
+  Jobs.emplace(job,keys);
+  for(const auto& key:keys) if(!key.empty()) Occupied.emplace(key,job);
+  return true;
+ }
  void Release(const std::string& job) {
   auto it=Jobs.find(job); if(it==Jobs.end()) return;
   for(const auto& key:it->second) Occupied.erase(key);
   Jobs.erase(it);
  }
+ bool StationBusy(const std::string& station) const { return Occupied.contains("station:"+station); }
  std::size_t Size() const { return Jobs.size(); }
 };
 }

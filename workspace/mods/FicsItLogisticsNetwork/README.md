@@ -1,3 +1,8 @@
+> Native completion remains in progress. Current headless commands and guarded station
+> configuration are in [docs/HEADLESS.md](docs/HEADLESS.md). Linux UHT/C++/link and Win64
+> Turnkey detection pass; shared dispatch and station UI source are implemented; full migration and runtime acceptance remain
+> open in [Spec Kit](../../specs/014-native-completion/tasks.md). This is not an installable release.
+
 # FicsIt Logistics Network — native M0/M1 prototype
 
 Status: source implemented, portable primitives tested; **not compiled with Unreal or verified

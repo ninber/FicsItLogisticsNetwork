@@ -182,5 +182,50 @@ int main() {
     CHECK(!Select({}));
     CHECK(!Select({missingFilter}));
 
+    Offer nearest = p;
+    nearest.provider->id = "nearest-provider";
+    nearest.roads.providerToRequester = 1;
+    nearest.roads.homeToProvider = 10000;
+    CHECK(Select({p, nearest})->provider == "nearest-provider");
+    CHECK(Select({nearest, p})->provider == "nearest-provider");
+    nearest.roads.providerToRequester = p.roads.providerToRequester;
+    CHECK(Select({nearest, p})->provider == p.provider->id);
+    Offer fluid = p;
+    fluid.requester.medium = Medium::Fluid;
+    CHECK(!Evaluate(fluid)); // solid truck cannot service fluid requester
+    fluid.vehicle.medium = Medium::Fluid;
+    CHECK(!Evaluate(fluid)); // solid provider cannot service fluid requester
+    fluid.provider->medium = Medium::Fluid;
+    CHECK(Evaluate(fluid));
+    fluid.provider->resource = "/Game/Desc_Water";
+    CHECK(!Evaluate(fluid));
+    fluid.provider->resource = fluid.requester.resource;
+    fluid.provider->quantity = fluid.vehicle.cargoCapacity - 1;
+    CHECK(!Evaluate(fluid));
+    fluid.provider->quantity = fluid.vehicle.cargoCapacity;
+    CHECK(Evaluate(fluid));
+    fluid.provider->label = "[s] Tank";
+    fluid.requester.label = "[S] Tank";
+    CHECK(!Evaluate(fluid));
+    fluid.provider.reset();
+    fluid.vehicle.cargoResource = fluid.requester.resource;
+    fluid.vehicle.cargoQuantity = 5;
+    fluid.vehicle.cargoKinds = 1;
+    fluid.roads.homeToRequester = 10;
+    CHECK(!Evaluate(fluid)); // unknown-origin retained fluid into warehouse
+    fluid.requester.label = "Factory";
+    CHECK(Evaluate(fluid)->amount == 5);
+    fluid.vehicle.driver = true;
+    CHECK(!Evaluate(fluid));
+
+    cargo = p;
+    cargo.provider.reset(); cargo.vehicle.cargoResource = p.requester.resource;
+    cargo.vehicle.cargoKinds = 1; cargo.vehicle.cargoQuantity = 5;
+    cargo.roads.homeToRequester = 10; cargo.requester.label = "[s] warehouse";
+    CHECK(!Evaluate(cargo));
+    cargo.vehicle.cargoOriginKnown = true;
+    CHECK(Evaluate(cargo));
+    cargo.vehicle.cargoOriginStorage = true;
+    CHECK(!Evaluate(cargo));
     std::cout << checks << " dispatch policy checks passed (portable, no game API exercised)\n";
 }

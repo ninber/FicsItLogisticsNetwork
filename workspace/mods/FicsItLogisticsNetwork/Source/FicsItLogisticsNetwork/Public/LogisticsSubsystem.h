@@ -5,9 +5,14 @@
 #include "FGSaveInterface.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "FILNCore.h"
+#include "FILNRoadCache.h"
+#include "FILNDispatchPolicy.h"
 #include "LogisticsSubsystem.generated.h"
 class AFGWheeledVehicleIdentifier;
 class AFGDockingStationIdentifier;
+class UFGItemDescriptor;
+class UFILNRemoteControl;
+class UFILNTransferObserver;
 DECLARE_LOG_CATEGORY_EXTERN(LogFILN, Log, All);
 
 USTRUCT()
@@ -15,6 +20,14 @@ struct FFILNStation {
  GENERATED_BODY()
  UPROPERTY(SaveGame) FGuid InstanceId;
  UPROPERTY(SaveGame) TObjectPtr<AFGDockingStationIdentifier> Station;
+};
+USTRUCT()
+struct FFILNStationConfig {
+ GENERATED_BODY()
+ UPROPERTY(SaveGame) TObjectPtr<AFGDockingStationIdentifier> Station;
+ UPROPERTY(SaveGame) TSubclassOf<UFGItemDescriptor> Resource;
+ // Preserve pre-FILN slot restrictions for explicit uninstall preparation.
+ UPROPERTY(SaveGame) TArray<TSubclassOf<UFGItemDescriptor>> OriginalFilters;
 };
 USTRUCT()
 struct FFILNRegistration {
@@ -31,6 +44,17 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) TArray<FGuid> RouteIntent;
  UPROPERTY(SaveGame) FString Diagnostic;
  UPROPERTY(SaveGame) float Elapsed = 0;
+ UPROPERTY(SaveGame) bool RetainedCargo = false;
+ UPROPERTY(SaveGame) bool CargoOriginKnown = false;
+ UPROPERTY(SaveGame) bool CargoOriginStorage = false;
+ UPROPERTY(SaveGame) bool Automatic = false;
+ UPROPERTY(SaveGame) bool Held = false;
+ UPROPERTY(SaveGame) TArray<FGuid> IdleRoute;
+ UPROPERTY(SaveGame) TSubclassOf<UFGItemDescriptor> Resource;
+ UPROPERTY(SaveGame) int32 ExpectedCargo = 0;
+ UPROPERTY(SaveGame) int32 LoadedCargo = 0;
+ UPROPERTY(SaveGame) int32 DeliveredCargo = 0;
+ UPROPERTY(SaveGame) int32 LastCargo = 0;
  double LastObserved = 0;
 };
 /** Native server-only prototype. Dedicated empty vanilla LOAD station is the home bay fallback. */
@@ -45,10 +69,26 @@ public:
  virtual bool NeedTransform_Implementation() override { return false; }
  virtual void PostLoadGame_Implementation(int32 SaveVersion, int32 GameVersion) override;
  void Execute(const FString& Command, const TArray<FString>& Args);
+ bool HoldVehicle(AFGWheeledVehicleIdentifier* Vehicle);
+ static void InstallParkingHook();
 private:
  UPROPERTY(SaveGame) int32 SchemaVersion = 1;
  UPROPERTY(SaveGame) TArray<FFILNStation> Stations;
+ UPROPERTY(SaveGame) TArray<FFILNStationConfig> StationConfigs;
  UPROPERTY(SaveGame) TArray<FFILNRegistration> Registrations;
+ UPROPERTY(SaveGame) int32 LegacyImportVersion = 0;
+ UPROPERTY(SaveGame) TArray<FString> MigrationReport;
+ friend class UFILNRemoteControl;
+ friend class UFILNTransferObserver;
+ UPROPERTY() TArray<TObjectPtr<UFILNTransferObserver>> TransferObservers;
+ void WatchTransfers(FFILNRegistration& R);
+ void Transfer(AFGWheeledVehicleIdentifier* Vehicle,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,class UFGInventoryComponent* Other,bool Added);
+ TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> HomeStations;
+ uint64 ScanRoadRevision=0;
+ int32 FuelCursor=0;
+ void ImportLegacy(bool Apply);
+ bool RemoveStation(AFGDockingStationIdentifier* Station);
+ void ServiceFuel();
  filn::Ownership Ownership;
  filn::Reservations Reservations;
  TMap<AFGWheeledVehicleIdentifier*, int32> ByVehicle;
@@ -58,7 +98,25 @@ private:
  int32 Cursor = 0;
  bool bDispatchBlocked = false;
  FTimerHandle Watchdog;
+ FTimerHandle DispatchTimer;
+ UPROPERTY(SaveGame) bool bAutoDispatchEnabled = false;
+ FFILNRoadCache RoadCache;
+ int32 RequestCursor=0, ScanVehicle=0, ScanProvider=-1;
+ int32 BestVehicle=INDEX_NONE, BestProvider=INDEX_NONE;
+ struct FProviderRanking { int32 Cursor=0; bool Sorted=false; TArray<TPair<double,int32>> Entries; };
+ TMap<const UFGVehiclePathPreset*,FProviderRanking> Rankings;
+ bool bCheckingRetained=true;
+ bool bScanning=false;
+ double NextDispatch=0;
+ std::optional<filn::dispatch::Choice> BestOffer;
+ void Schedule();
+ bool BuildOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex,filn::dispatch::Offer& Offer,bool QueryRoads,bool& Pending);
+ bool CommitOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex);
+ void ResetScan();
  void Rebuild();
+ bool ConfigureStation(AFGDockingStationIdentifier* Station, TSubclassOf<UFGItemDescriptor> Resource, bool ImportExisting=false);
+ bool PrepareStationsForUninstall();
+ bool ApplyStationFilter(const FFILNStationConfig& Config,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);
  void Observe();
  void Recover(FFILNRegistration& R, const FString& Why);
  bool Pair(AFGWheeledVehicleIdentifier* Vehicle, AFGDockingStationIdentifier* Home);

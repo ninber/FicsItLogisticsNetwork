@@ -1,3 +1,20 @@
+# Continuation verification (2026-11-24)
+
+[Current implementation and blockers](../../../specs/014-native-completion/continuation.md).
+Authoritative snapshots, shared automatic dispatcher, native directed-road cache, transfer
+observers, native parking hook, saved recovery, settings migration and server-validated station
+controls are now implemented in source. Actual game and release acceptance remain unresolved.
+Historical reports below are retained; use Spec Kit continuation evidence for current status.
+
+# Current verification — native completion (2026-11-24)
+
+See [current Spec Kit evidence](../../../specs/014-native-completion/validation.md)
+and [traceability](../../../specs/014-native-completion/traceability.md). Linux
+StarterProject and station-adapter UHT/C++/link have passed on installed SML 3.12.1.
+Win64 Turnkey SDK detection now passes. Portable tests: 3245 core + 67 policy checks
+on GCC/Clang. No completed Win64 package or runtime acceptance is claimed.
+Historical entries below describe prior environments and are superseded by this report.
+
 # Validation report — 2026-10-23
 
 ## Release preparation — 2026-11-24

@@ -1,3 +1,6 @@
+> Historical PR #1 scope below is retained. Current native adapter implementation, builds,
+> failing integration results and blockers are in [Spec Kit continuation](../../../specs/014-native-completion/continuation.md).
+
 # Native FILN conversion — implementation and acceptance
 
 Status: **IN PROGRESS / not installable**. This is a port of the existing FILN Lua experiment to the canonical `FicsItLogisticsNetwork` SML C++ plugin, not a new UE4SS loader and not a Lua bundle hidden inside a `.smod`. **No game save or running player session may be touched by source-only work.**
