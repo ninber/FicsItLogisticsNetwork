@@ -12,6 +12,7 @@
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "Misc/FileHelper.h"
+#include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
 
@@ -151,12 +152,19 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename,bool Apply
   auto* O=Candidate->GetOwnerVehicle(); auto* Cargo=IsValid(O)?O->GetStorageInventory():nullptr;
   const auto* Config=StationConfigs.FindByPredicate([Q](const FFILNStationConfig& C){return C.Station==Q;});
   const auto Recipe=IsValid(HB)?HB->GetBuiltWithRecipe():TSubclassOf<UFGRecipe>();
-  if(!IsValid(HB) || !IsValid(QB) || !Recipe || Recipe->GetPathName()!=TEXT("/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop") ||
+  const bool LegacyRecipe=Recipe && Recipe->GetPathName()==TEXT("/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop");
+  const bool ConvertedDepot=Recipe && Recipe->GetPathName()==TEXT("/Game/FactoryGame/Recipes/Buildings/Recipe_TruckStation.Recipe_TruckStation_C") &&
+    DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(H));
+  if(!IsValid(HB) || !IsValid(QB) || (!LegacyRecipe && !ConvertedDepot) ||
      !ValidHome(H) || QB->GetIsInLoadMode() || !Config || !Config->Resource || !Cargo || !Candidate->IsAutopilotEnabled() || O->GetDriver()) {
    MigrationReport.Add(Home+TEXT(": invalid endpoint, recipe, filter, owner or player opt-in; untouched")); continue;
   }
   if(Kind==filn::legacy::RouteMatch::Idle) {
-   const bool Ok=AdoptLegacyHome(Candidate,H,Apply);
+   const bool Ok=LegacyRecipe?AdoptLegacyHome(Candidate,H,Apply):
+     (Candidate->IsAutopilotEnabled() && !O->GetDriver() && Cargo->IsEmpty() &&
+      FMath::Abs(O->GetForwardSpeed())<=1.f && HB->GetDockingPathNode() &&
+      FVector::DistSquared(O->GetVehicleLocation(),HB->GetDockingPathNode()->GetActorLocation())<=FMath::Square(800.f) &&
+      (!Apply || Pair(Candidate,H)));
    MigrationReport.Add(Home+(Ok?TEXT(": idle adoption compatible"):TEXT(": idle adoption rejected"))); continue;
   }
   if(ByVehicle.Contains(Candidate) || HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(H))) {
@@ -178,20 +186,75 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename,bool Apply
   // Pickup routes are safe only after the provider has been passed, with an
   // exact requester/home suffix. Arrival at home terminates the entire route.
   const bool SafeSuffix=filn::legacy::SafeRemainingRoute(E,RouteKeys,TargetIndex);
-  const auto Decision=filn::legacy::Restore(Exclusive,Mixed,Quantity,AtRequester,AtHome,SafeSuffix,
+  auto Decision=filn::legacy::Restore(Exclusive,Mixed,Quantity,AtRequester,AtHome,SafeSuffix,
     filn::dispatch::IsStorage(TCHAR_TO_UTF8(*Q->GetStationName().ToString())));
+  AFGDockingStationIdentifier* P=nullptr;
+  int32 FullLoad=0;
+  if(Decision==filn::legacy::RestoreAction::Reject && filn::legacy::PickupSuffix(E,RouteKeys,TargetIndex) && Exclusive && !Mixed && Quantity==0 && Cargo->IsEmpty()) {
+   P=Resolve(E.provider); auto* PB=IsValid(P)?P->GetStation():nullptr;
+   auto* Stock=IsValid(PB)?PB->GetInventory():nullptr;
+   auto* Demand=QB->GetInventory();
+   const auto* PC=StationConfigs.FindByPredicate([P](const FFILNStationConfig& C){return C.Station==P;});
+   const auto Form=UFGItemDescriptor::GetForm(Config->Resource);
+   const bool Fluid=Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS;
+   bool Medium=Fluid || Form==EResourceForm::RF_SOLID;
+   for(const UObject* Obj:{static_cast<const UObject*>(O),static_cast<const UObject*>(PB),static_cast<const UObject*>(QB)}) {
+    const auto* Flag=Obj?FindFProperty<FBoolProperty>(Obj->GetClass(),TEXT("mIsFluidStorageInventory")):nullptr;
+    if(!Flag || Flag->GetPropertyValue_InContainer(Obj)!=Fluid) Medium=false;
+   }
+   int64 Capacity=0;
+   if(Cargo->GetSizeLinear()>0 && Cargo->GetSizeLinear()<=4096) {
+    for(int32 Slot=0;Slot<Cargo->GetSizeLinear();++Slot) {
+     const auto Allowed=Cargo->GetAllowedItemOnIndex(Slot);
+     if(!Allowed || Allowed==Config->Resource) Capacity+=Cargo->GetSlotSizeForItem(Slot,Config->Resource);
+    }
+   }
+   if(Capacity>0 && Capacity<=MAX_int32) FullLoad=static_cast<int32>(Capacity);
+   bool StockMatches=Stock!=nullptr;
+   if(Stock) {
+    TArray<FInventoryStack> Contents; Stock->GetInventoryStacks(Contents);
+    for(const auto& Stack:Contents) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=Config->Resource) StockMatches=false;
+   }
+   const bool ProviderOk=IsValid(PB) && !IsDepot(P) && P!=H && P!=Q && PB->GetIsInLoadMode() && PB->HasPower() &&
+      !PB->IsProductionPaused() && !PB->GetDockedActor() && StockMatches && (!PC || PC->Resource==Config->Resource) &&
+      !Reservations.StationBusy(TCHAR_TO_UTF8(*StationId(P).ToString()));
+   const bool RequesterOk=!IsDepot(Q) && QB->HasPower() && !QB->IsProductionPaused() && !QB->GetDockedActor() && Demand &&
+      Demand->IsEmpty() && FullLoad>0 && Demand->HasEnoughSpaceForStack(FInventoryStack(FullLoad,Config->Resource)) &&
+      !Reservations.StationBusy(TCHAR_TO_UTF8(*StationId(Q).ToString()));
+   const bool WarehouseAllowed=IsValid(P) && filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*P->GetStationName().ToString()),TCHAR_TO_UTF8(*Q->GetStationName().ToString()));
+   bool Roads=false;
+   // This is an explicit migration operation, not a periodic scheduler scan.
+   // Confirm all remaining directed legs with actual native path queries.
+   if(ProviderOk && RequesterOk && Medium && WarehouseAllowed && O->HasFuel() && O->GetVehiclePathPreset()) {
+    const FGuid Nodes[]={Candidate->GetCurrentToPathNodeGUID(),P->GetPathNodeGUID(),Q->GetPathNodeGUID(),H->GetPathNodeGUID()};
+    Roads=true;
+    for(int32 Leg=0;Leg<3;++Leg) {
+     auto* Net=Nodes[Leg].IsValid()?VS->FindNetworkByPathNodeGuid(Nodes[Leg]):nullptr;
+     TArray<FGuid> Route;
+     if(!Net || !Nodes[Leg+1].IsValid() || Net!=VS->FindNetworkByPathNodeGuid(Nodes[Leg+1]) ||
+        (Nodes[Leg]!=Nodes[Leg+1] && !Net->FindVehiclePath(Nodes[Leg],Nodes[Leg+1],O->GetVehiclePathPreset(),Route))) { Roads=false; break; }
+    }
+   }
+   if(filn::legacy::CanResumePickup(Exclusive,Mixed,Quantity,true,ProviderOk,RequesterOk,Medium,WarehouseAllowed,Roads,FullLoad,
+      Stock?Stock->GetNumItems(Config->Resource):0,RequesterOk?FullLoad:0)) Decision=filn::legacy::RestoreAction::Pickup;
+  }
   if(Decision==filn::legacy::RestoreAction::Reject || Candidate->IsCurrentlyDocking() || QB->GetDockedActor()==O || HB->GetDockedActor()==O) {
    MigrationReport.Add(Home+TEXT(": active route/cargo cannot safely resume without possible repeat pickup; untouched")); continue;
   }
-  if(!Apply) { MigrationReport.Add(Home+TEXT(": compatible active delivery/return adoption available")); continue; }
+  const bool Pickup=Decision==filn::legacy::RestoreAction::Pickup;
+  if(!Apply) { MigrationReport.Add(Home+(Pickup?TEXT(": compatible pre-pickup adoption available"):TEXT(": compatible active delivery/return adoption available"))); continue; }
   FFILNRegistration R;
   R.TruckId=FGuid::NewGuid(); R.BayId=StationId(H); R.JobId=FGuid::NewGuid();
   R.Vehicle=Candidate; R.Home=H; R.Requester=Q; R.Resource=Config->Resource; R.RequesterLease=StationId(Q);
-  R.Automatic=true; R.RetainedCargo=true; R.LegacyDelivery=true; R.RouteIntent=Current;
-  R.ExpectedCargo=FMath::Max(1,Quantity); R.LastCargo=Quantity; R.LastObserved=GetWorld()->GetTimeSeconds();
-  R.State=static_cast<uint8>(Decision==filn::legacy::RestoreAction::Deliver?filn::State::ToRequester:filn::State::Returning);
-  // No remaining provider waypoint; returning empty is not delivery success.
-  if(!Reservations.AcquireDelivery(TCHAR_TO_UTF8(*R.JobId.ToString()),TCHAR_TO_UTF8(*R.TruckId.ToString()),TCHAR_TO_UTF8(*StationId(Q).ToString()))) {
+  R.Automatic=true; R.RetainedCargo=!Pickup; R.LegacyDelivery=!Pickup; R.RouteIntent=Current;
+  R.ExpectedCargo=Pickup?FullLoad:FMath::Max(1,Quantity); R.LastCargo=Quantity; R.LastObserved=GetWorld()->GetTimeSeconds();
+  R.State=static_cast<uint8>(Pickup?filn::State::ToProvider:Decision==filn::legacy::RestoreAction::Deliver?filn::State::ToRequester:filn::State::Returning);
+  // Reserve both endpoints for future pickup; historical transfers remain zero.
+  if(Pickup) { R.Provider=P; R.ProviderLease=StationId(P); }
+  const std::string Job=TCHAR_TO_UTF8(*R.JobId.ToString()),Truck=TCHAR_TO_UTF8(*R.TruckId.ToString()),Requester=TCHAR_TO_UTF8(*R.RequesterLease.ToString());
+  const bool Acquired=Pickup?Reservations.Acquire(Job,Truck,TCHAR_TO_UTF8(*R.ProviderLease.ToString()),Requester):
+    Reservations.AcquireDelivery(Job,Truck,Requester);
+  if(!Acquired) {
    MigrationReport.Add(Home+TEXT(": reservation conflict; untouched")); continue;
   }
   if(!Ownership.Pair(TCHAR_TO_UTF8(*R.TruckId.ToString()),TCHAR_TO_UTF8(*R.BayId.ToString()))) {
@@ -199,7 +262,7 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename,bool Apply
   }
   R.Diagnostic=TEXT("Legacy route adopted; only future native transfer events counted");
   HomeStations.Add(H); TrackDepot(H); const int32 Index=Registrations.Add(R); ByVehicle.Add(Candidate,Index); WatchTransfers(Registrations[Index]); Active.AddUnique(Index);
-  ResetScan(); MigrationReport.Add(Home+TEXT(": active legacy delivery/return adopted without native route or cargo write"));
+  ResetScan(); MigrationReport.Add(Home+TEXT(": active legacy journey adopted without native route or cargo write"));
  }
  for(const auto& Line:MigrationReport) UE_LOG(LogFILN,Log,TEXT("JOURNAL %s"),*Line);
 }

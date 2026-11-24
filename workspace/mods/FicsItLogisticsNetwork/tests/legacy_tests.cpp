@@ -46,5 +46,20 @@ int main(){
  CHECK(!SafeRemainingRoute(old,{p,q,h},-1));
  CHECK(!SafeRemainingRoute(old,{p,q,h},3));
  CHECK(!SafeRemainingRoute(old,{h,q,p,h},1));
+ CHECK(PickupSuffix(old,{h,p,q,h},1));
+ CHECK(PickupSuffix(old,{p,q,h},0));
+ CHECK(!PickupSuffix(old,{h,p,q,h},0));
+ CHECK(!PickupSuffix(old,{h,p,q,h},2));
+ CHECK(!PickupSuffix(old,{p,q,h},-1));
+ CHECK(!PickupSuffix(old,{h,p,q,h,p},1));
+ CHECK(CanResumePickup(true,false,0,true,true,true,true,true,true,100,100,100));
+ CHECK(!CanResumePickup(true,false,1,true,true,true,true,true,true,100,100,100));
+ CHECK(!CanResumePickup(true,false,0,true,true,true,true,true,true,100,99,100));
+ CHECK(!CanResumePickup(true,false,0,true,true,true,true,true,true,100,100,99));
+ CHECK(!CanResumePickup(true,false,0,true,true,true,true,true,false,100,100,100));
+ CHECK(!CanResumePickup(true,false,0,true,true,true,true,false,true,100,100,100));
+ CHECK(!CanResumePickup(true,false,0,true,true,true,false,true,true,100,100,100));
+ CHECK(!CanResumePickup(false,false,0,true,true,true,true,true,true,100,100,100));
+ CHECK(!CanResumePickup(true,true,0,true,true,true,true,true,true,100,100,100));
  std::cout<<checks<<" legacy policy checks passed\n";
 }

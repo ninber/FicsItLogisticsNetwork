@@ -80,3 +80,9 @@ Author custom ALTNParkingBay assets, compile/resolve UHT and linkage issues in t
 engine, then execute docs/IN_GAME_TEST.md. Add an audited dock/undock event bridge before
 fleet-scale use. Implement destroyed-actor cleanup/administrative recovery before production.
 M2 automatic scheduler, M3 lazy cache, M4 telemetry and M5 FIN adapter remain deferred.
+
+## Native continuation: parked recovery and transfer ledger (2026-11-24)
+- Branch commit d04ec71: the exact FILNCore.h, FILNRehomePolicy.h and rehome_tests.cpp blobs were compiled in an independent Linux container using GCC 14.2 and Clang 17, C++20 -O2 -Wall -Wextra -Wpedantic -Werror. Each run printed 2,056 checks passed. Git blob hashes matched the committed sources.
+- Branch commit 769058d: exact FILNTransferLedger.h and transfer_ledger_tests.cpp blobs compiled with the same options/compilers; each printed 20 checks passed. Git blob hashes matched.
+- These are portable policy results only. The Unreal adapters, migration source, native API semantics and all 22 runtime/release acceptance gates remain unverified after these changes. Earlier build evidence predates the continuation; do not treat it as current-head compilation.
+- No game, installed mod or live save was changed. Explicit rehome requires a docked, stationary, AP-off registered truck and valid designated depot. Conflicting or unresolved ownership remains blocked, not automatically repaired.

@@ -102,3 +102,6 @@
 - [x] T081 Use signed bounded transfer-event ledger independent of delegate mutation timing, reconcile against authoritative inventory snapshots, and require route/AP/lease ownership at transfer and completion.
 - [x] T082 Expose explicit parked recovery through admin-validated native UI RPC.
 - [ ] T083 Verify actual native delegate order, duplicate/missing events, recovery RPC and save consistency in real game; portable accounting tests do not establish delegate behavior.
+
+- [x] T084 Adopt exact pre-pickup legacy routes only for empty trucks and still-eligible full-load providers/empty requesters with native directed remaining legs, both endpoint leases, and no route/cargo writes. Permit explicitly designated converted depots in journal import.
+- [ ] T085 Verify migration of pre-pickup and post-conversion journeys in real game, including native path semantics and duplicate prevention; reject ambiguous/docking routes.

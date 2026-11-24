@@ -38,7 +38,7 @@ inline RouteMatch Match(const Entry& e,const std::vector<std::string>& r) {
  if(r==std::vector<std::string>{e.home,e.requester,e.home}||r==std::vector<std::string>{e.requester,e.home}) return RouteMatch::Delivery;
  return RouteMatch::None;
 }
-enum class RestoreAction { Reject, Deliver, Return };
+enum class RestoreAction { Reject, Deliver, Return, Pickup };
 inline RestoreAction Restore(bool exclusive,bool mixed,int quantity,bool targetRequester,bool targetHome,bool deliveryOnly,bool storage) {
  if(!exclusive||mixed||quantity<0||!deliveryOnly) return RestoreAction::Reject;
  if(quantity>0 && targetRequester && !storage) return RestoreAction::Deliver;
@@ -52,6 +52,15 @@ inline bool SafeRemainingRoute(const Entry& e,const std::vector<std::string>& ro
  const auto i=static_cast<std::size_t>(target);
  return (i+1==route.size() && route[i]==e.home) ||
         (i+2==route.size() && route[i]==e.requester && route[i+1]==e.home);
+}
+inline bool PickupSuffix(const Entry& e,const std::vector<std::string>& route,int target) {
+ if(Match(e,route)!=RouteMatch::Pickup || target<0 || static_cast<std::size_t>(target)>=route.size()) return false;
+ const auto i=static_cast<std::size_t>(target);
+ return i+3==route.size() && route[i]==e.provider && route[i+1]==e.requester && route[i+2]==e.home;
+}
+inline bool CanResumePickup(bool exclusive,bool mixed,int quantity,bool exactSuffix,bool providerEligible,bool requesterEligible,bool mediumCompatible,bool warehouseAllowed,bool roadsProved,int fullLoad,int providerStock,int requesterCapacity) {
+ return exclusive&&!mixed&&quantity==0&&exactSuffix&&providerEligible&&requesterEligible&&mediumCompatible&&warehouseAllowed&&roadsProved&&
+        fullLoad>0&&providerStock>=fullLoad&&requesterCapacity>=fullLoad;
 }
 inline bool IdleAdoption(bool exactRecipe,bool validHome,bool uniqueHome,bool uniqueTruck,bool ap,bool driver,bool empty,bool stopped,bool nearby,bool homeOnly) {
  return exactRecipe&&validHome&&uniqueHome&&uniqueTruck&&ap&&!driver&&empty&&stopped&&nearby&&homeOnly;
