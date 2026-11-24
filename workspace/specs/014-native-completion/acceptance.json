@@ -275,7 +275,7 @@
     {
       "id": "management-ui",
       "status": "not-verified",
-      "reason": "Native selector, original-label proxy, validated controls and paginated network overview compiled; visual/localization/multiplayer not run",
+      "reason": "Manual native runtime observation failed: FILTERS/ordinary behavior, no FILN native controls. Live-panel/lifecycle correction awaiting build and manual inspection.",
       "history": [
         {
           "date": "2026-11-24",
@@ -284,7 +284,7 @@
       ],
       "implementation": "FILNStationControls.h/.cpp",
       "verification_method": "Original switch style/labels, selector, registration, admin controls, multiplayer",
-      "actual_result": "Native selector, original-label proxy, validated controls and paginated network overview compiled; visual/localization/multiplayer not run"
+      "actual_result": "Failed before UI correction; post-correction runtime untested."
     },
     {
       "id": "multiplayer-authority",
@@ -302,8 +302,8 @@
     },
     {
       "id": "native-package",
-      "status": "verified",
-      "reason": "Current GitHub implementation compiled/linked for Linux and both Win64 targets; Alpakit cook/stage/archive and static layout/PE checks passed. Gameplay/SMM loading remain unverified.",
+      "status": "not-verified",
+      "reason": "Previous verification branch passed Linux/Win64 builds and package; this subsequent UI source correction requires a fresh build/package.",
       "history": [
         {
           "date": "2026-11-24",
@@ -312,11 +312,15 @@
         {
           "previous_reason": "Blocked before entering Distrobox: Podman runtime read-only; exit 1",
           "github_baseline": "9623afb"
+        },
+        {
+          "previous_reason": "Current GitHub implementation compiled/linked for Linux and both Win64 targets; Alpakit cook/stage/archive and static layout/PE checks passed. Gameplay/SMM loading remain unverified.",
+          "verified_baseline": "b4bfb3ec0ac0381dd3d29207b0335679d5877503"
         }
       ],
       "implementation": "dev-exec.sh + headless.sh package + verifier",
       "verification_method": "Real Win64 Alpakit archive and SMM artifact validation",
-      "actual_result": "PASS actual package exit 0; preserved receipt hashes match canonical, installed and verification source.",
+      "actual_result": "Historical package pass preserved; current UI revision not compiled or packaged.",
       "evidence": [
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/receipt.json",
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/FicsItLogisticsNetwork-Windows.zip",

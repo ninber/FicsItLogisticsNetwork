@@ -141,3 +141,6 @@
 
 - [x] T109 Port the proved Lua home-only TooFewStations eligibility and five-second activation grace, distinguish initial retained-cargo home docking from premature return, reconcile same-identifier actor/inventory replacement against measured cargo, bridge missed departure observations only with matching reserved transfer events, and hold final physical home arrival pending watchdog reconciliation.
 - [ ] T110 Verify native AP state transition, proxy/significance actor changes, short docking intervals and final home hold under actual gameplay. No portable test establishes engine hook semantics.
+
+- [x] T111 Implement live-panel attachment and interaction lifecycle correction for the observed missing UI, including native child initialization before Slate creation and deferred choice enumeration. Based on the published verification branch; no external migration additions.
+- [ ] T112 Compile/package this UI revision in the existing development container and manually verify ordinary/configured solid/fluid station entry, labels and control behavior. Exact original failure cause remains unconfirmed. Do not redeploy the external harness or interrupt the running game.
