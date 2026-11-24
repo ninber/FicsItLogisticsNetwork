@@ -80,11 +80,15 @@ public:
  void SetContext(AFGBuildableDockingStation* Station,UUserWidget* VanillaWidget);
  void ShowOverview(AFGBuildableDockingStation* Station,int32 Page,int32 Pages,const FText& Text);
  void RestoreLabels();
+ void ClearContext();
+ bool HasContext(AFGBuildableDockingStation* Target) const { return Station==Target; }
  void Reply(AFGBuildableDockingStation* Station,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message);
  static void InstallHook();
 protected:
  void NativeOnInitialized() override;
+ void NativeDestruct() override;
 private:
+ void PopulateChoices();
  UPROPERTY() TObjectPtr<AFGBuildableDockingStation> Station;
  UPROPERTY() TObjectPtr<UVerticalBox> Panel;
  UPROPERTY() TObjectPtr<UButton> OpenButton;

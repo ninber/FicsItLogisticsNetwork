@@ -1,0 +1,9 @@
+# Native station UI incident: proposed source correction
+
+Source: user-provided runtime handoff, 2026-11-25. Remote main 9623afb merged original native branch; local verification commit b4bfb3e and uncommitted converter fixes are not published. This change is isolated on a review branch; reconcile against local modifications before copying/building. No game process or UI was driven.
+
+Observed: native-only gameplay smooth after removing external UE4SS test harness; FILN management controls absent (FILTERS alone is insufficient). Native build/package previously reported successful, not UI acceptance. Root replacement after Slate caching and wrong/late interaction-object identity are hypotheses, not proven causes.
+
+Patch: attach to a supported existing live panel; use native request and Native_Init hooks; resolve station references without global scans; restore labels and clear stale receiver when pooled interaction is removed/destructed; populate choices only when opening controls. Never automatically open an interaction window. Overlay/canvas fallback uses bottom-right placement and needs actual visual inspection. Unsupported panels fail closed with a diagnostic, rather than rebuilding vanilla UI.
+
+Manual acceptance, only after local source reconciliation and verified build/package: on an explicitly opened ordinary solid/fluid station, inspect LogFILN for installation/attachment stage, widget class, panel, interaction class and station. Confirm compact entry, expansion, resource selection, native LOAD/UNLOAD preservation for ordinary stations, FILN labels only after enrollment, switching/closing/reopening pooled widgets, and actual server RPC feedback. If no supported live panel, use logged widget class/tree to select a precise insertion point; do not infer success. No periodic polling, UI automation, game restart or migration import code.
