@@ -14,7 +14,7 @@ workflows idempotent, locked and observable. Preserve all caches and existing de
 6. Add bounded dirty-state snapshots, shared dispatcher, native graph adapter and lazy
 requester cache. Atomic reservations followed by native route and autopilot readback.
 7. Native depots/refueling, measured transfers, retained-cargo FSM, recovery and save lifecycle.
-8. Versioned legacy inventory/connections/state migration with dry-run and recovery journal.
+8. Legacy migration is external; native source provides ordinary registration and safe uninstall only.
 9. Complete management UI, disabled-state semantics and isolated uninstall preparation/load.
 10. Run pure, Unreal integration, multiplayer and isolated game acceptance separately; produce
 and inspect Win64 package only after these gates. Never deploy to the active installation.

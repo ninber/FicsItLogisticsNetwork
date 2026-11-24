@@ -53,3 +53,5 @@ bash scripts/build.sh           # requires version-matched CSS engine
 ```
 
 The unit tests validate decisions on supplied snapshots, **not** the origin, freshness, identity, or road costs of real game data. See `workspace/RELEASE.md` and `DEVELOPMENT.md` for the remaining release toolchain steps.
+
+**Scope correction (2026-11-24):** legacy save migration is owned by external Codex/Lua tooling, not the native plugin. Historical migration implementation notes are not current native features. No native legacy import command or recipe-specific behavior is supported.

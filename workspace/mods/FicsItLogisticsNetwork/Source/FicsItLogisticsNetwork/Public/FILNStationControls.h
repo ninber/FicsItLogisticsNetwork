@@ -100,12 +100,6 @@ private:
  UFUNCTION() void RegisterDepot();
  UFUNCTION() void RemoveDepot();
  UFUNCTION() void ToggleDispatcher();
- UFUNCTION() void PreviewLegacy();
- UFUNCTION() void ImportLegacy();
- UFUNCTION() void PreviewConverted();
- UFUNCTION() void ImportConverted();
- UFUNCTION() void PreviewJournal();
- UFUNCTION() void ImportJournal();
  UFUNCTION() void PrepareUninstall();
  UFUNCTION() void Apply();
  UFUNCTION() void Remove();

@@ -58,20 +58,15 @@ and depot manifest plus a .report.json receipt. The original save is never edite
 Remaining references to legacy mods are reported, not removed. Do not disable
 those mods until a disposable independent load proves the save no longer needs them.
 
-After manually loading the disposable converted save in the native mod, with Lua
-dispatch disabled and native dispatch disabled, copy the manifest to
-FactoryGame/Saved/FILN/converted-stations.tsv. Run
-`filn.convertedStations preview`, review the report, then
-`filn.convertedStations import`. Native import revalidates actor class, recipe,
-road GUID, role, inventory, resource and ownership. A depot with an active route
-is deliberately not adopted; finish legacy jobs before conversion.
-Preview is not a guarantee of native setter acceptance. No game process is
-started or stopped by these tools. Test with
+The manifest is external migration data for Codex/Lua scripts. The native mod
+does not read it, provide legacy import commands, or recognize legacy recipes.
+Use ordinary native configuration/enrollment interfaces after external preparation.
+No game process is started or stopped by these tools. Test with
 `node --test scripts/save-tools/native-station-conversion.test.cjs`.
 
 ### City-scale conversion and unconfigured templates
 
-The manifest accepts up to 512 explicitly selected stations and 256 KiB.
+The external manifest accepts up to 512 explicitly selected stations and 256 KiB.
 A missing or empty legacy FilterItem is converted to an ordinary vanilla station
 and recorded as an `ordinary` row, not a FILN requester. No resource is inferred.
 Malformed, multi-resource or contradictory explicit filters still fail closed.

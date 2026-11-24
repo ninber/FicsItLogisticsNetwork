@@ -1,6 +1,6 @@
 > Native completion remains in progress. Current headless commands and guarded station
 > configuration are in [docs/HEADLESS.md](docs/HEADLESS.md). Linux UHT/C++/link and Win64
-> Turnkey detection pass; shared dispatch and station UI source are implemented; full migration and runtime acceptance remain
+> Turnkey detection pass; shared dispatch and station UI source are implemented; runtime acceptance remains
 > open in [Spec Kit](../../specs/014-native-completion/tasks.md). This is not an installable release.
 
 # FicsIt Logistics Network — native M0/M1 prototype
@@ -125,3 +125,6 @@ were generated. The runbook describes a reproducible scene; it is not a prebuilt
 License: new code GPL-3.0-only; LICENSE.txt copied verbatim from the starter project's GPLv3
 license text. Module Build.cs follows the upstream Alpakit skeleton. No truck-filter reference
 code or proprietary art was copied. Engine/game content retains its upstream ownership.
+
+## Standalone scope
+The native mod is world-independent. Legacy Lua/mod save conversion is external to the plugin. No legacy recipe recognition, journal/manifest reader or migration UI is shipped. Ordinary station/depot/vehicle registration, recovery and safe removal of native restrictions remain supported; runtime verification is still required.

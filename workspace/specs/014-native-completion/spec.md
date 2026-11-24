@@ -22,13 +22,14 @@ R07: Explicit enrollment, home ownership, return/park/hold, native actual fuel o
 fuel connections and interrupted-delivery recovery for compatible solid/fluid trucks.
 R08: Case-insensitive [S] restrictions for both media. No fresh warehouse/warehouse journey;
 no unknown-origin retained cargo assigned to a warehouse requester.
-R09: Versioned, repeatable, recoverable legacy migration. Discover and preserve stations,
-filters/names/modes, cargo/fuel, routes/node GUIDs, connections, depots and registrations.
-Validate before replacement; report unsupported objects. Never migrate an active save.
+R09: Legacy-save migration is external to the released native mod (user scope correction
+2026-11-24). Codex/Lua and offline tools may prepare copies independently. No legacy
+recipe/class recognition, journal or manifest import, or save-specific behavior in native C++.
+Use the same public native station/depot/vehicle enrollment interfaces for every world.
 R10: Separate disable, prepare-uninstall, and independently verified load without FILN.
 Preserve vanilla buildings, cargo/fuel, routes and all physical connections.
 R11: Native management UI for registry, resources, vehicles, depots, jobs, reservations,
-failures, paths/fuel, migration, uninstall and enable/disable. Validated server mutations.
+failures, paths/fuel, uninstall and enable/disable. Validated server mutations.
 R12: Save/reload, server restart, actor destruction, path edits, assignments, retained/partial
 cargo, fuel shortages and duplicate prevention. Pure tests never establish runtime behavior.
 R13: Verified Win64 Alpakit artifact, metadata, native PE, cooked required assets, SMM layout,
@@ -51,7 +52,9 @@ docking and fluid transfers must be established in isolated runtime tests before
 ## Acceptance
 
 Every R requirement requires its traceability row and relevant executable tests to pass.
-An absent migration, management UI, automatic scheduler, package or independent mod-disabled
+An absent management UI, automatic scheduler, package or independent mod-disabled
 load is a failed acceptance criterion, not a skipped success. See tasks.md and validation.md.
 All game acceptance uses isolated copies and requires authorization before affecting any
 running session. No graphical editor is needed for C++, UHT or command-line packaging.
+
+The external legacy migration workflow is not a native release criterion. It remains unverified; scope exclusion is not a passing migration test.

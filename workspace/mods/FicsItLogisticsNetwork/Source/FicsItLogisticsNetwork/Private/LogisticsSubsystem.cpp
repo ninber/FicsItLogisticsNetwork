@@ -15,7 +15,6 @@
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "FGInventoryComponent.h"
-#include "FGRecipe.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "FGFactoryConnectionComponent.h"
 #include "FGPipeConnectionComponent.h"
@@ -142,13 +141,9 @@ bool ALogisticsSubsystem::ApplyStationFilter(const FFILNStationConfig& C,TSubcla
  }
  return true;
 }
-bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,TSubclassOf<UFGItemDescriptor> Resource,bool ImportExisting) {
+bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  auto* B=Building(Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
- if(bDispatchBlocked || !HasAuthority() || !Inventory || !Resource || (!ImportExisting && !Inventory->IsEmpty()) || B->GetDockedActor()) return false;
- if(ImportExisting) {
-  TArray<FInventoryStack> Contents; Inventory->GetInventoryStacks(Contents);
-  for(const auto& Stack:Contents) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=Resource) return false;
- }
+ if(bDispatchBlocked || !HasAuthority() || !Inventory || !Resource || !Inventory->IsEmpty() || B->GetDockedActor()) return false;
  if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station)))) return false;
  const auto* FluidProperty=FindFProperty<FBoolProperty>(B->GetClass(),TEXT("mIsFluidStorageInventory"));
  if(!FluidProperty) return false;
@@ -243,11 +238,7 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
 }
 bool ALogisticsSubsystem::IsDepot(AFGDockingStationIdentifier* Station) const {
  if(!IsValid(Station)) return false;
- if(HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station)) || DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station))) return true;
- // Unclaimed legacy rest stops are not providers, even before fleet adoption.
- auto* B=Building(Station);
- const auto Recipe=IsValid(B)?B->GetBuiltWithRecipe():TSubclassOf<UFGRecipe>();
- return Recipe && Recipe->GetPathName()==TEXT("/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop");
+ return HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station)) || DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station));
 }
 void ALogisticsSubsystem::TrackDepot(AFGDockingStationIdentifier* Station) {
  if(!IsValid(Station)) return;
@@ -259,12 +250,10 @@ bool ALogisticsSubsystem::SetDepot(AFGDockingStationIdentifier* Station,bool Rem
  check(IsInGameThread());
  if(!HasAuthority() || bDispatchBlocked || !IsValid(Station) || Station->GetWorld()!=GetWorld()) return false;
  auto* B=Building(Station); if(!IsValid(B)) return false;
- const auto Recipe=B->GetBuiltWithRecipe();
- const bool Legacy=Recipe && Recipe->GetPathName()==TEXT("/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop");
  const bool Claimed=HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station));
  const bool Configured=StationConfigs.ContainsByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
  const bool Reserved=Reservations.StationBusy(Key(StationId(Station)));
- const filn::depot::Snapshot Facts{true,Station->GetPathNodeGUID().IsValid() && ValidHome(Station),Reserved,Configured,Claimed,B->GetDockedActor()!=nullptr,Legacy};
+ const filn::depot::Snapshot Facts{true,Station->GetPathNodeGUID().IsValid() && ValidHome(Station),Reserved,Configured,Claimed,B->GetDockedActor()!=nullptr};
  if(Remove) {
   if(!filn::depot::CanRemove(Facts)) return false;
   DepotIndex.Remove(TWeakObjectPtr<AFGDockingStationIdentifier>(Station));
@@ -526,7 +515,7 @@ void ALogisticsSubsystem::Observe() {
   else if(Before==S::Returning && AtH) {
    if(!R.Automatic) R.Vehicle->SetAutopilotEnabled(false);
    auto* Cargo=Owner->GetStorageInventory();
-   if(!Cargo || (!R.Automatic && !Cargo->IsEmpty()) || (R.Automatic && R.DeliveredCargo<=0 && !R.AbortReturn && !(R.LegacyDelivery && Cargo->IsEmpty()))) { Recover(R,TEXT("Returned with cargo: incomplete unload requires operator recovery")); ++Cursor; continue; }
+   if(!Cargo || (!R.Automatic && !Cargo->IsEmpty()) || (R.Automatic && R.DeliveredCargo<=0 && !R.AbortReturn)) { Recover(R,TEXT("Returned with cargo: incomplete unload requires operator recovery")); ++Cursor; continue; }
    if(R.Automatic && FMath::Abs(Owner->GetForwardSpeed())<=1.f) {
     if(!RestoreHomeRoute(R)) { Recover(R,TEXT("Home route restoration failed; reservations retained")); ++Cursor; continue; }
     Next=filn::Advance(Before,filn::Event::HomeStopped);
@@ -540,9 +529,8 @@ void ALogisticsSubsystem::Observe() {
    if(Next==S::Completed) {
     if(!Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { Recover(R,TEXT("Completion lease ownership mismatch")); bDispatchBlocked=true; ++Cursor; continue; }
     Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
-    if(R.LegacyDelivery && R.DeliveredCargo==0) R.Diagnostic=TEXT("Legacy empty return confirmed; no historical delivery credited");
     if(R.AbortReturn) R.Diagnostic=FString::Printf(TEXT("Aborted shipment returned home; delivered=%d retained=%d; no delivery success inferred"),R.DeliveredCargo,R.LastCargo);
-    R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.LegacyDelivery=false; R.AbortReturn=false;
+    R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.AbortReturn=false;
     R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate();
     R.NavigationRetry.Reset(); R.TravelProgress.Reset();
     Active.RemoveAtSwap(Cursor); continue;
@@ -596,9 +584,6 @@ void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& 
   for(auto* H:VS->GetDockingStations()) if(IsValid(H)) UE_LOG(LogFILN,Log,TEXT("station %s name=%s node=%s"),*H->GetPathName(),*H->GetStationName().ToString(),*H->GetPathNodeGUID().ToString());
   return;
  }
- if(Command==TEXT("convertedStations") && Args.Num()==1 && (Args[0]==TEXT("preview") || Args[0]==TEXT("import"))) { ImportConvertedStations(Args[0]==TEXT("import")); return; }
- if(Command==TEXT("legacyJournal") && Args.Num()==2 && (Args[0]==TEXT("preview") || Args[0]==TEXT("import"))) { ImportLegacyJournal(Args[1],Args[0]==TEXT("import")); return; }
- if(Command==TEXT("legacy") && Args.Num()==1 && (Args[0]==TEXT("preview") || Args[0]==TEXT("import"))) { ImportLegacy(Args[0]==TEXT("import")); return; }
  if(Command==TEXT("depot") && Args.Num()==2 && (Args[0]==TEXT("register") || Args[0]==TEXT("remove"))) {
   for(auto* Station:VS->GetDockingStations()) if(IsValid(Station) && Station->GetPathName()==Args[1]) {
    const bool Ok=SetDepot(Station,Args[0]==TEXT("remove"));

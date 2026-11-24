@@ -232,17 +232,17 @@
     },
     {
       "id": "lua-to-native-migration",
-      "status": "not-verified",
-      "reason": "Settings importer compiled; actor/depot/job conversion incomplete",
+      "status": "out-of-scope",
+      "reason": "User explicitly moved legacy migration to external Codex/Lua tooling; no native importer shipped.",
       "history": [
         {
           "date": "2026-11-24",
           "previous_reason": "Importer not implemented"
         }
       ],
-      "implementation": "LogisticsMigration.cpp",
-      "verification_method": "Preview/import/repeat/rollback plus physical legacy conversion and reload",
-      "actual_result": "Settings importer compiled; actor/depot/job conversion incomplete"
+      "implementation": "External tools only",
+      "verification_method": "Separate operator-owned migration workflow",
+      "actual_result": "Not verified; excluded from native release scope, not passed."
     },
     {
       "id": "native-to-vanilla-migration",

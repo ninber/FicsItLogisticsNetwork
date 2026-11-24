@@ -51,8 +51,6 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) bool CargoOriginKnown = false;
  UPROPERTY(SaveGame) bool CargoOriginStorage = false;
  UPROPERTY(SaveGame) bool Automatic = false;
- // Imported cargo is observed, never credited as a historical transfer.
- UPROPERTY(SaveGame) bool LegacyDelivery = false;
  UPROPERTY(SaveGame) bool AbortReturn = false;
  // Stable reservation identities survive endpoint destruction and save/load.
  UPROPERTY(SaveGame) FGuid ProviderLease;
@@ -96,8 +94,6 @@ private:
  UPROPERTY(SaveGame) TArray<FFILNStationConfig> StationConfigs;
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGDockingStationIdentifier>> DepotStations;
  UPROPERTY(SaveGame) TArray<FFILNRegistration> Registrations;
- UPROPERTY(SaveGame) int32 LegacyImportVersion = 0;
- UPROPERTY(SaveGame) TArray<FString> MigrationReport;
  friend class UFILNRemoteControl;
  friend class UFILNTransferObserver;
  UPROPERTY() TArray<TObjectPtr<UFILNTransferObserver>> TransferObservers;
@@ -109,10 +105,6 @@ private:
  bool SetDepot(AFGDockingStationIdentifier* Station,bool Remove);
  uint64 ScanRoadRevision=0;
  int32 FuelCursor=0;
- void ImportLegacy(bool Apply);
- void ImportLegacyJournal(const FString& Filename,bool Apply);
- void ImportConvertedStations(bool Apply);
- bool AdoptLegacyHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Home,bool Apply);
  bool RemoveStation(AFGDockingStationIdentifier* Station);
  void ServiceFuel();
  bool FuelReady(const FFILNRegistration& R) const;
@@ -143,7 +135,7 @@ private:
  bool CommitOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex);
  void ResetScan();
  void Rebuild();
- bool ConfigureStation(AFGDockingStationIdentifier* Station, TSubclassOf<UFGItemDescriptor> Resource, bool ImportExisting=false);
+ bool ConfigureStation(AFGDockingStationIdentifier* Station, TSubclassOf<UFGItemDescriptor> Resource);
  bool PrepareStationsForUninstall();
  bool RestoreStationFilters(const TArray<int32>& Indices);
  bool ApplyStationFilter(const FFILNStationConfig& Config,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);

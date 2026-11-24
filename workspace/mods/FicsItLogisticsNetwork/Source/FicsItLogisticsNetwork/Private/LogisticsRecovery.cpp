@@ -240,7 +240,7 @@ bool ALogisticsSubsystem::RehomeParkedVehicle(int32 Index,AFGDockingStationIdent
  R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.IdleRoute=Intent;
  R.State=static_cast<uint8>(S::Idle); R.Held=false; R.Automatic=false;
  R.CargoOriginKnown=false; R.CargoOriginStorage=false; R.RetainedCargo=false;
- R.LegacyDelivery=false; R.AbortReturn=false; R.Resource=nullptr;
+ R.AbortReturn=false; R.Resource=nullptr;
  R.ExpectedCargo=R.LoadedCargo=R.DeliveredCargo=R.LastCargo=0;
  R.NavigationRetry.Reset(); R.TravelProgress.Reset(); R.FuelPending=false; R.ObservedFuel=nullptr;
  Active.Remove(Index); ResetScan();

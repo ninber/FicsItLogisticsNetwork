@@ -22,7 +22,7 @@ PASS below names the actual verification scope, never implied game acceptance.
 | R06 reservations | Dispatcher.lua | Exclusive native job/endpoint primitives | 3245 core checks incl synthetic fleet | Runtime concurrency NOT RUN |
 | R07 depots/fuel | Depot/RestStop modules | Vanilla-home prototype; no native rest-stop | Primitive ownership only | Native depot/refueling NOT IMPLEMENTED |
 | R08 warehouses | [S] logic | Shared case-insensitive policy; manual pickup guard | Solid/fluid/unknown origin cases | Policy PASS; runtime NOT RUN |
-| R09 Lua migration | Offline save tools | No importer; legacy functionality preserved | None | NOT IMPLEMENTED |
+| R09 Lua migration | External Codex/Lua/offline tools | No native importer by explicit user scope | Separate external workflow | OUT OF NATIVE SCOPE; NOT VERIFIED |
 | R10 uninstall | Legacy dependent actors | Station restriction restoration with preflight; vanilla actors retained | Native compile | Full migration/mod-disabled load NOT VERIFIED |
 | R11 management | Dashboard/Monitor | Native console status/list/config | None | Management UI NOT IMPLEMENTED |
 | R12 persistence | Lua persistent records | SaveGame identities/config; conservative interrupted-job recovery | Pure reload state tests; UHT compile | Real save/load/restart NOT RUN |

@@ -25,10 +25,6 @@ trap 'rm -rf -- "$build_dir"' EXIT
 "$build_dir/enrollment_tests"
 
 "${CXX:-g++}" -std=c++20 -Wall -Wextra -Wpedantic -Werror -O2 \
- -I"$plugin/Source/FicsItLogisticsNetwork/Public" "$plugin/tests/legacy_tests.cpp" -o "$build_dir/legacy_tests"
-"$build_dir/legacy_tests"
-
-"${CXX:-g++}" -std=c++20 -Wall -Wextra -Wpedantic -Werror -O2 \
  -I"$plugin/Source/FicsItLogisticsNetwork/Public" "$plugin/tests/lifecycle_tests.cpp" -o "$build_dir/lifecycle_tests"
 "$build_dir/lifecycle_tests"
 

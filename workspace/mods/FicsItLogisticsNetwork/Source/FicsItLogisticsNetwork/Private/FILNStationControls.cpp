@@ -189,20 +189,7 @@ void UFILNRemoteControl::AdminAction_Implementation(AFGBuildableDockingStation* 
   const bool Ok=S->SetDepot(Target->GetStationIdentifier(),Action==9);
   Message=Ok?NSLOCTEXT("FILN","DepotUpdated","Rest-stop role updated"):NSLOCTEXT("FILN","DepotRejected","Rest-stop role rejected: cargo, connection, docking or ownership conflict");
  }
- else if(Action==1 || Action==2 || (Action>=4 && Action<=7)) {
-  S->MigrationReport.Empty();
-  if(S->bAutoDispatchEnabled || S->Reservations.Size()!=0 || !S->Active.IsEmpty()) Message=NSLOCTEXT("FILN","MigrationBusy","Disable dispatch and finish active jobs before migration.");
-  else {
-   if(Action<=2) S->ImportLegacy(Action==2);
-   else if(Action<=5) S->ImportConvertedStations(Action==5);
-   else S->ImportLegacyJournal(TEXT("dispatch-journal.tsv"),Action==7);
-   TArray<FText> Lines;
-   Lines.Add(NSLOCTEXT("FILN","MigrationReport","Migration report (technical details follow; independent save verification required)"));
-   if(S->MigrationReport.IsEmpty()) Lines.Add(NSLOCTEXT("FILN","MigrationNoRows","No report rows returned. Check server logs and manifest preconditions; no success inferred."));
-   else for(const auto& Line:S->MigrationReport) Lines.Add(FText::FromString(Line));
-   Message=JoinLines(Lines);
-  }
- } else return;
+ else return;
  const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
  StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Message);
 }
@@ -228,12 +215,6 @@ void UFILNStationControls::NativeOnInitialized() {
  AddAction(NSLOCTEXT("FILN","EnrollVehicle","Register selected vehicle at this depot"))->OnClicked.AddDynamic(this,&UFILNStationControls::EnrollVehicle);
  AddAction(NSLOCTEXT("FILN","RecoverVehicle","Recover selected parked truck at this rest stop (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::RecoverVehicle);
  AddAction(NSLOCTEXT("FILN","ToggleDispatcher","Enable / disable automatic dispatch (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ToggleDispatcher);
- AddAction(NSLOCTEXT("FILN","PreviewLegacy","Preview legacy settings import (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviewLegacy);
- AddAction(NSLOCTEXT("FILN","ImportLegacy","Import compatible legacy settings (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ImportLegacy);
- AddAction(NSLOCTEXT("FILN","PreviewConverted","Preview converted station manifest (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviewConverted);
- AddAction(NSLOCTEXT("FILN","ImportConverted","Import converted station manifest (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ImportConverted);
- AddAction(NSLOCTEXT("FILN","PreviewJournal","Preview legacy delivery journal (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviewJournal);
- AddAction(NSLOCTEXT("FILN","ImportJournal","Import compatible legacy deliveries (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ImportJournal);
  AddAction(NSLOCTEXT("FILN","PrepareUninstall","Prepare for uninstall (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PrepareUninstall);
  AddAction(NSLOCTEXT("FILN","Overview","Network overview / refresh"))->OnClicked.AddDynamic(this,&UFILNStationControls::QueryOverview);
  AddAction(NSLOCTEXT("FILN","PreviousPage","Previous page"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviousPage);
@@ -329,12 +310,6 @@ void UFILNStationControls::RecoverVehicle() {
 void UFILNStationControls::RegisterDepot() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,8); } }
 void UFILNStationControls::RemoveDepot() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,9); } }
 void UFILNStationControls::ToggleDispatcher() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,0); } }
-void UFILNStationControls::PreviewLegacy() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,1); } }
-void UFILNStationControls::ImportLegacy() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,2); } }
-void UFILNStationControls::PreviewConverted() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,4); } }
-void UFILNStationControls::ImportConverted() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,5); } }
-void UFILNStationControls::PreviewJournal() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,6); } }
-void UFILNStationControls::ImportJournal() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,7); } }
 void UFILNStationControls::PrepareUninstall() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,3); } }
 void UFILNStationControls::InstallHook() {
  if(WITH_EDITOR) return;

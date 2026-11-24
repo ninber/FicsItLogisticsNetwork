@@ -21,10 +21,10 @@
 - [ ] T019 Integrate retained-cargo dispatch FSM and measured transfer completion.
 - [ ] T020 Port native depot enrollment, actual refueling, home return and hold.
 - [ ] T021 Reconcile saved jobs after restart/destruction/path changes without reservation leaks.
-- [ ] T022 Implement legacy discovery/dry-run/journaled import, preserving all connections/state.
+- **T022 — external/superseded:** Implement legacy discovery/dry-run/journaled import, preserving all connections/state. (Not a native release task.)
 - [ ] T023 Implement complete disable/uninstall semantics and save without FILN acceptance.
 - [ ] T024 Implement native management UI and validated multiplayer server commands.
-- [ ] T025 Run Unreal integration suite and isolated solid/fluid/migration/recovery acceptance.
+- [ ] T025 Run Unreal integration suite and isolated solid/fluid/recovery acceptance.
 - [ ] T026 Execute headless cook/Alpakit Win64 packaging and inspect actual generated artifact.
 - [ ] T027 Verify SMM installation/layout and independent mod-disabled disposable save load.
 - [ ] T028 Update draft PR only after reviewable tested changes; keep draft until acceptance.
@@ -41,9 +41,9 @@
 - [x] T036 Add saved automatic state/cargo counters and conservative matching-route reload reconciliation.
 - [x] T037 Add native AP-tick parking hook and native supplied-fuel docking service; runtime verification remains open.
 - [x] T038 Add server-validated resource/enrollment UI and original-label binding proxy with pooled-widget restoration.
-- [x] T039 Add explicit vehicle enrollment and admin dispatcher/migration/preparation UI actions.
-- [x] T040 Add version-1 idempotent legacy-filter settings import, preflight, rollback and unsupported-actor reporting.
-- [ ] T041 Complete physical legacy actor/depot/vehicle-state conversion (runtime-generated legacy classes/fixtures needed).
+- [x] T039 Add explicit vehicle enrollment and admin dispatcher/preparation UI actions.
+- **T040 — external/superseded:** Add version-1 idempotent legacy-filter settings import, preflight, rollback and unsupported-actor reporting. (Not a native release task.)
+- **T041 — external/superseded:** Complete physical legacy actor/depot/vehicle-state conversion (runtime-generated legacy classes/fixtures needed). (Not a native release task.)
 - [ ] T042 Validate native parking hook, native transfer callback timing, fuel and fluid quantities in a disposable real game.
 - [ ] T043 Complete full network management roster/pagination and visual/localization/multiplayer acceptance.
 - [x] T044 Add real NativeInventory automation cases and fail-closed automation-report validation.
@@ -54,19 +54,19 @@
 - [x] T048 Revoke retained-cargo provenance after unexplained/manual/recovery inventory changes.
 
 - [x] T049 Port Lua bounded-frequency native navigation retry policy; integrate guarded route/target reapplication for active automatic travel phases and preserve player-changed routes.
-- [ ] T050 Build/UHT and verify native navigation retry, fault clearance, route readback, player takeover and indefinite bounded-frequency retry in disposable real game. Full alternate-route return, stalled-without-error recovery, and legacy migration remain unresolved.
+- [ ] T050 Build/UHT and verify native navigation retry, fault clearance, route readback, player takeover and indefinite bounded-frequency retry in disposable real game. Full alternate-route return, stalled-without-error recovery, remain unresolved.
 
 - [x] T051 Port explicit Lua depot enrollment: reject ambiguous homes/trucks and unrelated routes, assign/read back home-only/AP-on, guard rollback and audit native fuel connections.
 - [ ] T052 Verify real native home-only AP acceptance (including initially unfueled trucks), rollback, exclusive ownership, hold/fuel behavior, legacy manual pair workflow and explicit registration UI in disposable game.
 
-- [x] T053 Add legacy recipe-based idle depot adoption and strict bounded Lua dispatch journal parser/route matching preview.
-- [ ] T054 Complete active journal job restoration and physical class/recipe conversion; verify actual migration and save reload. Journal preview is not job migration.
+- **T053 — external/superseded:** Add legacy recipe-based idle depot adoption and strict bounded Lua dispatch journal parser/route matching preview. (Not a native release task.)
+- **T054 — external/superseded:** Complete active journal job restoration and physical class/recipe conversion; verify actual migration and save reload. Journal preview is not job migration. (Not a native release task.)
 
 - [x] T055 Implement native travel progress watchdog and bounded stall retries; restore home-only route before successful automatic completion and release reservations only after route/AP readback.
 - [ ] T056 Verify actual native docking, hold, route restoration and stalled/repaired road behavior; alternate destination recovery and destroyed actor cleanup remain open.
 
-- [x] T057 Implement explicit legacy journal import for unique delivery-only routes with matching cargo or empty home return; preserve native route/AP, acquire leases and count only future transfer events. Expose server console preview/import.
-- [ ] T058 Extend migration to legacy pickup/alternate recovery routes without repeating pickups; verify imported jobs in actual save. Physical actor conversion remains open.
+- **T057 — external/superseded:** Implement explicit legacy journal import for unique delivery-only routes with matching cargo or empty home return; preserve native route/AP, acquire leases and count only future transfer events. Expose server console preview/import. (Not a native release task.)
+- **T058 — external/superseded:** Extend migration to legacy pickup/alternate recovery routes without repeating pickups; verify imported jobs in actual save. Physical actor conversion remains open. (Not a native release task.)
 
 - [x] T059 Implement shared transactional station filter restoration and guarded uninstall preflight; rollback owned writes on failure and retain conflicting state.
 - [x] T060 Implement bounded cleanup for positively observed destroyed vehicle identifiers; release only that registration's owned leases and repair indices.
@@ -76,24 +76,24 @@
 - [x] T063 Save stable reservation endpoint identities for new automatic and imported jobs; restore leases even when endpoint references are missing.
 - [ ] T064 Verify native route writes, abort return, anchor behavior and save/reload in game. Recovery after native auto-sanitization of the old route and missing homes remains unresolved.
 
-- [x] T065 Adopt legacy pickup-route suffixes after the provider, only with exact safe requester/home remainder and compatible observed cargo; refuse pre-pickup and ambiguous routes.
+- **T065 — external/superseded:** Adopt legacy pickup-route suffixes after the provider, only with exact safe requester/home remainder and compatible observed cargo; refuse pre-pickup and ambiguous routes. (Not a native release task.)
 - [x] T066 Port full compatible native fuel readiness, pending stationary docking observation, measured fuel receipts and retry cooldown from DepotFuelService.lua.
-- [ ] T067 Verify real-game native refueling/slot capacity, receipt timing and migration of in-flight pickup suffixes; legacy trips before pickup remain intentionally unresolved.
+- [ ] T067 Verify real-game native refueling/slot capacity, receipt timing.
 
-- [x] T068 Implement copy-only inverse legacy class/recipe/filter conversion, exact selection/hash guards, inverse body comparison, roundtrip check and native resource/depot manifest import.
-- [ ] T069 Verify actual parser serialization and independent disposable load; resolve residual legacy schematic/component references and unsupported classes. Active depot conversion remains restricted to quiescent saves.
+- **T068 — external/superseded:** Implement copy-only inverse legacy class/recipe/filter conversion, exact selection/hash guards, inverse body comparison, roundtrip check and native resource/depot manifest import. (Not a native release task.)
+- **T069 — external/superseded:** Verify actual parser serialization and independent disposable load; resolve residual legacy schematic/component references and unsupported classes. Active depot conversion remains restricted to quiescent saves. (Not a native release task.)
 
 - [x] T070 Port bounded idle home-only vehicle reconciliation: release stale holds, observe native return, retry exact empty home-only route with verified native roads, restore hold only at home.
 - [ ] T071 Verify home-only native retry, actual docking and hold after moving/reloading an enrolled truck. Unmanaged or AP-off trucks are not automatically enrolled.
 
 - [x] T072 Preserve localizable FText through station/overview RPCs, replace numeric FSM states with stable localization keys, and clamp stale overview pages.
-- [x] T073 Expose converted station and legacy journal preview/import through existing administrator-validated management UI; fixed manifest filenames, no arbitrary client file paths.
+- **T073 — external/superseded:** Expose converted station and legacy journal preview/import through existing administrator-validated management UI; fixed manifest filenames, no arbitrary client file paths. (Not a native release task.)
 - [ ] T074 Verify localized RPC rendering in actual multiplayer and gather/compile translation catalogs; technical diagnostics remain raw English server log text.
 
-- [x] T075 Discover ordinary LOAD providers from native station roster, rank directed compatible candidates, revalidate actual matching single cargo and exclude both registered and unclaimed legacy depots. Demand remains explicitly configured.
+- [x] T075 Discover ordinary LOAD providers from native station roster, rank directed compatible candidates, revalidate actual matching single cargo and exclude designated depots. Demand remains explicitly configured.
 - [ ] T076 Verify ordinary solid/fluid provider dispatch, native filter behavior and station roster changes under real runtime load.
 
-- [x] T077 Persist explicit native rest-stop designation independently of truck ownership; expose admin management, migrate unclaimed depots, exclude them from cargo scheduling and restore vanilla behavior during uninstall.
+- [x] T077 Persist explicit native rest-stop designation independently of truck ownership; expose admin management, exclude them from cargo scheduling and restore vanilla behavior during uninstall.
 - [ ] T078 Verify role markers, management access, saved unclaimed depots and actual fuel-only behavior in game. A distinct cooked build-menu recipe/descriptor is not implemented; vanilla actor designation is the current native alternative.
 
 - [x] T079 Implement explicit parked rehome/recovery with exclusive ownership move, owned-lease release, home-only route readback, cargo preservation and AP-off preservation. Replace unsafe unrestricted reset path.
@@ -103,14 +103,17 @@
 - [x] T082 Expose explicit parked recovery through admin-validated native UI RPC.
 - [ ] T083 Verify actual native delegate order, duplicate/missing events, recovery RPC and save consistency in real game; portable accounting tests do not establish delegate behavior.
 
-- [x] T084 Adopt exact pre-pickup legacy routes only for empty trucks and still-eligible full-load providers/empty requesters with native directed remaining legs, both endpoint leases, and no route/cargo writes. Permit explicitly designated converted depots in journal import.
-- [ ] T085 Verify migration of pre-pickup and post-conversion journeys in real game, including native path semantics and duplicate prevention; reject ambiguous/docking routes.
+- **T084 — external/superseded:** Adopt exact pre-pickup legacy routes only for empty trucks and still-eligible full-load providers/empty requesters with native directed remaining legs, both endpoint leases, and no route/cargo writes. Permit explicitly designated converted depots in journal import. (Not a native release task.)
+- **T085 — external/superseded:** Verify migration of pre-pickup and post-conversion journeys in real game, including native path semantics and duplicate prevention; reject ambiguous/docking routes. (Not a native release task.)
 
-- [x] T086 Extend conversion/manifest import to 512 rows, support absent/empty programmable filters as ordinary vanilla stations without demand inference, and preserve the verified native force-fuel property. Add synthetic city-scale regression matching observed record counts.
-- [ ] T087 Execute full parser roundtrip on a disposable real city copy; resolve exact per-actor filters, cargo, docking and residual schematic/recipe dependencies. Raw compressed-record inspection is not a full object parser.
+- **T086 — external/superseded:** Extend conversion/manifest import to 512 rows, support absent/empty programmable filters as ordinary vanilla stations without demand inference, and preserve the verified native force-fuel property. Add synthetic city-scale regression matching observed record counts. (Not a native release task.)
+- **T087 — external/superseded:** Execute full parser roundtrip on a disposable real city copy; resolve exact per-actor filters, cargo, docking and residual schematic/recipe dependencies. Raw compressed-record inspection is not a full object parser. (Not a native release task.)
 
-- [x] T088 Decode actual unlock arrays; implement opt-in exact legacy unlock cleanup on offline copies with inverse comparison, fail closed on remaining actor/asset use, report other dependencies.
-- [ ] T089 Verify parser roundtrip and resolve the remaining historical construction-statistics class key before independent legacy-disabled load. Do not discard statistics or unrelated mod data.
+- **T088 — external/superseded:** Decode actual unlock arrays; implement opt-in exact legacy unlock cleanup on offline copies with inverse comparison, fail closed on remaining actor/asset use, report other dependencies. (Not a native release task.)
+- **T089 — external/superseded:** Verify parser roundtrip and resolve the remaining historical construction-statistics class key before independent legacy-disabled load. Do not discard statistics or unrelated mod data. (Not a native release task.)
 
-- [x] T090 Share typed residual dependency scanning between conversion and unlock cleanup; preserve BigInt/Map statistics without JSON serialization failure.
-- [ ] T091 Establish explicit statistics migration semantics for CurrentMax and typed parser representation; preserve history and block dependency-free claims until then.
+- **T090 — external/superseded:** Share typed residual dependency scanning between conversion and unlock cleanup; preserve BigInt/Map statistics without JSON serialization failure. (Not a native release task.)
+- **T091 — external/superseded:** Establish explicit statistics migration semantics for CurrentMax and typed parser representation; preserve history and block dependency-free claims until then. (Not a native release task.)
+
+- [x] T092 Remove embedded legacy importers, saved import metadata, legacy recipe detection, migration console/RPC/UI actions and importer policy tests. Keep general native enrollment, recovery and uninstall. External save tools are not shipped in the mod.
+- [ ] T093 Verify the standalone native package has no legacy import or save-specific dependency; rerun current-head tests/build.
