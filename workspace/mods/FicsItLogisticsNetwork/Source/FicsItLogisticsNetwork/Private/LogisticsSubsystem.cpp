@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
+#include "FILNDispatchPolicy.h"
 #include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
@@ -103,6 +104,9 @@ bool ALogisticsSubsystem::Dispatch(FFILNRegistration& R,AFGDockingStationIdentif
  auto* PB=Building(P); auto* QB=Building(Q);
  if(bDispatchBlocked || StateOf(R)!=S::Idle || !Parked(R) || !ValidHome(R.Home) ||
   !IsValid(PB) || !IsValid(QB) || P==Q || P==R.Home || Q==R.Home || !PB->GetIsInLoadMode() || QB->GetIsInLoadMode()) return false;
+ // Honor explicit warehouse marker for newly created journeys. Existing recovery is untouched.
+ if(!filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*P->GetStationName().ToString()),
+                                  TCHAR_TO_UTF8(*Q->GetStationName().ToString()))) return false;
  if(!R.Vehicle->GetOwnerVehicle()->GetStorageInventory() || !R.Vehicle->GetOwnerVehicle()->GetStorageInventory()->IsEmpty()) return false;
  for(const auto& Other:Registrations) if(Other.Home==P || Other.Home==Q) return false;
  const auto* Preset=R.Vehicle->GetOwnerVehicle()->GetVehiclePathPreset();
