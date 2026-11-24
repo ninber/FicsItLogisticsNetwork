@@ -1,0 +1,16 @@
+# Reuse the cooked actor/CDO; runtime-generated actor templates crash hologram duplication.
+# Per-instance identity must use reflected mBuiltWithRecipe, not actor class alone.
+type: class
+classes:
+  - id: Desc_RestStop
+    parent: /Game/FactoryGame/Buildable/Factory/TruckStation/Desc_TruckStation.Desc_TruckStation_C
+    properties:
+      - path: mBuildableClass
+        value: /Game/FactoryGame/Buildable/Factory/TruckStation/Build_TruckStation.Build_TruckStation_C
+      - path: mDisplayName
+        value: FILN Rest Stop
+      - path: mCategory
+        value: /Game/FactoryGame/Interface/UI/InGame/BuildMenu/BuildCategories/BC_Vehicles.BC_Vehicles_C
+      - path: mSubCategories
+        value:
+          - /Game/FactoryGame/Interface/UI/InGame/BuildMenu/BuildCategories/Sub_Transport/SC_Vehicles.SC_Vehicles_C

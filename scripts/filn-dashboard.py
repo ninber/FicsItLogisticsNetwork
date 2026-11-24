@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Loopback FILN telemetry with explicit parked-truck registration."""
+import argparse
+import json
+import secrets
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlsplit
+from filn_dashboard_model import analyze
+from filn_dashboard_lifecycle import ModLifetime
+from filn_depot_registration import plan as registration_plan, queue as queue_registration
+
+ROOT = Path(__file__).resolve().parents[1]
+ASSETS = ROOT/'workspace/experiments/FILNLua/dashboard'
+DEFAULT_SCRIPTS = Path.home()/'.local/share/Steam/steamapps/common/Satisfactory/Engine/Binaries/Win64/ue4ss/Mods/FILNLua/Scripts'
+
+class State:
+    def __init__(self, scripts):
+        self.scripts, self.history, self.snapshot = scripts, {}, None
+        self.lock = threading.Lock()
+        self.token = secrets.token_hex(24)
+
+    def status(self):
+        with self.lock:
+            now = time.time()
+            demand = self.scripts/'dashboard-demand.txt'
+            if not demand.exists() or now-demand.stat().st_mtime >= 5:
+                demand.write_text(str(int(now)))
+            error = None
+            try:
+                data = json.loads((self.scripts/'telemetry.json').read_text())
+                if data.get('schema_version') != 1 or not isinstance(data.get('stations'), list) or not isinstance(data.get('vehicles'), list):
+                    raise ValueError('Unsupported telemetry schema')
+                self.snapshot = data
+            except (OSError, ValueError, TypeError) as exc:
+                error = str(exc)
+            progress = None
+            try:
+                progress = json.loads((self.scripts/'telemetry-progress.json').read_text())
+            except (OSError, ValueError):
+                pass
+            registration=dict(supported=bool(self.snapshot and self.snapshot.get('dispatcher',{}).get('registration_supported')),candidates=[],result=None)
+            if self.snapshot:
+                try:registration['candidates']=registration_plan(self.snapshot,now)
+                except ValueError:pass
+            try:registration['result']=json.loads((self.scripts/'depot-registration-result.json').read_text())
+            except (OSError,ValueError):pass
+            try:
+                pending=(self.scripts/'depot-registration.tsv').read_text().splitlines()[0]
+                if not registration['result'] or registration['result'].get('request_id')!=pending:registration['result']=dict(request_id=pending,status='queued',results=[])
+            except (OSError,IndexError):pass
+            return dict(csrf_token=self.token,registration=registration,server_time=now,ready=self.snapshot is not None,error=error,progress=progress,
+                        data=analyze(self.snapshot,now,self.history) if self.snapshot else None)
+
+
+def make_server(scripts, port=8765):
+    state = State(scripts)
+    manifest = json.loads((ASSETS/'icons/manifest.json').read_text())
+    icons = set(manifest['assets']) | {'unknown.svg'}
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            host=self.headers.get('Host','')
+            allowed=(f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}',f'filn.localhost:{self.server.server_port}')
+            if host not in allowed or self.headers.get('Origin')!='http://'+host or not secrets.compare_digest(self.headers.get('X-FILN-Token',''),state.token):
+                self.send_error(403);return
+            if self.path!='/api/register-depots':self.send_error(404);return
+            try:
+                if self.headers.get('Content-Type')!='application/json' or int(self.headers.get('Content-Length','0')) not in range(1,65):raise ValueError('Invalid request body')
+                payload=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                if payload!={'action':'register_depots'}:raise ValueError('Unsupported action')
+                with state.lock:
+                    snapshot=json.loads((state.scripts/'telemetry.json').read_text())
+                    if not snapshot.get('dispatcher',{}).get('registration_supported'):raise ValueError('Restart with the updated mod to register trucks')
+                    result=queue_registration(state.scripts,snapshot)
+                body=json.dumps(result).encode();self.send_response(202)
+                self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+            except (OSError,ValueError,KeyError,TypeError) as exc:self.send_error(409,str(exc))
+        def do_GET(self):
+            # Fixed loopback Host prevents DNS-rebinding sites reading city telemetry.
+            if self.headers.get('Host') not in (f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}', f'filn.localhost:{self.server.server_port}'):
+                self.send_error(403); return
+            path = urlsplit(self.path).path
+            if path == '/api/status':
+                try:
+                    body = json.dumps(state.status(), ensure_ascii=False, allow_nan=False).encode()
+                    content_type = 'application/json; charset=utf-8'
+                except (OSError, ValueError, TypeError, KeyError) as exc:
+                    self.send_error(503, str(exc)); return
+            elif path.startswith('/icons/') and path[7:] in icons:
+                body = (ASSETS/'icons'/path[7:]).read_bytes()
+                content_type = 'image/svg+xml' if path.endswith('.svg') else 'image/png'
+            elif path == '/health':
+                body, content_type = b'{"service":"filn-dashboard","version":1}', 'application/json'
+            elif path in ('/', '/app.js', '/style.css'):
+                name = 'index.html' if path == '/' else path[1:]
+                body = (ASSETS/name).read_bytes()
+                content_type = {'index.html':'text/html; charset=utf-8','app.js':'text/javascript; charset=utf-8','style.css':'text/css; charset=utf-8'}[name]
+            else:
+                self.send_error(404); return
+            self.send_response(200)
+            self.send_header('Content-Type', content_type)
+            self.send_header('Cache-Control','no-store')
+            self.send_header('X-Content-Type-Options','nosniff')
+            self.send_header('Content-Security-Policy',"default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'")
+            self.send_header('Content-Length',str(len(body)))
+            self.end_headers();self.wfile.write(body)
+        def log_message(self,*args):
+            pass
+    server = ThreadingHTTPServer(('127.0.0.1',port),Handler)
+    server.daemon_threads = True
+    server.state = state
+    return server
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--scripts-dir',type=Path,default=DEFAULT_SCRIPTS)
+    parser.add_argument('--with-game-mod',action='store_true',help='Exit when the running mod/game stops')
+    args = parser.parse_args()
+    if not (args.scripts_dir/'main.lua').is_file():
+        parser.error('Installed FILNLua Scripts directory not found')
+    lifetime = ModLifetime(args.scripts_dir/'dashboard-mod.txt') if args.with_game_mod else None
+    if lifetime and not lifetime.alive():
+        print('FILN mod is not running; dashboard remains stopped.',flush=True)
+        return
+    server = make_server(args.scripts_dir)
+    def watch_mod():
+        while lifetime.alive():
+            time.sleep(3)
+        print('FILN mod stopped; shutting down dashboard.',flush=True)
+        server.shutdown()
+    if lifetime:
+        threading.Thread(target=watch_mod,daemon=True).start()
+    def heartbeat():
+        while True:
+            (args.scripts_dir/'dashboard-server.txt').write_text(str(int(time.time())))
+            time.sleep(5)
+    threading.Thread(target=heartbeat,daemon=True).start()
+    print('FILN dashboard: http://filn.localhost:8765/ — open manually in Steam overlay browser',flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+
+if __name__ == '__main__':
+    main()

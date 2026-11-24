@@ -1,0 +1,14 @@
+type: schematic
+schematics:
+  - id: Schematic_RestStop
+    properties:
+      - path: mDisplayName
+        value: FILN Rest Stop Prototype
+      - path: mType
+        value: EST_Custom
+    unlocks:
+      - class: /Game/FactoryGame/Unlocks/BP_UnlockRecipe.BP_UnlockRecipe_C
+        properties:
+          - path: mRecipes
+            value:
+              - /KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop

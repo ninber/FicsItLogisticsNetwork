@@ -1,0 +1,13 @@
+type: recipe
+recipes:
+  - id: Recipe_LogisticsStation
+    parent: /Game/FactoryGame/Recipes/Buildings/Recipe_TruckStation.Recipe_TruckStation_C
+    properties:
+      - path: mDisplayNameOverride
+        value: true
+      - path: mDisplayName
+        value: FILN Logistics Station
+      - path: mProduct
+        value:
+          - ItemClass: /KDataForge/Gen/FILNStations.Gen_FILNStations_Desc_LogisticsStation
+            Amount: 1

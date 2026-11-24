@@ -1,0 +1,14 @@
+type: schematic
+schematics:
+  - id: Schematic_LogisticsStation
+    properties:
+      - path: mDisplayName
+        value: FILN Logistics Station
+      - path: mType
+        value: EST_Custom
+    unlocks:
+      - class: /Game/FactoryGame/Unlocks/BP_UnlockRecipe.BP_UnlockRecipe_C
+        properties:
+          - path: mRecipes
+            value:
+              - /KDataForge/Gen/FILNStations.Gen_FILNStations_Recipe_LogisticsStation

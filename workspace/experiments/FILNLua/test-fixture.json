@@ -1,0 +1,125 @@
+{
+  "save_file": "/var/home/ninber/.local/share/Steam/steamapps/compatdata/526870/pfx/drive_c/users/steamuser/AppData/Local/FactoryGame/Saved/SaveGames/76561199736157176/City_FILN_Stations_20261025_145945.sav",
+  "sha256": "19220a8f3f1e980eb4a1f175e69b40a74b21880d569d3ba0c087e1b2f00fbcba",
+  "size": 1895489,
+  "backup": "workspace/test-results/fixtures/verified-fleet-20261025/City_FILN_Stations_20261025_145945.sav",
+  "observed_utc": "2026-10-25T15:07:18.488368+00:00",
+  "rest_stops": [
+    {
+      "guid": "d88f55a341ed36965f87589586765f21",
+      "native_fleet_cycle_pass": true
+    },
+    {
+      "guid": "ebe4138f485beef873cdc5977842d4f8",
+      "native_fleet_cycle_pass": true
+    },
+    {
+      "guid": "7bb288b64fda62037cfedb918dce6bb6",
+      "native_fleet_cycle_pass": true
+    },
+    {
+      "guid": "54f0517d4f127bee251e1f860946f084",
+      "native_fleet_cycle_pass": true
+    }
+  ],
+  "vehicle": {
+    "session_id": "volatile; rediscover with scan",
+    "route": [
+      "d88f55a341ed36965f87589586765f21"
+    ],
+    "autopilot": true,
+    "target": 0,
+    "error": 3,
+    "error_name": "TooFewStations",
+    "filn_state": "Idle fixture: native TooFewStations is expected for the depot-only route"
+  },
+  "limits": [
+    "native four-truck cargo/refueling/return/hold proof passed; original manually fueled source preserved",
+    "stationary native refueling while cargo dispatch paused passed separately",
+    "fuel branch settings corrected in this checkpoint; all rest-stop cargo stores remain empty",
+    "re-running the low-fuel fixture requires its original empty-depot source fixture, not this fully fueled checkpoint",
+    "remote depots remain disabled until user enables them; no hard logical network labels yet",
+    "legacy three-bay parking/road-fault test requires its historical fixture; this checkpoint has four occupied depot homes"
+  ],
+  "hub_repair": {
+    "previous_save": "/var/home/ninber/.local/share/Steam/steamapps/compatdata/526870/pfx/drive_c/users/steamuser/AppData/Local/FactoryGame/Saved/SaveGames/76561199736157176/City_241026-150303.sav",
+    "purchased_count": 392,
+    "active_schematic": null,
+    "reload_verified": true
+  },
+  "converted_station": {
+    "guid": "cf556f664b8da131ec2498b4e28f6ea3",
+    "name": "IRON IGNOTS IN",
+    "recipe": "/KDataForge/Gen/FILNStations.Gen_FILNStations_Recipe_LogisticsStation",
+    "item": "/Game/FactoryGame/Resource/Parts/IronIngot/Desc_IronIngot.Desc_IronIngot_C",
+    "source_actor_path": "Persistent_Level:PersistentLevel.Build_TruckStation_C_2147156499"
+  },
+  "migration": {
+    "selected": 38,
+    "native_verified": 38,
+    "evidence": "workspace/test-results/static-city-apply-20261025T093609Z",
+    "source_sha256": "518b007ba566e6fcd5beb2b2b694fc769ef5d33e7e6c46a58455ac7e41b3525b"
+  },
+  "baseline_validation": {
+    "report": "workspace/test-results/20261025T122229Z-3c1345f3/report.json",
+    "status": "PASS",
+    "loaded": 4800,
+    "unloaded": 4800,
+    "held_seconds": 12,
+    "traffic_isolated": true,
+    "occupied": false,
+    "scope": "historical single-truck fixture; current four-vehicle proof is fleet_validation"
+  },
+  "fleet": {
+    "expected_powered": 4,
+    "ordinary_power_truck": "preserve native route/autopilot; do not isolate traffic",
+    "remote_depots": "keep disabled until user enables after first fleet proof",
+    "fuel_splitters": [
+      {
+        "home": "54f0517d4f127bee251e1f860946f084",
+        "actor_suffix": "Build_ConveyorAttachmentSplitterSmart_C_2147244479"
+      },
+      {
+        "home": "d88f55a341ed36965f87589586765f21",
+        "actor_suffix": "Build_ConveyorAttachmentSplitterSmart_C_2147243596"
+      },
+      {
+        "home": "ebe4138f485beef873cdc5977842d4f8",
+        "actor_suffix": "Build_ConveyorAttachmentSplitterSmart_C_2147236640"
+      },
+      {
+        "home": "7bb288b64fda62037cfedb918dce6bb6",
+        "actor_suffix": "Build_ConveyorAttachmentSplitterSmart_C_2147235747"
+      }
+    ]
+  },
+  "fleet_validation": {
+    "status": "PASS",
+    "report": "workspace/test-results/20261025T144651Z-293bd4bc/report.json",
+    "vehicles": 4,
+    "cycles": {
+      "d88f55a341ed36965f87589586765f21": {
+        "loaded": 4800,
+        "unloaded": 4800,
+        "held_seconds": 12
+      },
+      "ebe4138f485beef873cdc5977842d4f8": {
+        "loaded": 4800,
+        "unloaded": 4800,
+        "held_seconds": 12
+      },
+      "7bb288b64fda62037cfedb918dce6bb6": {
+        "loaded": 4800,
+        "unloaded": 4800,
+        "held_seconds": 12
+      },
+      "54f0517d4f127bee251e1f860946f084": {
+        "loaded": 4800,
+        "unloaded": 4800,
+        "held_seconds": 12
+      }
+    },
+    "refueling_report": "workspace/test-results/20261025T150031Z-c79fce3f/report.json",
+    "coverage_policy": "one completed cargo cycle per home in the fleet fixture; finished homes excluded only from remaining fixture jobs"
+  }
+}

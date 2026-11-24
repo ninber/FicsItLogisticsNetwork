@@ -1,0 +1,14 @@
+type: class
+classes:
+  - id: Desc_LogisticsStation
+    parent: /TruckStationSettings/Desc_ProgrammableTruckStation.Desc_ProgrammableTruckStation_C
+    properties:
+      - path: mDisplayName
+        value: FILN Logistics Station
+      - path: mBuildableClass
+        value: /TruckStationSettings/Build_ProgrammableTruckStation.Build_ProgrammableTruckStation_C
+      - path: mCategory
+        value: /Game/FactoryGame/Interface/UI/InGame/BuildMenu/BuildCategories/BC_Vehicles.BC_Vehicles_C
+      - path: mSubCategories
+        value:
+          - /Game/FactoryGame/Interface/UI/InGame/BuildMenu/BuildCategories/Sub_Transport/SC_Vehicles.SC_Vehicles_C

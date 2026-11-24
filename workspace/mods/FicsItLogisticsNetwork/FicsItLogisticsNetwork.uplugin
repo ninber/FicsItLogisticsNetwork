@@ -1,0 +1,25 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "SemVersion": "0.1.0",
+  "FriendlyName": "FicsIt Logistics Network",
+  "Description": "M0/M1 native parking and GUID routing prototype",
+  "CreatedBy": "FILN contributors",
+  "GameVersion": ">=491125",
+  "CanContainContent": true,
+  "Modules": [
+    {
+      "Name": "FicsItLogisticsNetwork",
+      "Type": "Runtime",
+      "LoadingPhase": "PostDefault"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "SML",
+      "Enabled": true,
+      "SemVersion": ">=3.12.0 <3.13.0"
+    }
+  ]
+}

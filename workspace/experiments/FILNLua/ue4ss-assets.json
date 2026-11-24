@@ -1,0 +1,18 @@
+{
+  "repository": "UE4SS-RE/RE-UE4SS",
+  "release": "experimental-latest",
+  "assets": [
+    {
+      "name": "UE4SS_v3.0.1-1181-g83330635.zip",
+      "size": 8748315,
+      "digest": "sha256:b9a166a756605b21058a64cde93bcaab1a855dba3553e5c7e6ce0fa8fdfad7b9",
+      "url": "https://github.com/UE4SS-RE/RE-UE4SS/releases/download/experimental-latest/UE4SS_v3.0.1-1181-g83330635.zip"
+    },
+    {
+      "name": "zCustomGameConfigs.zip",
+      "size": 423121,
+      "digest": "sha256:0d91b15a75a7787bd4a469d1b3338a27c3e19ca843b5f8778f69a4d13f63b5de",
+      "url": "https://github.com/UE4SS-RE/RE-UE4SS/releases/download/experimental-latest/zCustomGameConfigs.zip"
+    }
+  ]
+}
