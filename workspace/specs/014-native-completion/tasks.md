@@ -75,3 +75,7 @@
 - [x] T062 Implement guarded abort-to-home routing using a distinct validated depot anchor and preserve cargo/leases until actual home arrival.
 - [x] T063 Save stable reservation endpoint identities for new automatic and imported jobs; restore leases even when endpoint references are missing.
 - [ ] T064 Verify native route writes, abort return, anchor behavior and save/reload in game. Recovery after native auto-sanitization of the old route and missing homes remains unresolved.
+
+- [x] T065 Adopt legacy pickup-route suffixes after the provider, only with exact safe requester/home remainder and compatible observed cargo; refuse pre-pickup and ambiguous routes.
+- [x] T066 Port full compatible native fuel readiness, pending stationary docking observation, measured fuel receipts and retry cooldown from DepotFuelService.lua.
+- [ ] T067 Verify real-game native refueling/slot capacity, receipt timing and migration of in-flight pickup suffixes; legacy trips before pickup remain intentionally unresolved.

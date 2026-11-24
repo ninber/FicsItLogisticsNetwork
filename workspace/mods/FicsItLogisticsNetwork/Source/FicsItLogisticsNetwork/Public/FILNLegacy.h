@@ -45,6 +45,14 @@ inline RestoreAction Restore(bool exclusive,bool mixed,int quantity,bool targetR
  if(quantity==0 && targetHome) return RestoreAction::Return;
  return RestoreAction::Reject;
 }
+// The Lua pickup route can safely be observed after its provider has been
+// passed. Require the exact remaining suffix, not merely a matching waypoint.
+inline bool SafeRemainingRoute(const Entry& e,const std::vector<std::string>& route,int target) {
+ if(Match(e,route)==RouteMatch::None || target<0 || static_cast<std::size_t>(target)>=route.size()) return false;
+ const auto i=static_cast<std::size_t>(target);
+ return (i+1==route.size() && route[i]==e.home) ||
+        (i+2==route.size() && route[i]==e.requester && route[i+1]==e.home);
+}
 inline bool IdleAdoption(bool exactRecipe,bool validHome,bool uniqueHome,bool uniqueTruck,bool ap,bool driver,bool empty,bool stopped,bool nearby,bool homeOnly) {
  return exactRecipe&&validHome&&uniqueHome&&uniqueTruck&&ap&&!driver&&empty&&stopped&&nearby&&homeOnly;
 }

@@ -11,6 +11,7 @@ void UFILNTransferObserver::Bind(ALogisticsSubsystem* S,AFGWheeledVehicleIdentif
  Unbind(); Owner=S; Vehicle=V; Inventory=I;
  if(I) { I->OnItemAddedDelegate.AddUniqueDynamic(this,&UFILNTransferObserver::Added); I->OnItemRemovedDelegate.AddUniqueDynamic(this,&UFILNTransferObserver::Removed); }
 }
+bool UFILNTransferObserver::IsBoundTo(AFGWheeledVehicleIdentifier* V) const { return Vehicle.Get(true)==V; }
 void UFILNTransferObserver::Unbind() {
  if(auto* I=Inventory.Get()) { I->OnItemAddedDelegate.RemoveDynamic(this,&UFILNTransferObserver::Added); I->OnItemRemovedDelegate.RemoveDynamic(this,&UFILNTransferObserver::Removed); }
  Inventory.Reset(); Owner.Reset(); Vehicle.Reset();
@@ -29,7 +30,7 @@ void ALogisticsSubsystem::WatchTransfers(FFILNRegistration& R) {
 }
 void ALogisticsSubsystem::Transfer(AFGWheeledVehicleIdentifier* V,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other,bool Added) {
  if(!HasAuthority() || !IsInGameThread() || Amount<=0) return;
- const auto* Index=ByVehicle.Find(V); if(!Index) return; auto& R=Registrations[*Index];
+ const auto* Index=ByVehicle.Find(V); if(!Index || !Registrations.IsValidIndex(*Index)) return; auto& R=Registrations[*Index];
  using S=filn::State; const auto State=static_cast<S>(R.State);
  if(State==S::Idle || State==S::Recovery || !R.Automatic) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; return; }
  if(!R.Automatic || State==S::Idle || State==S::Recovery || !IsValid(V->GetOwnerVehicle())) return;

@@ -489,6 +489,7 @@ void ALogisticsSubsystem::Observe() {
    UE_LOG(LogFILN,Log,TEXT("job=%s state=%d; docking observation only, transfer unverified"),*R.JobId.ToString(),R.State);
    if(Next==S::Completed) {
     Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
+    if(R.LegacyDelivery && R.DeliveredCargo==0) R.Diagnostic=TEXT("Legacy empty return confirmed; no historical delivery credited");
     if(R.AbortReturn) R.Diagnostic=FString::Printf(TEXT("Aborted shipment returned home; delivered=%d retained=%d; no delivery success inferred"),R.DeliveredCargo,R.LastCargo);
     R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.LegacyDelivery=false; R.AbortReturn=false;
     R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate();

@@ -37,5 +37,14 @@ int main(){
  CHECK(Restore(false,false,20,true,false,true,false)==RestoreAction::Reject);
  CHECK(Restore(true,true,20,true,false,true,false)==RestoreAction::Reject);
  CHECK(Restore(true,false,20,false,true,true,false)==RestoreAction::Reject);
+ Entry old{h,p,q};
+ CHECK(!SafeRemainingRoute(old,{h,p,q,h},0));
+ CHECK(!SafeRemainingRoute(old,{h,p,q,h},1));
+ CHECK(SafeRemainingRoute(old,{h,p,q,h},2));
+ CHECK(SafeRemainingRoute(old,{h,p,q,h},3));
+ CHECK(SafeRemainingRoute(old,{p,q,h},1));
+ CHECK(!SafeRemainingRoute(old,{p,q,h},-1));
+ CHECK(!SafeRemainingRoute(old,{p,q,h},3));
+ CHECK(!SafeRemainingRoute(old,{h,q,p,h},1));
  std::cout<<checks<<" legacy policy checks passed\n";
 }

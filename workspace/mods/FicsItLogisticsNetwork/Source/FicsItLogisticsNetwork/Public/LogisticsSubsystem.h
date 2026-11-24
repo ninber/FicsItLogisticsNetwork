@@ -8,6 +8,7 @@
 #include "FILNRoadCache.h"
 #include "FILNDispatchPolicy.h"
 #include "FILNRecovery.h"
+#include "FILNFuelPolicy.h"
 #include "LogisticsSubsystem.generated.h"
 class AFGWheeledVehicleIdentifier;
 class AFGDockingStationIdentifier;
@@ -68,6 +69,11 @@ struct FFILNRegistration {
  filn::recovery::Progress TravelProgress;
  FVector ProgressLocation=FVector::ZeroVector;
  int32 ProgressWaypoint=INDEX_NONE;
+ // Runtime-only native fuel service observation; inventory is authoritative.
+ bool FuelPending=false;
+ TSubclassOf<UFGItemDescriptor> ObservedFuel;
+ int32 FuelBefore=0;
+ double FuelStarted=0, FuelRetryAt=0;
 };
 /** Native server-only prototype. Dedicated empty vanilla LOAD station is the home bay fallback. */
 UCLASS()
@@ -103,6 +109,7 @@ private:
  bool AdoptLegacyHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Home,bool Apply);
  bool RemoveStation(AFGDockingStationIdentifier* Station);
  void ServiceFuel();
+ bool FuelReady(const FFILNRegistration& R) const;
  filn::Ownership Ownership;
  filn::Reservations Reservations;
  TMap<AFGWheeledVehicleIdentifier*, int32> ByVehicle;

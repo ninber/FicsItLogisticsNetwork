@@ -47,7 +47,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  if(!IsValid(Owner)) return false;
  if(Owner->GetDriver()) { R.Diagnostic=TEXT("Player-controlled vehicle excluded"); return false; }
  if(!R.Vehicle->IsAutopilotEnabled()) { R.Diagnostic=TEXT("Autopilot disabled; explicit player opt-in required"); return false; }
- if(!Owner->HasFuel()) { R.Diagnostic=TEXT("Native vehicle reports no fuel; awaiting supplied fuel at home"); return false; }
+ if(!Owner->HasFuel() || !FuelReady(R)) { R.Diagnostic=TEXT("Awaiting full compatible native fuel inventory at assigned home"); return false; }
  if(QB->GetIsInLoadMode() || !QB->HasPower() || QB->IsProductionPaused()) { R.Diagnostic=TEXT("Requester mode/power/standby ineligible"); return false; }
  if(!QB->GetInventory() || !QB->GetInventory()->IsEmpty()) { R.Diagnostic=TEXT("Requester is not empty"); return false; }
  // Automatic scheduling never opts a truck back in after a player disables autopilot.
@@ -60,7 +60,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  Truck.cargoOriginKnown=R.CargoOriginKnown; Truck.cargoOriginStorage=R.CargoOriginStorage;
  Truck.id=Id(R.TruckId); Truck.home=Id(R.BayId); Truck.enrolled=true;
  Truck.homeReady=HB->HasPower() && !HB->IsProductionPaused(); Truck.idle=R.State==static_cast<uint8>(filn::State::Idle);
- Truck.autopilot=R.Vehicle->IsAutopilotEnabled(); Truck.driver=Owner->GetDriver()!=nullptr; Truck.fuelReady=Owner->HasFuel();
+ Truck.autopilot=R.Vehicle->IsAutopilotEnabled(); Truck.driver=Owner->GetDriver()!=nullptr; Truck.fuelReady=Owner->HasFuel() && FuelReady(R);
  if(!TransportMedium(Owner,Truck.medium)) return false;
  if(!Inventory(Owner->GetStorageInventory(),C.Resource,Truck.cargoKinds,Truck.cargoQuantity,Truck.cargoCapacity,&Truck.cargoResource)) return false;
  Request.id=Id(StationId(C.Station)); Request.label=TCHAR_TO_UTF8(*C.Station->GetStationName().ToString()); Request.resource=Descriptor(C.Resource);

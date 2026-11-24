@@ -28,7 +28,7 @@ bool ALogisticsSubsystem::RemoveStation(AFGDockingStationIdentifier* Station) {
  StationConfigs.RemoveAt(Index); ResetScan(); return true;
 }
 void ALogisticsSubsystem::ImportLegacy(bool Apply) {
- if(!HasAuthority() || bDispatchBlocked || LegacyImportVersion>2) return;
+ if(!HasAuthority() || bDispatchBlocked || bAutoDispatchEnabled || Reservations.Size()!=0 || LegacyImportVersion>2) return;
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
  struct FCandidate { AFGDockingStationIdentifier* Station; TSubclassOf<UFGItemDescriptor> Resource; };
  TArray<FCandidate> Candidates; TArray<FString> Report;
@@ -170,9 +170,12 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename,bool Apply
   const bool TargetValid=Current.IsValidIndex(TargetIndex);
   const bool AtRequester=TargetValid && Current[TargetIndex]==Q->GetPathNodeGUID();
   const bool AtHome=TargetValid && Current[TargetIndex]==H->GetPathNodeGUID();
-  // Never resume a route whose next waypoint could pick up again. Legacy cargo
-  // origin is unknown and an imported shipment must not be redirected.
-  const auto Decision=filn::legacy::Restore(Exclusive,Mixed,Quantity,AtRequester,AtHome,Kind==filn::legacy::RouteMatch::Delivery,
+  std::vector<std::string> RouteKeys;
+  for(const auto& G:Current) RouteKeys.emplace_back(TCHAR_TO_UTF8(*G.ToString(EGuidFormats::Digits).ToLower()));
+  // Pickup routes are safe only after the provider has been passed, with an
+  // exact requester/home suffix. Arrival at home terminates the entire route.
+  const bool SafeSuffix=filn::legacy::SafeRemainingRoute(E,RouteKeys,TargetIndex);
+  const auto Decision=filn::legacy::Restore(Exclusive,Mixed,Quantity,AtRequester,AtHome,SafeSuffix,
     filn::dispatch::IsStorage(TCHAR_TO_UTF8(*Q->GetStationName().ToString())));
   if(Decision==filn::legacy::RestoreAction::Reject || Candidate->IsCurrentlyDocking() || QB->GetDockedActor()==O || HB->GetDockedActor()==O) {
    MigrationReport.Add(Home+TEXT(": active route/cargo cannot safely resume without possible repeat pickup; untouched")); continue;
@@ -184,7 +187,7 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename,bool Apply
   R.Automatic=true; R.RetainedCargo=true; R.LegacyDelivery=true; R.RouteIntent=Current;
   R.ExpectedCargo=FMath::Max(1,Quantity); R.LastCargo=Quantity; R.LastObserved=GetWorld()->GetTimeSeconds();
   R.State=static_cast<uint8>(Decision==filn::legacy::RestoreAction::Deliver?filn::State::ToRequester:filn::State::Returning);
-  // Existing route must contain no provider; returning empty is not delivery success.
+  // No remaining provider waypoint; returning empty is not delivery success.
   if(!Reservations.AcquireDelivery(TCHAR_TO_UTF8(*R.JobId.ToString()),TCHAR_TO_UTF8(*R.TruckId.ToString()),TCHAR_TO_UTF8(*StationId(Q).ToString()))) {
    MigrationReport.Add(Home+TEXT(": reservation conflict; untouched")); continue;
   }

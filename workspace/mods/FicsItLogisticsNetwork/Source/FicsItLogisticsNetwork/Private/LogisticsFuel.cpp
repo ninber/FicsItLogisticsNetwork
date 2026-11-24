@@ -6,22 +6,84 @@
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "FGInventoryComponent.h"
+#include "Resources/FGItemDescriptor.h"
+#include "Engine/World.h"
 
+namespace {
+struct FFuelSnapshot {
+ filn::fuel::Snapshot Facts;
+ TSubclassOf<UFGItemDescriptor> Item;
+};
+bool SingleFuel(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor>& Item) {
+ if(!IsValid(I)) return false;
+ TArray<FInventoryStack> Stacks; I->GetInventoryStacks(Stacks);
+ for(const auto& S:Stacks) if(S.NumItems>0) {
+  if(!S.Item.GetItemClass() || (Item && Item!=S.Item.GetItemClass())) return false;
+  Item=S.Item.GetItemClass();
+ }
+ return true;
+}
+FFuelSnapshot Inspect(const FFILNRegistration& R,double Now) {
+ FFuelSnapshot Result; auto& F=Result.Facts;
+ auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
+ auto* H=IsValid(R.Home)?R.Home->GetStation():nullptr;
+ if(!IsValid(O) || !IsValid(H) || !H->GetDockingPathNode() || !R.Held ||
+    R.State!=static_cast<uint8>(filn::State::Idle) || O->GetDriver() || !V->IsAutopilotEnabled() ||
+    !H->HasPower() || H->IsProductionPaused() || FMath::Abs(O->GetForwardSpeed())>1.f ||
+    (H->GetDockedActor() && H->GetDockedActor()!=O) ||
+    FVector::DistSquared(O->GetVehicleLocation(),H->GetDockingPathNode()->GetActorLocation())>FMath::Square(800.f)) return Result;
+ const TArray<FGuid> HomeRoute={R.Home->GetPathNodeGUID()};
+ if(V->GetVehicleRoute()!=HomeRoute || R.IdleRoute!=HomeRoute) return Result;
+ auto* Source=H->GetFuelInventory(); auto* Target=O->GetFuelInventory();
+ TSubclassOf<UFGItemDescriptor> Supplied,Carried;
+ if(!SingleFuel(Source,Supplied)||!SingleFuel(Target,Carried)) return Result;
+ Result.Item=Carried?Carried:Supplied;
+ if(!Result.Item) return Result;
+ F.sameFuel=!Carried || !Supplied || Carried==Supplied;
+ F.supplied=Supplied!=nullptr; F.pending=R.FuelPending; F.cooldown=Now<R.FuelRetryAt;
+ F.quantity=Target->GetNumItems(Result.Item);
+ int64 Capacity=0;
+ if(Target->GetSizeLinear()>4096) return Result;
+ for(int32 Slot=0;Slot<Target->GetSizeLinear();++Slot) {
+  auto Filter=Target->GetAllowedItemOnIndex(Slot);
+  if(!Filter || Filter==Result.Item) Capacity+=Target->GetSlotSizeForItem(Slot,Result.Item);
+ }
+ if(Capacity<=0 || Capacity>MAX_int32) return Result;
+ F.capacity=static_cast<int>(Capacity); F.valid=true;
+ return Result;
+}
+}
+bool ALogisticsSubsystem::FuelReady(const FFILNRegistration& R) const {
+ return filn::fuel::Decide(Inspect(R,GetWorld()->GetTimeSeconds()).Facts)==filn::fuel::Action::Ready;
+}
 void ALogisticsSubsystem::ServiceFuel() {
  if(!HasAuthority() || bDispatchBlocked) return;
- for(int32 Count=0;Count<4 && !Registrations.IsEmpty();++Count) {
+ const double Now=GetWorld()->GetTimeSeconds();
+ for(int32 Count=0, Budget=FMath::Min(4,Registrations.Num());Count<Budget;++Count) {
   FuelCursor%=Registrations.Num(); auto& R=Registrations[FuelCursor++];
-  auto* Owner=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
-  auto* Home=IsValid(R.Home)?R.Home->GetStation():nullptr;
-  if(R.State!=static_cast<uint8>(filn::State::Idle) || !IsValid(Owner) || !IsValid(Home) || !ValidHome(R.Home) ||
-     !R.Held || R.Vehicle->GetVehicleRoute()!=R.IdleRoute ||
-     Owner->GetDriver() || !R.Vehicle->IsAutopilotEnabled() || !Home->HasPower() || Home->IsProductionPaused() ||
-     !Home->GetFuelInventory() || Home->GetFuelInventory()->IsEmpty() || !Owner->GetFuelInventory() ||
-     !Home->GetDockingPathNode() || FMath::Abs(Owner->GetForwardSpeed())>1.f || Home->GetDockedActor()) continue;
-  FVector Location; FRotator Rotation; Owner->GetVehicleLocationAndRotation(Location,Rotation);
-  if(FVector::DistSquared(Location,Home->GetDockingPathNode()->GetActorLocation())>FMath::Square(500.f)) continue;
-  // Let the game's ordinary docking/fuel inventory transfer and burn logic do all work.
-  // No AddStack, fabricated fuel, inventory copy, consumption override or route rewrite.
-  if(Home->DockActor(Owner) && Home->GetDockedActor()==Owner) R.Diagnostic=TEXT("Native home docking accepted for supplied-fuel service; transfer not yet measured");
+  auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
+  auto* H=IsValid(R.Home)?R.Home->GetStation():nullptr;
+  const auto Snapshot=Inspect(R,Now);
+  if(R.FuelPending) {
+   const bool Valid=Snapshot.Facts.valid && ValidHome(R.Home) && R.ObservedFuel && IsValid(O) && O->GetFuelInventory();
+   const int After=Valid?O->GetFuelInventory()->GetNumItems(R.ObservedFuel):0;
+   // Only credit a measured increase while this truck still owns the docking.
+   const bool Owned=Valid && IsValid(H) && H->GetDockedActor()==O;
+   const auto Receipt=filn::fuel::Observe(Valid,Owned,R.FuelBefore,After,Now-R.FuelStarted);
+   if(Receipt==filn::fuel::Receipt::Pending) continue;
+   if(Receipt==filn::fuel::Receipt::Received) {
+    R.Diagnostic=FString::Printf(TEXT("Native stationary fuel received: %d -> %d"),R.FuelBefore,After);
+    UE_LOG(LogFILN,Log,TEXT("DEPOT_NATIVE_FUEL_RECEIVED %s"),*R.Diagnostic);
+   } else R.Diagnostic=TEXT("Native fuel service ended without verified receipt; no synthetic fuel");
+   R.FuelPending=false; R.ObservedFuel=nullptr; R.FuelRetryAt=Now+15.; continue;
+  }
+  if(!ValidHome(R.Home) || filn::fuel::Decide(Snapshot.Facts)!=filn::fuel::Action::RequestDock) continue;
+  // No inventory writes or fuel-type overrides: native docking transfers fuel.
+  if(!H->GetDockedActor() && !H->DockActor(O)) { R.FuelRetryAt=Now+15.; continue; }
+  if(H->GetDockedActor()!=O || !V->IsAutopilotEnabled() || O->GetDriver() || V->GetVehicleRoute()!=R.IdleRoute) {
+   R.FuelRetryAt=Now+15.; continue;
+  }
+  R.FuelPending=true; R.ObservedFuel=Snapshot.Item; R.FuelBefore=Snapshot.Facts.quantity;
+  R.FuelStarted=Now; R.Diagnostic=TEXT("Native stationary refueling pending measured receipt");
  }
 }
