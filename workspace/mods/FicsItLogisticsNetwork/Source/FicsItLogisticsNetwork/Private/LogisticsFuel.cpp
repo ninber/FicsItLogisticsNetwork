@@ -14,6 +14,7 @@ void ALogisticsSubsystem::ServiceFuel() {
   auto* Owner=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
   auto* Home=IsValid(R.Home)?R.Home->GetStation():nullptr;
   if(R.State!=static_cast<uint8>(filn::State::Idle) || !IsValid(Owner) || !IsValid(Home) || !ValidHome(R.Home) ||
+     !R.Held || R.Vehicle->GetVehicleRoute()!=R.IdleRoute ||
      Owner->GetDriver() || !R.Vehicle->IsAutopilotEnabled() || !Home->HasPower() || Home->IsProductionPaused() ||
      !Home->GetFuelInventory() || Home->GetFuelInventory()->IsEmpty() || !Owner->GetFuelInventory() ||
      !Home->GetDockingPathNode() || FMath::Abs(Owner->GetForwardSpeed())>1.f || Home->GetDockedActor()) continue;

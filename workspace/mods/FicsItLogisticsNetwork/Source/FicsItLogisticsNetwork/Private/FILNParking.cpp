@@ -12,7 +12,7 @@ bool ALogisticsSubsystem::HoldVehicle(AFGWheeledVehicleIdentifier* V) {
  if(!HasAuthority() || !IsInGameThread()) return false;
  const auto* Index=ByVehicle.Find(V); if(!Index) return false;
  auto& R=Registrations[*Index]; auto* Owner=IsValid(V)?V->GetOwnerVehicle():nullptr;
- if(!IsValid(Owner) || Owner->GetDriver() || V->GetVehicleRoute()!=R.IdleRoute || !IsValid(R.Home)) { R.Held=false; return false; }
+ if(!IsValid(Owner) || Owner->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.IdleRoute || !IsValid(R.Home)) { R.Held=false; return false; }
  return R.Held && R.State==static_cast<uint8>(filn::State::Idle) && V->IsAutopilotEnabled();
 }
 void ALogisticsSubsystem::InstallParkingHook() {

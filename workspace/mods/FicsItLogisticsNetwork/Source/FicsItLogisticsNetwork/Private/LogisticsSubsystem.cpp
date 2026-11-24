@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
 #include "FILNDispatchPolicy.h"
+#include "FILNEnrollment.h"
 #include "FILNStationControls.h"
 #include "FILNTransferObserver.h"
 #include "Resources/FGItemDescriptor.h"
@@ -192,8 +193,23 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
 bool ALogisticsSubsystem::ValidHome(AFGDockingStationIdentifier* Home) const {
  auto* B=Building(Home);
  if(!IsValid(B) || !B->GetDockingPathNode() || !B->GetIsInLoadMode() || !B->GetInventory() || !B->GetInventory()->IsEmpty()) return false;
+ // Port identities are native reflected components, not connector names.
+ TSet<const UFGFactoryConnectionComponent*> FuelPorts;
+ const auto* FuelProperty=FindFProperty<FArrayProperty>(B->GetClass(),TEXT("mFuelConnections"));
+ const auto* FuelInner=FuelProperty?CastField<FObjectPropertyBase>(FuelProperty->Inner):nullptr;
+ if(FuelProperty && FuelInner) {
+  FScriptArrayHelper Ports(FuelProperty,FuelProperty->ContainerPtrToValuePtr<void>(B));
+  for(int32 I=0;I<Ports.Num();++I)
+   if(const auto* Port=Cast<UFGFactoryConnectionComponent>(FuelInner->GetObjectPropertyValue(Ports.GetRawPtr(I)))) FuelPorts.Add(Port);
+ }
  TArray<UFGFactoryConnectionComponent*> Belts; B->GetComponents(Belts);
- for(const auto* Connection:Belts) if(Connection->GetInventory()==B->GetInventory() && Connection->IsConnected()) return false;
+ for(const auto* Connection:Belts) {
+  if(!IsValid(Connection)) return false;
+  if(!Connection->IsConnected()) continue;
+  auto* Inventory=Connection->GetInventory();
+  if(!filn::enrollment::ConnectedPortAllowed(Inventory==B->GetInventory(),
+     Inventory && Inventory==B->GetFuelInventory(),FuelPorts.Contains(Connection))) return false;
+ }
  TArray<UFGPipeConnectionComponent*> Pipes; B->GetComponents(Pipes);
  for(const auto* Connection:Pipes) if(Connection->IsConnected()) return false;
  return true;
@@ -211,23 +227,90 @@ void ALogisticsSubsystem::Recover(FFILNRegistration& R,const FString& Why) {
  UE_LOG(LogFILN,Warning,TEXT("job=%s RECOVERY: %s (reservations retained)"),*R.JobId.ToString(),*Why);
 }
 bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationIdentifier* H) {
- if(bDispatchBlocked || !IsValid(V) || !ValidHome(H) || !H->GetPathNodeGUID().IsValid()) return false;
- if(auto* Existing=ByVehicle.Find(V)) return Registrations[*Existing].Home==H;
+ using namespace filn::enrollment;
+ check(IsInGameThread());
+ if(!HasAuthority() || bDispatchBlocked || !IsValid(V) || !IsValid(H) ||
+    V->GetWorld()!=GetWorld() || H->GetWorld()!=GetWorld() || !ValidHome(H) || !H->GetPathNodeGUID().IsValid()) return false;
+ if(const auto* Existing=ByVehicle.Find(V)) {
+  if(!Registrations.IsValidIndex(*Existing)) return false;
+  const auto& R=Registrations[*Existing];
+  return R.Home==H && StateOf(R)==S::Idle && R.Held && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.IdleRoute;
+ }
  for(const auto& R:Registrations) if(R.Home==H || (StateOf(R)!=S::Idle && (R.Provider==H || R.Requester==H))) return false;
- FFILNRegistration R; R.Vehicle=V; R.Home=H;
- auto* Owner=V->GetOwnerVehicle();
- auto* BuildingHome=Building(H);
- if(!IsValid(Owner) || Owner->GetDriver() || FMath::Abs(Owner->GetForwardSpeed())>1.f || !Owner->GetStorageInventory() || !Owner->GetStorageInventory()->IsEmpty()) return false;
- FVector Position; FRotator Rotation; Owner->GetVehicleLocationAndRotation(Position,Rotation);
- if(!BuildingHome->GetDockingPathNode() || FVector::DistSquared(Position,BuildingHome->GetDockingPathNode()->GetActorLocation())>FMath::Square(500.f) ||
-    (BuildingHome->GetDockedActor() && BuildingHome->GetDockedActor()!=Owner)) return false;
  for(const auto& C:StationConfigs) if(C.Station==H) return false;
- R.Held=true; R.IdleRoute=V->GetVehicleRoute();
- R.TruckId=FGuid::NewGuid(); R.BayId=StationId(H);
- if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) return false;
+ auto* Owner=V->GetOwnerVehicle(); auto* Home=Building(H);
+ auto* VS=AFGVehicleSubsystem::Get(GetWorld());
+ if(!IsValid(Owner) || !Owner->HasAuthority() || !VS || !Owner->GetStorageInventory() || !Home->GetDockingPathNode()) return false;
+ const FGuid Node=H->GetPathNodeGUID();
+ const FVector HomeLocation=Home->GetDockingPathNode()->GetActorLocation();
+ FVector Position; FRotator Rotation; Owner->GetVehicleLocationAndRotation(Position,Rotation);
+ const auto Near=[](const FVector& A,const FVector& B) {
+  return FMath::Abs(A.Z-B.Z)<=250.f && FVector::DistSquared(A,B)<=FMath::Square(800.f);
+ };
+ bool UniqueHome=true, UniqueTruck=true;
+ // Explicit enrollment is a rare operator action, not a periodic world scan.
+ // Reject duplicate GUIDs and any competing eligible nearby depot or truck.
+ for(auto* Other:VS->GetDockingStations()) {
+  if(!IsValid(Other) || Other==H) continue;
+  if(Other->GetPathNodeGUID()==Node) { UniqueHome=false; break; }
+  auto* B=Building(Other);
+  if(IsValid(B) && ValidHome(Other) && B->GetDockingPathNode() && Near(Position,B->GetDockingPathNode()->GetActorLocation())) {
+   UniqueHome=false; break;
+  }
+ }
+ for(auto* Other:VS->GetAllVehicles()) {
+  if(!IsValid(Other) || Other==V) continue;
+  if(Other->GetVehicleRoute().Contains(Node)) { UniqueTruck=false; break; }
+  auto* OtherOwner=Other->GetOwnerVehicle();
+  if(IsValid(OtherOwner)) {
+   FVector OtherPosition; FRotator OtherRotation; OtherOwner->GetVehicleLocationAndRotation(OtherPosition,OtherRotation);
+   if(Near(OtherPosition,HomeLocation)) { UniqueTruck=false; break; }
+  }
+ }
+ const TArray<FGuid> Before=V->GetVehicleRoute();
+ const bool BeforeAP=V->IsAutopilotEnabled();
+ const TArray<FGuid> Intended={Node};
+ const Route ExistingRoute=Before.IsEmpty()?Route::Empty:Before==Intended?Route::HomeOnly:Route::Other;
+ const Snapshot Facts{true,(!Home->GetDockedActor() || Home->GetDockedActor()==Owner),UniqueHome,UniqueTruck,
+  Owner->GetDriver()!=nullptr,FMath::Abs(Owner->GetForwardSpeed())<=1.f,Owner->GetStorageInventory()->IsEmpty(),Near(Position,HomeLocation),BeforeAP,ExistingRoute};
+ const auto Verdict=Evaluate(Facts);
+ if(Verdict==Decision::Reject) return false;
+ FFILNRegistration R; R.Vehicle=V; R.Home=H; R.TruckId=FGuid::NewGuid(); R.BayId=StationId(H);
+ for(const auto& Other:Registrations) if(Other.BayId==R.BayId || Other.TruckId==R.TruckId) return false;
+ if(Reservations.StationBusy(Key(R.BayId))) return false;
+ // No native writes for adoption of an already opted-in home-only truck.
+ const auto Rollback=[&]() {
+  if(Verdict!=Decision::AssignHome) return;
+  if(Owner->GetDriver() || V->GetVehicleRoute()!=Intended) {
+   bDispatchBlocked=true;
+   UE_LOG(LogFILN,Error,TEXT("Enrollment rollback conflict; dispatch locked; inspect vehicle route manually"));
+   return;
+  }
+  V->SetAutopilotEnabled(BeforeAP);
+  V->SetVehicleRoute(Before);
+  if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()!=BeforeAP) {
+   bDispatchBlocked=true;
+   UE_LOG(LogFILN,Error,TEXT("Enrollment rollback readback failed; dispatch locked"));
+  }
+ };
+ if(Owner->GetDriver() || V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()!=BeforeAP ||
+    !Owner->GetStorageInventory()->IsEmpty() || !ValidHome(H)) return false;
+ if(Verdict==Decision::AssignHome) {
+  V->SetVehicleRoute(Intended);
+  if(V->GetVehicleRoute()!=Intended) {
+   if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()!=BeforeAP) Rollback();
+   return false;
+  }
+  if(Owner->GetDriver()) { Rollback(); return false; }
+  V->SetAutopilotEnabled(true);
+ }
+ if(Owner->GetDriver() || V->GetVehicleRoute()!=Intended || !V->IsAutopilotEnabled()) { Rollback(); return false; }
+ if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) { Rollback(); return false; }
+ R.Held=true; R.IdleRoute=Intended;
+ R.Diagnostic=TEXT("Explicit home-only enrollment; native route and autopilot read back");
  HomeStations.Add(H);
  ByVehicle.Add(V,Registrations.Add(R)); WatchTransfers(Registrations.Last()); ResetScan();
- UE_LOG(LogFILN,Log,TEXT("PAIRED truck=%s bay=%s"),*R.TruckId.ToString(),*R.BayId.ToString());
+ UE_LOG(LogFILN,Log,TEXT("PAIRED truck=%s bay=%s home-only/AP enabled"),*R.TruckId.ToString(),*R.BayId.ToString());
  return true;
 }
 bool ALogisticsSubsystem::Dispatch(FFILNRegistration& R,AFGDockingStationIdentifier* P,AFGDockingStationIdentifier* Q) {

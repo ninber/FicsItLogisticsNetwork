@@ -1,0 +1,9 @@
+# Native depot enrollment continuation
+Source port of DepotRegistration.lua and Bridge.home_audit, following workspace/AGENTS.md. Base cbb5184adc10638886e58f38b691eb1571ff153a.
+- Pair now validates authority, world, exclusive depot GUID and nearby truck, existing routes, cargo, movement and driver. Explicit new unrouted/AP-off registration assigns home-only route and AP-on with native readback. Already opted-in home-only trucks can be adopted without native route writes. Existing AP-off assigned routes and unrelated routes are rejected.
+- Uses Lua 8m/2.5m vertical proximity but retains stricter native speed <=1. Nearby eligible vanilla homes are conservatively treated as competing depots. An explicit registration may enable an initially unrouted truck only; dispatch never opts AP-off trucks in. No physical legacy actor conversion claimed.
+- Fuel connection audit identifies native reflected mFuelConnections or the actual fuel inventory. Cargo/unknown connections and connected pipes fail closed; no connector-name guesses or fuel synthesis.
+- Fuel service now requires owned held unchanged route. Hold hook clears the held flag when it observes AP disabled. No per-frame location scan added.
+- Rollback attempts only on the expected route with no driver; unexpected state locks dispatch. No silent successful enrollment when route or AP readback fails.
+- Existing manual AP-off dispatch prototype no longer immediately follows explicit Pair; explicit registration now targets automatic scheduler. The manual command requires separate operator AP-off parking and remains legacy/unverified.
+- Native compile/UHT, one-way route support and physical game behavior have not been tested. All runtime/release gates remain open. Run scripts/test-filn.sh and local native build. No actual game changes made.

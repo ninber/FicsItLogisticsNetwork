@@ -113,7 +113,7 @@ void UFILNRemoteControl::RegisterVehicle_Implementation(AFGBuildableDockingStati
  auto* S=Subsystem(GetWorld()); if(!S) return;
  const bool Accepted=S->Pair(Vehicle,Target->GetStationIdentifier());
  const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
- StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Accepted?TEXT("Vehicle registered to this home; its native route and autopilot were preserved"):TEXT("Enrollment rejected: needs an unclaimed empty LOAD depot and an empty stopped undriven truck within 5m"));
+ StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Accepted?TEXT("Vehicle registered: native home-only route and autopilot enabled"):TEXT("Enrollment rejected: needs a unique unclaimed empty LOAD depot and empty stopped undriven truck within 8m; existing non-home or disabled routes are not changed"));
 }
 void UFILNRemoteControl::AdminAction_Implementation(AFGBuildableDockingStation* Target,uint8 Action) {
  if(!ValidateContext(Target)) return;

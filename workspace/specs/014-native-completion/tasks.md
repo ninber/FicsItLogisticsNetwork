@@ -55,3 +55,6 @@
 
 - [x] T049 Port Lua bounded-frequency native navigation retry policy; integrate guarded route/target reapplication for active automatic travel phases and preserve player-changed routes.
 - [ ] T050 Build/UHT and verify native navigation retry, fault clearance, route readback, player takeover and indefinite bounded-frequency retry in disposable real game. Full alternate-route return, stalled-without-error recovery, and legacy migration remain unresolved.
+
+- [x] T051 Port explicit Lua depot enrollment: reject ambiguous homes/trucks and unrelated routes, assign/read back home-only/AP-on, guard rollback and audit native fuel connections.
+- [ ] T052 Verify real native home-only AP acceptance (including initially unfueled trucks), rollback, exclusive ownership, hold/fuel behavior, legacy manual pair workflow and explicit registration UI in disposable game.
