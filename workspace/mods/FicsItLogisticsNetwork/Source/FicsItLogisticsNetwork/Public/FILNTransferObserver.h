@@ -14,7 +14,9 @@ public:
  void Bind(ALogisticsSubsystem* Subsystem,AFGWheeledVehicleIdentifier* Vehicle,UFGInventoryComponent* Inventory,const FGuid& Truck);
  void Unbind();
  bool IsBoundToTruck(const FGuid& Truck) const { return TruckId==Truck; }
+ bool Matches(AFGWheeledVehicleIdentifier* V,AFGWheeledVehicle* O,UFGInventoryComponent* I) const;
 private:
+ void Forward(TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other,bool Added);
  TWeakObjectPtr<ALogisticsSubsystem> Owner;
  TWeakObjectPtr<AFGWheeledVehicleIdentifier> Vehicle;
  TWeakObjectPtr<UFGInventoryComponent> Inventory;

@@ -183,8 +183,12 @@ void UFILNRemoteControl::AdminAction_Implementation(AFGBuildableDockingStation* 
  }
  auto* S=Subsystem(GetWorld()); if(!S) return;
  FText Message;
- if(Action==0) { S->bAutoDispatchEnabled=!S->bAutoDispatchEnabled; S->ResetScan(); Message=FText::Format(NSLOCTEXT("FILN","DispatcherChanged","Automatic dispatcher: {0}; existing deliveries continue"),Enabled(S->bAutoDispatchEnabled)); }
- else if(Action==3) Message=S->PrepareStationsForUninstall()?NSLOCTEXT("FILN","UninstallPrepared","Restrictions restored. Save required; mod-disabled load still needs independent verification"):NSLOCTEXT("FILN","UninstallRejected","Preparation rejected: active jobs or station/filter conflict");
+ if(Action==0) {
+  const bool Ok=S->SetDispatchEnabled(!S->bAutoDispatchEnabled);
+  Message=Ok?FText::Format(NSLOCTEXT("FILN","DispatcherChanged","Automatic dispatcher: {0}; existing deliveries continue"),Enabled(S->bAutoDispatchEnabled)):
+   NSLOCTEXT("FILN","DispatcherBlocked","Cannot enable dispatcher: unresolved native registry or filter conflict");
+ }
+ else if(Action==3) Message=S->PrepareStationsForUninstall()?NSLOCTEXT("FILN","UninstallPrepared","Restrictions restored; registered parked trucks have autopilot off. Save required; mod-disabled load still needs independent verification"):NSLOCTEXT("FILN","UninstallRejected","Preparation rejected: finish jobs and refueling, park registered trucks, resolve conflicts. Any trucks already stopped remain AP-off.");
  else if(Action==8 || Action==9) {
   const bool Ok=S->SetDepot(Target->GetStationIdentifier(),Action==9);
   Message=Ok?NSLOCTEXT("FILN","DepotUpdated","Rest-stop role updated"):NSLOCTEXT("FILN","DepotRejected","Rest-stop role rejected: cargo, connection, docking or ownership conflict");

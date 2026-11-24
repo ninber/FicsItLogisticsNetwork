@@ -126,3 +126,11 @@
 
 - [x] T098 Capture authoritative identifier OnDestroyed events before GC, defer reclamation until both observed vehicle owners are gone, remove observer/index by stable truck identity, and defer own-state rebuild after a late PostLoadGame callback.
 - [ ] T099 Verify native actor destruction/streaming/GC and load callback ordering; unresolved pointers without explicit destruction evidence remain retained.
+
+## Consolidated standalone source pass
+- [x] T100 Rebind idle native inventory observers by stable truck identity; reject stale callbacks and stop active jobs if their observed inventory changes.
+- [x] T101 Use one checked filter transaction for new configuration, resource changes, own-state reload and removal; distinguish missing inventory from unrestricted slot.
+- [x] T102 Explicit uninstall stops owned parked AP-on vehicles without altering routes, disables dispatch, restores filters and clears native saved registry; empty prepared subsystem declines saving.
+- [x] T103 Revalidate active resource/role/storage constraints and prevent an invalid endpoint route from continuing while asynchronous recovery is pending; use native directed queries to a safe unclaimed depot anchor or fail closed.
+- [x] T104 Discover all portable test files and run GCC/Clang regression CI; do not claim native compilation from portable CI.
+- [ ] T105 Verify consolidated source on current SDK and runtime, including observer replacement, filter rollback, AP-off uninstall, safe abort and save behavior.

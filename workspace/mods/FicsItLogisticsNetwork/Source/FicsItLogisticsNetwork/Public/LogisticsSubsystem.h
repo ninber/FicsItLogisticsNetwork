@@ -83,7 +83,7 @@ public:
  ALogisticsSubsystem();
  virtual void BeginPlay() override;
  virtual void EndPlay(const EEndPlayReason::Type Reason) override;
- virtual bool ShouldSave_Implementation() const override { return true; }
+ virtual bool ShouldSave_Implementation() const override;
  virtual bool NeedTransform_Implementation() override { return false; }
  virtual void PostLoadGame_Implementation(int32 SaveVersion, int32 GameVersion) override;
  void Execute(const FString& Command, const TArray<FString>& Args);
@@ -98,7 +98,9 @@ private:
  friend class UFILNRemoteControl;
  friend class UFILNTransferObserver;
  UPROPERTY() TArray<TObjectPtr<UFILNTransferObserver>> TransferObservers;
- void WatchTransfers(FFILNRegistration& R);
+ TMap<FGuid,TWeakObjectPtr<UFILNTransferObserver>> TransferByTruck;
+ bool WatchTransfers(FFILNRegistration& R);
+ bool HasTransferObserver(const FFILNRegistration& R) const;
  void Transfer(AFGWheeledVehicleIdentifier* Vehicle,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,class UFGInventoryComponent* Other,bool Added);
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> HomeStations;
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> DepotIndex;
@@ -144,6 +146,11 @@ private:
  bool PrepareStationsForUninstall();
  bool RestoreStationFilters(const TArray<int32>& Indices);
  bool ApplyStationFilter(const FFILNStationConfig& Config,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);
+ bool ChangeStationFilters(const TArray<FFILNStationConfig>& Configs,bool Restore,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);
+ bool bChangingFilters=false;
+ bool bPreparingUninstall=false;
+ bool SetDispatchEnabled(bool Enabled);
+ bool EndpointConfigurationValid(const FFILNRegistration& R) const;
  void Observe();
  bool RetryNavigation(FFILNRegistration& R, double Now, bool Stalled=false);
  bool RestoreHomeRoute(FFILNRegistration& R);

@@ -46,9 +46,9 @@ void ALogisticsSubsystem::ResetScan() {
 }
 bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Offer& O,bool QueryRoads,bool& Pending) {
  Pending=false; O={};
- if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !ProviderCandidates.IsValidIndex(P))) return false;
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !ProviderCandidates.IsValidIndex(P))) return false;
  auto& R=Registrations[V]; const auto& C=StationConfigs[Q];
- if(R.State!=static_cast<uint8>(filn::State::Idle) || !R.Held || R.JobId.IsValid()) return false;
+ if(R.State!=static_cast<uint8>(filn::State::Idle) || !R.Held || R.JobId.IsValid() || !WatchTransfers(R)) return false;
  R.Diagnostic=TEXT("No eligible compatible offer for this requester");
  auto* Owner=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
  auto* QB=IsValid(C.Station)?C.Station->GetStation():nullptr;
@@ -121,9 +121,22 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  }
  return filn::dispatch::Evaluate(O).has_value();
 }
+bool ALogisticsSubsystem::EndpointConfigurationValid(const FFILNRegistration& R) const {
+ auto* Q=IsValid(R.Requester)?R.Requester->GetStation():nullptr;
+ if(!IsValid(Q) || Q->GetIsInLoadMode() || IsDepot(R.Requester) || !R.Resource || !ExactFilter(Q->GetInventory(),R.Resource)) return false;
+ const auto* QC=StationConfigs.FindByPredicate([&](const FFILNStationConfig& C){return C.Station==R.Requester;});
+ if(!QC || QC->Resource!=R.Resource) return false;
+ if(R.RetainedCargo) return !filn::dispatch::IsStorage(TCHAR_TO_UTF8(*R.Requester->GetStationName().ToString())) ||
+  (R.CargoOriginKnown && !R.CargoOriginStorage) || (R.DeliveredCargo>0 && R.LastCargo==0);
+ auto* P=IsValid(R.Provider)?R.Provider->GetStation():nullptr;
+ if(!IsValid(P) || !P->GetIsInLoadMode() || IsDepot(R.Provider)) return false;
+ const auto* PC=StationConfigs.FindByPredicate([&](const FFILNStationConfig& C){return C.Station==R.Provider;});
+ return (!PC || (PC->Resource==R.Resource && ExactFilter(P->GetInventory(),R.Resource))) &&
+  filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*R.Provider->GetStationName().ToString()),TCHAR_TO_UTF8(*R.Requester->GetStationName().ToString()));
+}
 void ALogisticsSubsystem::Schedule() {
  check(IsInGameThread());
- if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || StationConfigs.IsEmpty() || Registrations.IsEmpty()) return;
+ if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || bChangingFilters || bPreparingUninstall || StationConfigs.IsEmpty() || Registrations.IsEmpty()) return;
  const double Now=GetWorld()->GetTimeSeconds();
  if(!bScanning) {
   if(Now<NextDispatch) return;

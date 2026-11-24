@@ -128,3 +128,6 @@ code or proprietary art was copied. Engine/game content retains its upstream own
 
 ## Standalone scope
 The native mod is world-independent. Legacy Lua/mod save conversion is external to the plugin. No legacy recipe recognition, journal/manifest reader or migration UI is shipped. Ordinary station/depot/vehicle registration, recovery and safe removal of native restrictions remain supported; runtime verification is still required.
+
+### Explicit uninstall preparation
+Disable automatic dispatch, finish all jobs and refueling, and park all enrolled trucks at their homes. Preparation explicitly stops autopilot only for parked FILN-owned home-only routes, keeps route lists and cargo intact, restores station filters and removes FILN registrations. If a step fails, any trucks already stopped remain AP-off; no automatic re-enable. Save after success and verify an independent load without the mod. This is not a verified mod-disabled save until the actual load succeeds.

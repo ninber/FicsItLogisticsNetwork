@@ -34,6 +34,16 @@ ALogisticsSubsystem::ALogisticsSubsystem() {
  ReplicationPolicy=ESubsystemReplicationPolicy::SpawnOnServer;
  PrimaryActorTick.bCanEverTick=false;
 }
+bool ALogisticsSubsystem::ShouldSave_Implementation() const {
+ // A prepared, empty subsystem has no state to serialize into vanilla saves.
+ // Keep invalid/conflicted metadata for diagnosis instead of dropping it.
+ return SchemaVersion!=1 || bDispatchBlocked || bAutoDispatchEnabled || !Registrations.IsEmpty() ||
+  !StationConfigs.IsEmpty() || !DepotStations.IsEmpty() || !Stations.IsEmpty();
+}
+bool ALogisticsSubsystem::SetDispatchEnabled(bool Enabled) {
+ if(!HasAuthority() || (Enabled && (!bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters))) return false;
+ bAutoDispatchEnabled=Enabled; ResetScan(); return true;
+}
 void ALogisticsSubsystem::BeginPlay() {
  Super::BeginPlay();
  if(!HasAuthority()) return;
@@ -47,7 +57,7 @@ void ALogisticsSubsystem::EndPlay(const EEndPlayReason::Type Reason) {
  GetWorldTimerManager().ClearTimer(DispatchTimer);
  GetWorldTimerManager().ClearTimer(DeferredRebuild); bRegistryValidated=false; DestroyedVehicles.Empty();
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
- TransferObservers.Empty();
+ TransferObservers.Empty(); TransferByTruck.Empty();
  Super::EndPlay(Reason);
 }
 void ALogisticsSubsystem::PostLoadGame_Implementation(int32,int32) {
@@ -91,7 +101,7 @@ void ALogisticsSubsystem::Rebuild() {
  if(!HasAuthority() || !GetWorld() || GetWorld()->bIsTearingDown) return;
  bRegistryValidated=false; DestroyedVehicles.Empty();
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
- TransferObservers.Empty();
+ TransferObservers.Empty(); TransferByTruck.Empty();
  Ownership=filn::Ownership(); Reservations=filn::Reservations();
  HomeStations.Empty(); DepotIndex.Empty();
  ByVehicle.Empty(); StationIds.Empty(); StationIdentityIndex.Empty(); Active.Empty(); Cursor=0;
@@ -140,7 +150,9 @@ void ALogisticsSubsystem::Rebuild() {
  }
  // Apply only validated native configuration. A filter conflict is not a
  // successful restore; do not resume automatic control until it is resolved.
- for(const auto& C:StationConfigs) if(IsValid(C.Station) && !ApplyStationFilter(C)) {
+ TArray<FFILNStationConfig> LiveConfigs;
+ for(const auto& C:StationConfigs) if(IsValid(C.Station)) LiveConfigs.Add(C);
+ if(!ChangeStationFilters(LiveConfigs,false)) {
   bDispatchBlocked=true; bAutoDispatchEnabled=false;
   UE_LOG(LogFILN,Error,TEXT("Saved FILN filter conflict: native job reconciliation withheld"));
   return;
@@ -155,14 +167,14 @@ void ALogisticsSubsystem::Rebuild() {
  for(int32 I=0;I<Registrations.Num();++I) {
   auto& R=Registrations[I];
   if(IsValid(R.Home)) TrackDepot(R.Home);
-  if(IsValid(R.Vehicle)) WatchTransfers(R);
+  const bool Observed=IsValid(R.Vehicle) && WatchTransfers(R);
   auto* V=IsValid(R.Vehicle)?R.Vehicle.Get():nullptr;
   auto* O=V?V->GetOwnerVehicle():nullptr;
   if(StateOf(R)==S::Idle) {
    // Saved provenance cannot survive a discrepancy in the saved cargo ledger.
    if(R.CargoOriginKnown) {
     auto* Cargo=IsValid(O)?O->GetStorageInventory():nullptr;
-    bool Verified=Cargo && R.Resource && R.LastCargo>0 && Cargo->GetNumItems(R.Resource)==R.LastCargo;
+    bool Verified=Observed && Cargo && R.Resource && R.LastCargo>0 && Cargo->GetNumItems(R.Resource)==R.LastCargo;
     if(Verified) {
      TArray<FInventoryStack> Stacks; Cargo->GetInventoryStacks(Stacks);
      for(const auto& Stack:Stacks) if(Stack.NumItems<0 || (Stack.NumItems>0 && Stack.Item.GetItemClass()!=R.Resource)) Verified=false;
@@ -171,39 +183,63 @@ void ALogisticsSubsystem::Rebuild() {
    }
    continue;
   }
-  const bool Resume=R.Automatic && R.Resource && R.ExpectedCargo>0 && R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning) &&
+  const bool Resume=Observed && R.Automatic && R.Resource && R.ExpectedCargo>0 && R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning) &&
     IsValid(O) && !O->GetDriver() && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home);
   if(Resume) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
   else Recover(R,TEXT("Saved journey cannot safely resume; inspect and return home before reset"));
  }
 }
 bool ALogisticsSubsystem::ApplyStationFilter(const FFILNStationConfig& C,TSubclassOf<UFGItemDescriptor> PriorResource) {
- auto* B=Building(C.Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
- if(!Inventory || !C.Resource || Inventory->GetSizeLinear()<=0 || Inventory->GetSizeLinear()!=C.OriginalFilters.Num()) return false;
- TArray<TSubclassOf<UFGItemDescriptor>> Before;
- // Do not overwrite another mod/operator's changed restriction during recovery.
- for(int32 I=0;I<Inventory->GetSizeLinear();++I) {
-  auto Existing=Inventory->GetAllowedItemOnIndex(I);
-  if(Existing!=C.Resource && Existing!=C.OriginalFilters[I] && (!PriorResource || Existing!=PriorResource)) return false;
-  Before.Add(Existing);
- }
- for(int32 I=0;I<Inventory->GetSizeLinear();++I) Inventory->SetAllowedItemOnIndex(I,C.Resource);
- for(int32 I=0;I<Inventory->GetSizeLinear();++I) if(Inventory->GetAllowedItemOnIndex(I)!=C.Resource) {
-  // Native setters are void: read back rather than report a metadata-only success.
-  for(int32 J=0;J<Before.Num();++J) {
-   const auto Current=Inventory->GetAllowedItemOnIndex(J);
-   if(Current==C.Resource) Inventory->SetAllowedItemOnIndex(J,Before[J]);
-   else if(Current!=Before[J]) bDispatchBlocked=true;
+ return ChangeStationFilters(TArray<FFILNStationConfig>{C},false,PriorResource);
+}
+bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>& Configs,bool Restore,TSubclassOf<UFGItemDescriptor> PriorResource) {
+ check(IsInGameThread());
+ if(!HasAuthority() || bChangingFilters) return false;
+ TGuardValue<bool> Guard(bChangingFilters,true);
+ struct FSlot { TWeakObjectPtr<UFGInventoryComponent> Inventory; int32 Slot,Size; };
+ TArray<FSlot> Slots;
+ using Resource=TSubclassOf<UFGItemDescriptor>;
+ // A disengaged optional means unreadable; a valid null resource means unrestricted.
+ using Value=std::optional<Resource>;
+ std::vector<Value> Before,After;
+ TSet<UFGInventoryComponent*> Seen;
+ for(const auto& C:Configs) {
+  auto* B=Building(C.Station); auto* I=IsValid(B)?B->GetInventory():nullptr;
+  if(!IsValid(I) || !C.Resource || Seen.Contains(I) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096 ||
+     I->GetSizeLinear()!=C.OriginalFilters.Num() || (Restore && B->GetDockedActor())) return false;
+  Seen.Add(I);
+  if(!Restore) {
+   TArray<FInventoryStack> Contents; I->GetInventoryStacks(Contents);
+   for(const auto& Stack:Contents) if(Stack.NumItems<0 || (Stack.NumItems>0 && Stack.Item.GetItemClass()!=C.Resource)) return false;
   }
-  for(int32 J=0;J<Before.Num();++J) if(Inventory->GetAllowedItemOnIndex(J)!=Before[J]) bDispatchBlocked=true;
-  UE_LOG(LogFILN,Error,TEXT("Native resource filter readback failed; configuration not committed, rollback conflicts=%d"),bDispatchBlocked);
+  for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) {
+   auto Current=I->GetAllowedItemOnIndex(Slot);
+   if(Restore ? Current!=C.Resource : (Current!=C.Resource && Current!=C.OriginalFilters[Slot] && (!PriorResource || Current!=PriorResource))) return false;
+   Slots.Add({I,Slot,I->GetSizeLinear()}); Before.emplace_back(Current); After.emplace_back(Restore?C.OriginalFilters[Slot]:C.Resource);
+  }
+ }
+ bool Invalid=false;
+ auto Read=[&](std::size_t N)->Value {
+  const auto& Slot=Slots[static_cast<int32>(N)]; auto* I=Slot.Inventory.Get();
+  if(!I || I->GetSizeLinear()!=Slot.Size) { Invalid=true; return std::nullopt; }
+  return Value(I->GetAllowedItemOnIndex(Slot.Slot));
+ };
+ auto Write=[&](std::size_t N,Value V) {
+  const auto& Slot=Slots[static_cast<int32>(N)]; auto* I=Slot.Inventory.Get();
+  if(!I || !V || I->GetSizeLinear()!=Slot.Size) { Invalid=true; return; }
+  I->SetAllowedItemOnIndex(Slot.Slot,*V);
+ };
+ const auto Result=filn::restore::Transaction(Before,After,Read,Write);
+ if(Invalid || Result==filn::restore::Result::Conflict) {
+  bDispatchBlocked=true; bAutoDispatchEnabled=false;
+  UE_LOG(LogFILN,Error,TEXT("Native filter transaction conflict; saved configuration retained and dispatch locked"));
   return false;
  }
- return true;
+ return Result==filn::restore::Result::Success;
 }
 bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  auto* B=Building(Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
- if(bDispatchBlocked || !HasAuthority() || !Inventory || !Resource || !Inventory->IsEmpty() || B->GetDockedActor()) return false;
+ if(bDispatchBlocked || !bRegistryValidated || bChangingFilters || bPreparingUninstall || !HasAuthority() || !IsValid(Station) || Station->GetWorld()!=GetWorld() || !Inventory || !Resource || !Inventory->IsEmpty() || B->GetDockedActor()) return false;
  if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station)))) return false;
  const auto* FluidProperty=FindFProperty<FBoolProperty>(B->GetClass(),TEXT("mIsFluidStorageInventory"));
  if(!FluidProperty) return false;
@@ -213,8 +249,7 @@ bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,
  if((!IsFluid && Form!=EResourceForm::RF_SOLID) || IsFluid!=FluidProperty->GetPropertyValue_InContainer(B)) return false;
  FFILNStationConfig* Existing=StationConfigs.FindByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
  if(Existing) {
-  if(!ApplyStationFilter(*Existing)) return false;
-  // Only FILN-owned restrictions may be changed.
+  // Only FILN-owned restrictions may be changed; one transaction, no preliminary writes.
   for(const auto& Original:Existing->OriginalFilters) if(Original && Original!=Resource) return false;
   ResetScan();
   FFILNStationConfig Updated=*Existing; Updated.Resource=Resource;
@@ -233,60 +268,44 @@ bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,
  ResetScan(); return true;
 }
 bool ALogisticsSubsystem::RestoreStationFilters(const TArray<int32>& Indices) {
- struct FSlot { TWeakObjectPtr<UFGInventoryComponent> Inventory; int32 Slot; };
- TArray<FSlot> Slots;
- using Resource=TSubclassOf<UFGItemDescriptor>;
- std::vector<Resource> Before,After;
+ TArray<FFILNStationConfig> Configs; TSet<int32> Seen;
  for(int32 Index:Indices) {
-  if(!StationConfigs.IsValidIndex(Index)) return false;
-  const auto& C=StationConfigs[Index];
-  auto* B=Building(C.Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
-  if(!Inventory || B->GetDockedActor() || !C.Resource || Inventory->GetSizeLinear()!=C.OriginalFilters.Num()) return false;
-  for(int32 I=0;I<Inventory->GetSizeLinear();++I) {
-   if(Inventory->GetAllowedItemOnIndex(I)!=C.Resource) return false;
-   Slots.Add({Inventory,I}); Before.push_back(C.Resource); After.push_back(C.OriginalFilters[I]);
-  }
+  if(!StationConfigs.IsValidIndex(Index) || Seen.Contains(Index)) return false;
+  Seen.Add(Index); Configs.Add(StationConfigs[Index]);
  }
- // A missing inventory must not be interpreted as a legitimate unrestricted slot.
- bool Invalid=false;
- auto Read=[&](std::size_t I)->Resource {
-  const auto& S=Slots[static_cast<int32>(I)];
-  auto* Inventory=S.Inventory.Get();
-  if(!Inventory || S.Slot>=Inventory->GetSizeLinear()) { Invalid=true; return {}; }
-  return Inventory->GetAllowedItemOnIndex(S.Slot);
- };
- auto Write=[&](std::size_t I,Resource Value) {
-  const auto& S=Slots[static_cast<int32>(I)];
-  auto* Inventory=S.Inventory.Get();
-  if(!Inventory || S.Slot>=Inventory->GetSizeLinear()) { Invalid=true; return; }
-  Inventory->SetAllowedItemOnIndex(S.Slot,Value);
- };
- const auto Result=filn::restore::Transaction(Before,After,Read,Write);
- if(Invalid || Result==filn::restore::Result::Conflict) {
-  bDispatchBlocked=true; bAutoDispatchEnabled=false;
-  UE_LOG(LogFILN,Error,TEXT("Filter transaction conflict; dispatch locked and saved metadata retained"));
-  return false;
- }
- return Result==filn::restore::Result::Success;
+ return ChangeStationFilters(Configs,true);
 }
 bool ALogisticsSubsystem::PrepareStationsForUninstall() {
  check(IsInGameThread());
- if(!HasAuthority() || bDispatchBlocked || Reservations.Size()!=0 || !Active.IsEmpty()) return false;
- // Do not discard an active job, an unresolved endpoint or a vehicle that could
- // resume a multi-stop cargo route when the parking hook disappears.
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters ||
+    Reservations.Size()!=0 || !Active.IsEmpty()) return false;
+ // Explicit preparation requires a quiet fleet. Keep all physical routes,
+ // inventories and connections; release only FILN metadata and restrictions.
  for(const auto& R:Registrations) {
-  if(StateOf(R)!=S::Idle || !IsValid(R.Vehicle) || !IsValid(R.Home)) return false;
+  if(StateOf(R)!=S::Idle || R.JobId.IsValid() || R.FuelPending || !IsValid(R.Vehicle) || !IsValid(R.Home)) return false;
   auto* O=R.Vehicle->GetOwnerVehicle(); auto* H=Building(R.Home);
-  if(!IsValid(O) || !IsValid(H) || !H->GetDockingPathNode() || O->GetDriver() ||
-     FMath::Abs(O->GetForwardSpeed())>1.f ||
-     FVector::DistSquared(O->GetVehicleLocation(),H->GetDockingPathNode()->GetActorLocation())>FMath::Square(800.f)) return false;
+  if(!IsValid(O) || !IsValid(H) || !H->GetDockingPathNode() || O->GetDriver()) return false;
+  const FVector Delta=O->GetVehicleLocation()-H->GetDockingPathNode()->GetActorLocation();
+  if(!filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,O->GetForwardSpeed(),H->GetDockedActor() && H->GetDockedActor()!=O)) return false;
   const TArray<FGuid> HomeRoute={R.Home->GetPathNodeGUID()};
-  if(R.Vehicle->IsAutopilotEnabled() && R.Vehicle->GetVehicleRoute()!=HomeRoute) return false;
+  if(R.Vehicle->IsAutopilotEnabled() && (!R.Held || R.IdleRoute!=HomeRoute || R.Vehicle->GetVehicleRoute()!=HomeRoute)) return false;
+ }
+ TGuardValue<bool> Preparing(bPreparingUninstall,true);
+ SetDispatchEnabled(false);
+ // Removing the AP-tick hook must not release a parked truck into traffic.
+ // This is an explicit administrator action; never touch a foreign route.
+ // If a later step fails, leave previously stopped trucks AP-off, retaining
+ // their ownership/configuration. Never silently turn AP back on.
+ for(auto& R:Registrations) if(R.Vehicle->IsAutopilotEnabled()) {
+  auto* V=R.Vehicle.Get(); auto* O=V->GetOwnerVehicle();
+  if(!IsValid(O) || O->GetDriver() || V->GetVehicleRoute()!=R.IdleRoute || FMath::Abs(O->GetForwardSpeed())>1.f) return false;
+  V->SetAutopilotEnabled(false);
+  if(V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.IdleRoute || O->GetDriver()) return false;
+  R.Held=false;
  }
  TArray<int32> Indices;
  for(int32 I=0;I<StationConfigs.Num();++I) Indices.Add(I);
  if(!RestoreStationFilters(Indices)) return false;
- bAutoDispatchEnabled=false;
  for(const auto& C:StationConfigs) if(auto* B=Building(C.Station); IsValid(B)) {
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
@@ -294,7 +313,7 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
  StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty(); Rebuild();
- return true;
+ return bRegistryValidated && !bDispatchBlocked;
 }
 bool ALogisticsSubsystem::IsDepot(AFGDockingStationIdentifier* Station) const {
  if(!IsValid(Station)) return false;
@@ -308,7 +327,7 @@ void ALogisticsSubsystem::TrackDepot(AFGDockingStationIdentifier* Station) {
 }
 bool ALogisticsSubsystem::SetDepot(AFGDockingStationIdentifier* Station,bool Remove) {
  check(IsInGameThread());
- if(!HasAuthority() || bDispatchBlocked || !IsValid(Station) || Station->GetWorld()!=GetWorld()) return false;
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters || !IsValid(Station) || Station->GetWorld()!=GetWorld()) return false;
  auto* B=Building(Station); if(!IsValid(B)) return false;
  const bool Claimed=HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station));
  const bool Configured=StationConfigs.ContainsByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
@@ -369,7 +388,7 @@ void ALogisticsSubsystem::Recover(FFILNRegistration& R,const FString& Why) {
 bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationIdentifier* H) {
  using namespace filn::enrollment;
  check(IsInGameThread());
- if(!HasAuthority() || bDispatchBlocked || !IsValid(V) || !IsValid(H) ||
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters || !IsValid(V) || !IsValid(H) ||
     V->GetWorld()!=GetWorld() || H->GetWorld()!=GetWorld() || !ValidHome(H) || !H->GetPathNodeGUID().IsValid()) return false;
  if(const auto* Existing=ByVehicle.Find(V)) {
   if(!Registrations.IsValidIndex(*Existing)) return false;
@@ -469,7 +488,7 @@ bool ALogisticsSubsystem::Dispatch(FFILNRegistration& R,AFGDockingStationIdentif
 }
 void ALogisticsSubsystem::Observe() {
  check(IsInGameThread());
- if(!HasAuthority() || !bRegistryValidated) return;
+ if(!HasAuthority() || !bRegistryValidated || bPreparingUninstall || bChangingFilters) return;
  AuditLostRegistrations();
  AuditIdleFleet();
  ServiceFuel();
@@ -486,7 +505,11 @@ void ALogisticsSubsystem::Observe() {
   if(!IsValid(R.Vehicle) || !IsValid(R.Vehicle->GetOwnerVehicle()) || !IsValid(HB) || !ValidHome(R.Home)) {
    Recover(R,TEXT("Vehicle or home destroyed/unavailable")); ++Cursor; continue;
   }
-  if(!R.AbortReturn && ((!R.RetainedCargo && (!IsValid(PB) || !PB->GetIsInLoadMode())) || !IsValid(QB) || QB->GetIsInLoadMode())) {
+  if(!HasTransferObserver(R)) {
+   R.CargoOriginKnown=false; R.CargoOriginStorage=false;
+   Recover(R,TEXT("Cargo observer no longer matches the native vehicle inventory")); ++Cursor; continue;
+  }
+  if(!R.AbortReturn && !EndpointConfigurationValid(R)) {
    if(!R.Automatic || !TryAbortToHome(R,Now)) Recover(R,TEXT("Endpoint unavailable; safe return not established"));
    ++Cursor; continue;
   }
@@ -599,7 +622,7 @@ bool ALogisticsSubsystem::RemoveLostRegistration(int32 Index) {
   if(TransferObservers[I]) TransferObservers[I]->Unbind();
   TransferObservers.RemoveAtSwap(I);
  }
- DestroyedVehicles.Remove(R.TruckId);
+ DestroyedVehicles.Remove(R.TruckId); TransferByTruck.Remove(R.TruckId);
  Active.Remove(Index);
  Registrations.RemoveAt(Index);
  for(auto& Entry:ByVehicle) if(Entry.Value>Index) --Entry.Value;
@@ -626,8 +649,8 @@ void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& 
   for(auto* Station:VS->GetDockingStations()) if(IsValid(Station) && Station->GetPathName()==Args[0]) { RemoveStation(Station); return; }
  }
  if(Command==TEXT("enable") && Args.Num()==1 && (Args[0]==TEXT("0") || Args[0]==TEXT("1"))) {
-  bAutoDispatchEnabled=Args[0]==TEXT("1"); ResetScan();
-  UE_LOG(LogFILN,Log,TEXT("Automatic dispatch=%d; existing journeys continue"),bAutoDispatchEnabled); return;
+  const bool Accepted=SetDispatchEnabled(Args[0]==TEXT("1"));
+  UE_LOG(LogFILN,Log,TEXT("Automatic dispatch=%d request accepted=%d; existing journeys continue"),bAutoDispatchEnabled,Accepted); return;
  }
  if(Command==TEXT("status")) {
   UE_LOG(LogFILN,Log,TEXT("automatic=%d blocked=%d stations=%d cache hits=%llu misses=%llu invalidations=%llu work=%llu"),bAutoDispatchEnabled,bDispatchBlocked,StationConfigs.Num(),RoadCache.Hits,RoadCache.Misses,RoadCache.Invalidations,RoadCache.Work);

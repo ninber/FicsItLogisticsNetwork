@@ -1,0 +1,28 @@
+name: Native portable regression
+on:
+  push:
+    paths:
+      - 'workspace/mods/FicsItLogisticsNetwork/**'
+      - 'scripts/test-filn.sh'
+      - '.github/workflows/filn-portable.yml'
+  pull_request:
+    paths:
+      - 'workspace/mods/FicsItLogisticsNetwork/**'
+      - 'scripts/test-filn.sh'
+      - '.github/workflows/filn-portable.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cxx: [g++, clang++]
+    env:
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: "$CXX --version"
+      - run: bash scripts/test-filn.sh

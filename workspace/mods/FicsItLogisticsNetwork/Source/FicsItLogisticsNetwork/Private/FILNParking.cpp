@@ -11,7 +11,7 @@
 #include "Engine/World.h"
 
 bool ALogisticsSubsystem::HoldVehicle(AFGWheeledVehicleIdentifier* V) {
- if(!HasAuthority() || !IsInGameThread() || !bRegistryValidated) return false;
+ if(!HasAuthority() || !IsInGameThread() || !bRegistryValidated || bPreparingUninstall) return false;
  const auto* Index=ByVehicle.Find(V); if(!Index || !Registrations.IsValidIndex(*Index)) return false;
  auto& R=Registrations[*Index]; auto* Owner=IsValid(V)?V->GetOwnerVehicle():nullptr;
  auto* Home=IsValid(R.Home)?R.Home->GetStation():nullptr;

@@ -106,39 +106,39 @@ bool ALogisticsSubsystem::TryAbortToHome(FFILNRegistration& R,double Now) {
  if(!R.ProviderLease.IsValid() && IsValid(R.Provider)) R.ProviderLease=StationId(R.Provider);
  if(!R.RequesterLease.IsValid() && IsValid(R.Requester)) R.RequesterLease=StationId(R.Requester);
  if(!R.RequesterLease.IsValid() || (!R.RetainedCargo && !R.ProviderLease.IsValid())) return false;
- auto& Clock=R.NavigationRetry;
- if(!O->HasFuel()) { R.Diagnostic=TEXT("Abort return waiting for native fuel"); return true; }
- if(!Clock.Due(Now)) return true;
+ // An invalid endpoint must not remain the target of an AP-on route while
+ // a cache search is pending. For this exceptional recovery use the native
+ // directed path query, or fail closed to explicit parked recovery.
+ if(!O->HasFuel()) return false;
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); auto* Preset=O->GetVehiclePathPreset();
  const auto From=V->GetCurrentToPathNodeGUID(), Home=R.Home->GetPathNodeGUID();
- double Cost=-1;
- if(!RoadCache.Distance(VS,From,Home,Preset,Cost)) return true;
- Clock.Attempt(Now);
- if(Cost<0) { R.Diagnostic=TEXT("Abort return: home road unreachable; retry scheduled"); return true; }
- // A distinct second depot is a native route anchor, not a cargo endpoint.
- // Select only another registered, valid home with a proved round trip.
- // No cargo station is ever used as an anchor.
+ const auto Reachable=[&](const FGuid& A,const FGuid& B) {
+  if(!VS || !Preset || !A.IsValid() || !B.IsValid()) return false;
+  auto* Net=VS->FindNetworkByPathNodeGuid(A);
+  if(!Net || Net!=VS->FindNetworkByPathNodeGuid(B)) return false;
+  TArray<FGuid> Path;
+  return A==B || Net->FindVehiclePath(A,B,Preset,Path);
+ };
+ if(!Reachable(From,Home)) return false;
  AFGDockingStationIdentifier* Anchor=nullptr;
  int32 Examined=0;
- for(const auto& Entry:Registrations) {
-  if(++Examined>128) break;
-  auto* ID=Entry.Home.Get();
-  if(!IsValid(ID) || ID==R.Home || !ValidHome(ID)) continue;
-  double Out=-1,Back=-1;
-  if(!RoadCache.Distance(VS,Home,ID->GetPathNodeGUID(),Preset,Out) ||
-     !RoadCache.Distance(VS,ID->GetPathNodeGUID(),Home,Preset,Back)) {
-   Clock.next=Now; return true;
-  }
-  if(Out>=0 && Back>=0) { Anchor=ID; break; }
+ // Prefer unclaimed designated rest stops; never use a cargo endpoint or
+ // interrupt a different truck's home assignment as a recovery anchor.
+ for(const auto& Depot:DepotStations) {
+  if(++Examined>32) break;
+  auto* ID=Depot.Get();
+  if(!IsValid(ID) || ID==R.Home || HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(ID)) || !ValidHome(ID) ||
+     ID->GetPathNodeGUID()==Home || !IsValid(ID->GetStation()) || ID->GetStation()->GetDockedActor()) continue;
+  if(Reachable(Home,ID->GetPathNodeGUID()) && Reachable(ID->GetPathNodeGUID(),Home)) { Anchor=ID; break; }
  }
- if(!Anchor) { R.Diagnostic=TEXT("Abort return: no proved alternate depot anchor; retry scheduled"); return true; }
+ if(!Anchor) return false;
  if(O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.RouteIntent || V->IsCurrentlyDocking()) return false;
  const TArray<FGuid> Intent={Home,Anchor->GetPathNodeGUID()};
  V->SetVehicleRoute(Intent);
  if(V->GetVehicleRoute()!=Intent) return false;
  R.RouteIntent=Intent; R.AbortReturn=true; R.State=static_cast<uint8>(filn::State::Returning);
  V->SetCurrentTargetWaypoint(0);
- if(V->GetCurrentTargetWaypointIndex()!=0 || !V->IsAutopilotEnabled() || O->GetDriver()) return false;
+ if(V->GetCurrentTargetWaypointIndex()!=0 || V->GetVehicleRoute()!=Intent || !V->IsAutopilotEnabled() || O->GetDriver()) return false;
  R.TravelProgress.Reset(); R.Elapsed=0;
  R.Diagnostic=TEXT("Aborted shipment: native return route read back; cargo and leases retained until home");
  return true;
@@ -151,6 +151,7 @@ void ALogisticsSubsystem::AuditIdleFleet() {
  for(int32 Count=0,Budget=FMath::Min(4,Registrations.Num());Count<Budget;++Count) {
   IdleCursor%=Registrations.Num(); auto& R=Registrations[IdleCursor++];
   if(R.State!=static_cast<uint8>(filn::State::Idle)) continue;
+  if(!WatchTransfers(R)) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; R.Held=false; continue; }
   auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
   auto* H=IsValid(R.Home)?R.Home->GetStation():nullptr;
   if(!IsValid(O) || !IsValid(H) || !H->GetDockingPathNode() || !O->GetStorageInventory()) { R.Held=false; continue; }
@@ -197,7 +198,7 @@ void ALogisticsSubsystem::AuditIdleFleet() {
 bool ALogisticsSubsystem::RehomeParkedVehicle(int32 Index,AFGDockingStationIdentifier* Home) {
  check(IsInGameThread());
  using S=filn::State;
- if(!HasAuthority() || bDispatchBlocked || SchemaVersion!=1 || !Registrations.IsValidIndex(Index) ||
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters || SchemaVersion!=1 || !Registrations.IsValidIndex(Index) ||
     !IsValid(Home) || Home->GetWorld()!=GetWorld() || !IsDepot(Home) || !ValidHome(Home)) return false;
  auto& R=Registrations[Index];
  auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;

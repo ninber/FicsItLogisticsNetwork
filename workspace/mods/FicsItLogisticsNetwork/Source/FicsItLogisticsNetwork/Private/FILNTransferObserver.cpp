@@ -21,17 +21,56 @@ void UFILNTransferObserver::Unbind() {
  if(auto* V=Vehicle.Get()) V->OnDestroyed.RemoveDynamic(this,&UFILNTransferObserver::Destroyed);
  Inventory.Reset(); Owner.Reset(); Vehicle.Reset(); BoundOwner.Reset(); TruckId.Invalidate();
 }
+bool UFILNTransferObserver::Matches(AFGWheeledVehicleIdentifier* V,AFGWheeledVehicle* O,UFGInventoryComponent* I) const {
+ return IsValid(V) && IsValid(O) && IsValid(I) && Vehicle.Get()==V && BoundOwner.Get()==O && Inventory.Get()==I;
+}
+void UFILNTransferObserver::Forward(TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other,bool Added) {
+ auto* S=Owner.Get(); auto* V=Vehicle.Get();
+ if(!S || !V || !IsInGameThread() || !S->HasAuthority() || !S->bRegistryValidated) return;
+ auto* O=V->GetOwnerVehicle();
+ if(!IsValid(O) || !Matches(V,O,O->GetStorageInventory())) {
+  // An old component must never credit events to a replacement inventory.
+  const auto* Index=S->ByVehicle.Find(V);
+  if(Index && S->Registrations.IsValidIndex(*Index)) {
+   auto& R=S->Registrations[*Index]; R.CargoOriginKnown=false; R.CargoOriginStorage=false;
+   if(R.JobId.IsValid()) S->Recover(R,TEXT("Native cargo inventory identity changed during delivery"));
+  }
+  return;
+ }
+ S->Transfer(V,Item,Amount,Other,Added);
+}
 void UFILNTransferObserver::Added(TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other) {
- if(Owner.IsValid() && Vehicle.IsValid()) Owner->Transfer(Vehicle.Get(),Item,Amount,Other,true);
+ Forward(Item,Amount,Other,true);
 }
 void UFILNTransferObserver::Removed(TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other) {
- if(Owner.IsValid() && Vehicle.IsValid()) Owner->Transfer(Vehicle.Get(),Item,Amount,Other,false);
+ Forward(Item,Amount,Other,false);
 }
-void ALogisticsSubsystem::WatchTransfers(FFILNRegistration& R) {
+bool ALogisticsSubsystem::HasTransferObserver(const FFILNRegistration& R) const {
  auto* V=IsValid(R.Vehicle)?R.Vehicle.Get():nullptr;
- auto* Owner=V?V->GetOwnerVehicle():nullptr;
- if(!V) return;
- auto* Observer=NewObject<UFILNTransferObserver>(this); Observer->Bind(this,V,IsValid(Owner)?Owner->GetStorageInventory():nullptr,R.TruckId); TransferObservers.Add(Observer);
+ auto* O=V?V->GetOwnerVehicle():nullptr;
+ const auto* Ref=TransferByTruck.Find(R.TruckId);
+ auto* Observer=Ref?Ref->Get():nullptr;
+ return Observer && IsValid(O) && Observer->Matches(V,O,O->GetStorageInventory());
+}
+bool ALogisticsSubsystem::WatchTransfers(FFILNRegistration& R) {
+ if(HasTransferObserver(R)) return true;
+ auto* V=IsValid(R.Vehicle)?R.Vehicle.Get():nullptr;
+ auto* O=V?V->GetOwnerVehicle():nullptr;
+ if(auto* Ref=TransferByTruck.Find(R.TruckId)) {
+  if(auto* Existing=Ref->Get()) {
+   // Rebinding loses observation continuity. Active jobs require recovery;
+   // idle trucks may be rebound, but their cargo origin is no longer proved.
+   R.CargoOriginKnown=false; R.CargoOriginStorage=false;
+   if(R.JobId.IsValid()) return false;
+   Existing->Unbind(); TransferObservers.Remove(Existing);
+  }
+  TransferByTruck.Remove(R.TruckId);
+ }
+ if(!V || DestroyedVehicles.Contains(R.TruckId)) return false;
+ auto* Observer=NewObject<UFILNTransferObserver>(this);
+ Observer->Bind(this,V,IsValid(O)?O->GetStorageInventory():nullptr,R.TruckId);
+ TransferObservers.Add(Observer); TransferByTruck.Add(R.TruckId,Observer);
+ return HasTransferObserver(R);
 }
 void ALogisticsSubsystem::Transfer(AFGWheeledVehicleIdentifier* V,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other,bool Added) {
  if(!HasAuthority() || !IsInGameThread() || !bRegistryValidated || Amount<=0) return;
@@ -46,11 +85,11 @@ void ALogisticsSubsystem::Transfer(AFGWheeledVehicleIdentifier* V,TSubclassOf<UF
  }
  auto* Provider=IsValid(R.Provider)?R.Provider->GetStation():nullptr;
  auto* Requester=IsValid(R.Requester)?R.Requester->GetStation():nullptr;
- const bool AtSource=Added && !R.RetainedCargo && IsValid(Provider) && Provider->GetDockedActor()==V->GetOwnerVehicle() &&
+ const bool AtSource=Added && !R.AbortReturn && !R.RetainedCargo && IsValid(Provider) && Provider->GetIsInLoadMode() && Provider->GetDockedActor()==V->GetOwnerVehicle() &&
   Other==Provider->GetInventory() && (State==S::ToProvider || State==S::Loading);
- const bool AtTarget=!Added && IsValid(Requester) && Requester->GetDockedActor()==V->GetOwnerVehicle() &&
+ const bool AtTarget=!Added && !R.AbortReturn && IsValid(Requester) && !Requester->GetIsInLoadMode() && Requester->GetDockedActor()==V->GetOwnerVehicle() &&
   Other==Requester->GetInventory() && (State==S::ToRequester || State==S::Unloading);
- if(Item!=R.Resource || (!AtSource && !AtTarget)) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; Recover(R,TEXT("Cargo event has no matching reserved native transfer endpoint")); return; }
+ if(Item!=R.Resource || (!AtSource && !AtTarget) || !EndpointConfigurationValid(R)) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; Recover(R,TEXT("Cargo event has no matching reserved native transfer endpoint")); return; }
  // Delegate timing (before/after inventory mutation) must not decide the ledger.
  // Reconcile the signed event total with the next authoritative inventory snapshot.
  filn::transfer::Ledger Ledger{R.LastCargo,R.LoadedCargo,R.DeliveredCargo};
