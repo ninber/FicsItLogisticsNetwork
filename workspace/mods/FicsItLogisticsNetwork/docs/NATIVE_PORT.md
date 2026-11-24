@@ -27,7 +27,7 @@ Before enabling automatic scheduling, implement and **compile against version-ma
 
 | Gate | Current state | Evidence required |
 | --- | --- | --- |
-| C++ eligibility and deterministic selection | **PASS portable only** | `bash scripts/test-filn.sh` (including 54 new policy checks); no Unreal code executed |
+| C++ eligibility and deterministic selection | **PASS new policy test only** | 54 policy checks compiled and run locally using GCC and Clang; full repository script not rerun in this session, no Unreal code executed |
 | C++ native adapter/UHT/UBT | **BLOCKED** | Custom CSS UE, MSVC/Wwise tools and compiled FactoryEditor with versioned APIs |
 | Truck/station data parity | **NOT IMPLEMENTED** | Filtered inventory, fuel/driver/home and native route snapshots in game |
 | Native auto dispatch and cargo reuse | **NOT IMPLEMENTED** | Two providers, two requesters, multiple trucks, road ranking, actual delivery and return |
