@@ -8,14 +8,18 @@
 #include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
 #include "WheeledVehicles/FGWheeledVehicle.h"
-void UFILNTransferObserver::Bind(ALogisticsSubsystem* S,AFGWheeledVehicleIdentifier* V,UFGInventoryComponent* I) {
- Unbind(); Owner=S; Vehicle=V; Inventory=I;
+void UFILNTransferObserver::Bind(ALogisticsSubsystem* S,AFGWheeledVehicleIdentifier* V,UFGInventoryComponent* I,const FGuid& Truck) {
+ Unbind(); Owner=S; Vehicle=V; Inventory=I; TruckId=Truck;
+ if(IsValid(V)) { BoundOwner=V->GetOwnerVehicle(); V->OnDestroyed.AddUniqueDynamic(this,&UFILNTransferObserver::Destroyed); }
  if(I) { I->OnItemAddedDelegate.AddUniqueDynamic(this,&UFILNTransferObserver::Added); I->OnItemRemovedDelegate.AddUniqueDynamic(this,&UFILNTransferObserver::Removed); }
 }
-bool UFILNTransferObserver::IsBoundTo(AFGWheeledVehicleIdentifier* V) const { return Vehicle.Get(true)==V; }
+void UFILNTransferObserver::Destroyed(AActor* Actor) {
+ if(auto* S=Owner.Get()) if(auto* V=Cast<AFGWheeledVehicleIdentifier>(Actor)) S->NoteVehicleDestroyed(TruckId,V,BoundOwner);
+}
 void UFILNTransferObserver::Unbind() {
  if(auto* I=Inventory.Get()) { I->OnItemAddedDelegate.RemoveDynamic(this,&UFILNTransferObserver::Added); I->OnItemRemovedDelegate.RemoveDynamic(this,&UFILNTransferObserver::Removed); }
- Inventory.Reset(); Owner.Reset(); Vehicle.Reset();
+ if(auto* V=Vehicle.Get()) V->OnDestroyed.RemoveDynamic(this,&UFILNTransferObserver::Destroyed);
+ Inventory.Reset(); Owner.Reset(); Vehicle.Reset(); BoundOwner.Reset(); TruckId.Invalidate();
 }
 void UFILNTransferObserver::Added(TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other) {
  if(Owner.IsValid() && Vehicle.IsValid()) Owner->Transfer(Vehicle.Get(),Item,Amount,Other,true);
@@ -26,8 +30,8 @@ void UFILNTransferObserver::Removed(TSubclassOf<UFGItemDescriptor> Item,int32 Am
 void ALogisticsSubsystem::WatchTransfers(FFILNRegistration& R) {
  auto* V=IsValid(R.Vehicle)?R.Vehicle.Get():nullptr;
  auto* Owner=V?V->GetOwnerVehicle():nullptr;
- if(!IsValid(Owner) || !Owner->GetStorageInventory()) return;
- auto* Observer=NewObject<UFILNTransferObserver>(this); Observer->Bind(this,V,Owner->GetStorageInventory()); TransferObservers.Add(Observer);
+ if(!V) return;
+ auto* Observer=NewObject<UFILNTransferObserver>(this); Observer->Bind(this,V,IsValid(Owner)?Owner->GetStorageInventory():nullptr,R.TruckId); TransferObservers.Add(Observer);
 }
 void ALogisticsSubsystem::Transfer(AFGWheeledVehicleIdentifier* V,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other,bool Added) {
  if(!HasAuthority() || !IsInGameThread() || !bRegistryValidated || Amount<=0) return;

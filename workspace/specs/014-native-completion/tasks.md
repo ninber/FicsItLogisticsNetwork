@@ -123,3 +123,6 @@
 
 - [x] T096 Preflight native saved registry identities, endpoint leases, states and configuration before native route/filter reconciliation; reject duplicate IDs, live mismatches, and unknown phases; preserve unresolved endpoint IDs and revoke inconsistent idle provenance.
 - [ ] T097 Verify current-head native save/load with valid and conflicting own-state fixtures, missing endpoints and AP-on/off vehicles; no legacy save migration involved.
+
+- [x] T098 Capture authoritative identifier OnDestroyed events before GC, defer reclamation until both observed vehicle owners are gone, remove observer/index by stable truck identity, and defer own-state rebuild after a late PostLoadGame callback.
+- [ ] T099 Verify native actor destruction/streaming/GC and load callback ordering; unresolved pointers without explicit destruction evidence remain retained.

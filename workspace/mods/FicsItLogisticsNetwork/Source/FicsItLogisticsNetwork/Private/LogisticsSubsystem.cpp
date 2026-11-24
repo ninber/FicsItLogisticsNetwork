@@ -45,6 +45,7 @@ void ALogisticsSubsystem::BeginPlay() {
 void ALogisticsSubsystem::EndPlay(const EEndPlayReason::Type Reason) {
  GetWorldTimerManager().ClearTimer(Watchdog);
  GetWorldTimerManager().ClearTimer(DispatchTimer);
+ GetWorldTimerManager().ClearTimer(DeferredRebuild); bRegistryValidated=false; DestroyedVehicles.Empty();
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
  TransferObservers.Empty();
  Super::EndPlay(Reason);
@@ -52,7 +53,11 @@ void ALogisticsSubsystem::EndPlay(const EEndPlayReason::Type Reason) {
 void ALogisticsSubsystem::PostLoadGame_Implementation(int32,int32) {
  // Rebuild validates saved identities before it touches native routes or filters.
  // Do not normalize unknown states during deserialization.
- bRegistryValidated=false;
+ bRegistryValidated=false; bDispatchBlocked=true;
+ if(HasAuthority() && HasActorBegunPlay() && GetWorld() && !GetWorld()->bIsTearingDown) {
+  GetWorldTimerManager().ClearTimer(DeferredRebuild);
+  DeferredRebuild=GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateUObject(this,&ALogisticsSubsystem::Rebuild));
+ }
 }
 FGuid ALogisticsSubsystem::StationId(AFGDockingStationIdentifier* Station) {
  if(!IsValid(Station) || Station->GetWorld()!=GetWorld()) return FGuid();
@@ -83,7 +88,8 @@ bool ALogisticsSubsystem::RestoreJobReservation(FFILNRegistration& R) {
  return Reservations.Acquire(Key(R.JobId),Key(R.TruckId),Key(R.ProviderLease),Key(R.RequesterLease));
 }
 void ALogisticsSubsystem::Rebuild() {
- bRegistryValidated=false;
+ if(!HasAuthority() || !GetWorld() || GetWorld()->bIsTearingDown) return;
+ bRegistryValidated=false; DestroyedVehicles.Empty();
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
  TransferObservers.Empty();
  Ownership=filn::Ownership(); Reservations=filn::Reservations();
@@ -557,9 +563,17 @@ void ALogisticsSubsystem::Observe() {
   ++Cursor;
  }
 }
-// A destroyed identifier can be conclusively removed only while its UObject
-// still exists and reports destruction. Null/unresolved saved references are
-// not proof of destruction and keep their recovery record.
+// Record explicit destruction before GC can erase the saved actor pointer.
+ // A surviving owner, streaming/unresolved reference or world shutdown is not
+ // sufficient evidence for releasing cargo endpoint leases.
+void ALogisticsSubsystem::NoteVehicleDestroyed(const FGuid& Truck,AFGWheeledVehicleIdentifier* Vehicle,TWeakObjectPtr<AFGWheeledVehicle> BoundOwner) {
+ if(!HasAuthority() || !IsInGameThread() || !bRegistryValidated || !GetWorld() || GetWorld()->bIsTearingDown || !Vehicle) return;
+ const auto* Index=ByVehicle.Find(Vehicle);
+ if(!Index || !Registrations.IsValidIndex(*Index) || Registrations[*Index].TruckId!=Truck) return;
+ DestroyedVehicles.Add(Truck,{BoundOwner,TWeakObjectPtr<AFGWheeledVehicle>(Vehicle->GetOwnerVehicle())});
+ Registrations[*Index].Held=false;
+ ResetScan();
+}
 void ALogisticsSubsystem::AuditLostRegistrations() {
  if(!HasAuthority() || bDispatchBlocked || Registrations.IsEmpty()) return;
  const int32 Budget=FMath::Min(4,Registrations.Num());
@@ -571,19 +585,21 @@ void ALogisticsSubsystem::AuditLostRegistrations() {
 bool ALogisticsSubsystem::RemoveLostRegistration(int32 Index) {
  if(!Registrations.IsValidIndex(Index)) return false;
  auto& R=Registrations[Index];
- auto* V=R.Vehicle.Get();
- // A live vehicle with a missing home is not eligible for automatic deletion.
- // Never release leases for a surviving truck that might still carry cargo.
- if(!V || !V->IsActorBeingDestroyed()) return false;
+ const auto* Proof=DestroyedVehicles.Find(R.TruckId);
+ // Wait until both the owner observed at binding and the owner at destruction
+ // are gone. The explicit identifier event is required even if the saved
+ // reference later becomes null. Never reclaim a lease on pointer absence alone.
+ if(!filn::registry::MayReclaimDestroyed(Proof!=nullptr,Proof && Proof->BoundOwner.IsValid(),Proof && Proof->LastOwner.IsValid())) return false;
  if(R.JobId.IsValid() && !Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { bDispatchBlocked=true; return false; }
  if(!Ownership.Unpair(Key(R.TruckId),Key(R.BayId))) { bDispatchBlocked=true; return false; }
  if(R.JobId.IsValid()) Reservations.Release(Key(R.JobId));
  if(IsValid(R.Home)) HomeStations.Remove(TWeakObjectPtr<AFGDockingStationIdentifier>(R.Home.Get()));
- ByVehicle.Remove(V);
- for(int32 I=TransferObservers.Num()-1;I>=0;--I) if(!TransferObservers[I] || TransferObservers[I]->IsBoundTo(V)) {
+ for(auto It=ByVehicle.CreateIterator();It;++It) if(It.Value()==Index) It.RemoveCurrent();
+ for(int32 I=TransferObservers.Num()-1;I>=0;--I) if(!TransferObservers[I] || TransferObservers[I]->IsBoundToTruck(R.TruckId)) {
   if(TransferObservers[I]) TransferObservers[I]->Unbind();
   TransferObservers.RemoveAtSwap(I);
  }
+ DestroyedVehicles.Remove(R.TruckId);
  Active.Remove(Index);
  Registrations.RemoveAt(Index);
  for(auto& Entry:ByVehicle) if(Entry.Value>Index) --Entry.Value;

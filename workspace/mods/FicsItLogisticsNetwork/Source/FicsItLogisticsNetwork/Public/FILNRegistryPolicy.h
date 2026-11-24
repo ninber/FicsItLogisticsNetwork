@@ -7,6 +7,9 @@ namespace filn::registry {
 inline bool LeaseReference(bool known,bool live,bool matches) {
  return known && (!live || matches);
 }
+inline bool MayReclaimDestroyed(bool explicitEvent,bool boundOwnerLive,bool lastOwnerLive) {
+ return explicitEvent && !boundOwnerLive && !lastOwnerLive;
+}
 inline bool StateAndJob(std::uint8_t state,bool job) {
  return state<=static_cast<std::uint8_t>(State::Recovery) &&
   (state==static_cast<std::uint8_t>(State::Idle)?!job:job);

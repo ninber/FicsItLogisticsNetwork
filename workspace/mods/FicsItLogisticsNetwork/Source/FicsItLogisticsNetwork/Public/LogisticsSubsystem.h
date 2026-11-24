@@ -12,6 +12,7 @@
 #include "FILNIdlePolicy.h"
 #include "LogisticsSubsystem.generated.h"
 class AFGWheeledVehicleIdentifier;
+class AFGWheeledVehicle;
 class AFGDockingStationIdentifier;
 class UFGItemDescriptor;
 class UFILNRemoteControl;
@@ -120,6 +121,7 @@ private:
  bool bDispatchBlocked = false;
  FTimerHandle Watchdog;
  FTimerHandle DispatchTimer;
+ FTimerHandle DeferredRebuild;
  UPROPERTY(SaveGame) bool bAutoDispatchEnabled = false;
  FFILNRoadCache RoadCache;
  int32 RequestCursor=0, ScanVehicle=0, ScanProvider=-1;
@@ -149,6 +151,11 @@ private:
  bool TryAbortToHome(FFILNRegistration& R,double Now);
  bool RestoreJobReservation(FFILNRegistration& R);
  void Recover(FFILNRegistration& R, const FString& Why);
+ struct FDestroyedVehicleProof {
+  TWeakObjectPtr<AFGWheeledVehicle> BoundOwner, LastOwner;
+ };
+ TMap<FGuid,FDestroyedVehicleProof> DestroyedVehicles;
+ void NoteVehicleDestroyed(const FGuid& Truck,AFGWheeledVehicleIdentifier* Vehicle,TWeakObjectPtr<AFGWheeledVehicle> BoundOwner);
  bool RemoveLostRegistration(int32 Index);
  void AuditLostRegistrations();
  void AuditIdleFleet();

@@ -46,7 +46,7 @@ void ALogisticsSubsystem::ResetScan() {
 }
 bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Offer& O,bool QueryRoads,bool& Pending) {
  Pending=false; O={};
- if(!HasAuthority() || bDispatchBlocked || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !ProviderCandidates.IsValidIndex(P))) return false;
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !ProviderCandidates.IsValidIndex(P))) return false;
  auto& R=Registrations[V]; const auto& C=StationConfigs[Q];
  if(R.State!=static_cast<uint8>(filn::State::Idle) || !R.Held || R.JobId.IsValid()) return false;
  R.Diagnostic=TEXT("No eligible compatible offer for this requester");
@@ -123,7 +123,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
 }
 void ALogisticsSubsystem::Schedule() {
  check(IsInGameThread());
- if(!HasAuthority() || !bAutoDispatchEnabled || bDispatchBlocked || StationConfigs.IsEmpty() || Registrations.IsEmpty()) return;
+ if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || StationConfigs.IsEmpty() || Registrations.IsEmpty()) return;
  const double Now=GetWorld()->GetTimeSeconds();
  if(!bScanning) {
   if(Now<NextDispatch) return;
