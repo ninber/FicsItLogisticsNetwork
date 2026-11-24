@@ -30,5 +30,12 @@ int main(){
  CHECK(!IdleAdoption(true,true,true,true,false,false,true,true,true,true));
  CHECK(!IdleAdoption(true,true,true,true,true,true,true,true,true,true));
  CHECK(!IdleAdoption(false,true,true,true,true,false,true,true,true,true));
+ CHECK(Restore(true,false,20,true,false,true,false)==RestoreAction::Deliver);
+ CHECK(Restore(true,false,0,false,true,true,false)==RestoreAction::Return);
+ CHECK(Restore(true,false,20,true,false,false,false)==RestoreAction::Reject);
+ CHECK(Restore(true,false,20,true,false,true,true)==RestoreAction::Reject);
+ CHECK(Restore(false,false,20,true,false,true,false)==RestoreAction::Reject);
+ CHECK(Restore(true,true,20,true,false,true,false)==RestoreAction::Reject);
+ CHECK(Restore(true,false,20,false,true,true,false)==RestoreAction::Reject);
  std::cout<<checks<<" legacy policy checks passed\n";
 }

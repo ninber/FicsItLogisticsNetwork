@@ -38,6 +38,13 @@ inline RouteMatch Match(const Entry& e,const std::vector<std::string>& r) {
  if(r==std::vector<std::string>{e.home,e.requester,e.home}||r==std::vector<std::string>{e.requester,e.home}) return RouteMatch::Delivery;
  return RouteMatch::None;
 }
+enum class RestoreAction { Reject, Deliver, Return };
+inline RestoreAction Restore(bool exclusive,bool mixed,int quantity,bool targetRequester,bool targetHome,bool deliveryOnly,bool storage) {
+ if(!exclusive||mixed||quantity<0||!deliveryOnly) return RestoreAction::Reject;
+ if(quantity>0 && targetRequester && !storage) return RestoreAction::Deliver;
+ if(quantity==0 && targetHome) return RestoreAction::Return;
+ return RestoreAction::Reject;
+}
 inline bool IdleAdoption(bool exactRecipe,bool validHome,bool uniqueHome,bool uniqueTruck,bool ap,bool driver,bool empty,bool stopped,bool nearby,bool homeOnly) {
  return exactRecipe&&validHome&&uniqueHome&&uniqueTruck&&ap&&!driver&&empty&&stopped&&nearby&&homeOnly;
 }

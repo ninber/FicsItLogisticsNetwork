@@ -27,7 +27,7 @@ public:
  virtual void StartupModule() override {
   UFILNStationControls::InstallHook();
   ALogisticsSubsystem::InstallParkingHook();
-  for(const FString& Verb:TArray<FString>{TEXT("list"),TEXT("pair"),TEXT("dispatch"),TEXT("reset"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("legacy"),TEXT("removeStation"),TEXT("manage")}) {
+  for(const FString& Verb:TArray<FString>{TEXT("list"),TEXT("pair"),TEXT("dispatch"),TEXT("reset"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("legacy"),TEXT("legacyJournal"),TEXT("removeStation"),TEXT("manage")}) {
    Commands.Add(IConsoleManager::Get().RegisterConsoleCommand(
     *(TEXT("filn.")+Verb),TEXT("FILN server prototype; see README for exact object-path arguments"),
     FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([Verb](const TArray<FString>& Args,UWorld* World) {

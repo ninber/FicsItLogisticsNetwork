@@ -431,7 +431,7 @@ void ALogisticsSubsystem::Observe() {
   else if(Before==S::Returning && AtH) {
    if(!R.Automatic) R.Vehicle->SetAutopilotEnabled(false);
    auto* Cargo=Owner->GetStorageInventory();
-   if(!Cargo || (!R.Automatic && !Cargo->IsEmpty()) || (R.Automatic && R.DeliveredCargo<=0)) { Recover(R,TEXT("Returned with cargo: incomplete unload requires operator recovery")); ++Cursor; continue; }
+   if(!Cargo || (!R.Automatic && !Cargo->IsEmpty()) || (R.Automatic && R.DeliveredCargo<=0 && !(R.LegacyDelivery && Cargo->IsEmpty()))) { Recover(R,TEXT("Returned with cargo: incomplete unload requires operator recovery")); ++Cursor; continue; }
    if(R.Automatic && FMath::Abs(Owner->GetForwardSpeed())<=1.f) {
     if(!RestoreHomeRoute(R)) { Recover(R,TEXT("Home route restoration failed; reservations retained")); ++Cursor; continue; }
     Next=filn::Advance(Before,filn::Event::HomeStopped);
@@ -444,7 +444,7 @@ void ALogisticsSubsystem::Observe() {
    UE_LOG(LogFILN,Log,TEXT("job=%s state=%d; docking observation only, transfer unverified"),*R.JobId.ToString(),R.State);
    if(Next==S::Completed) {
     Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
-    R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty();
+    R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.LegacyDelivery=false;
     R.NavigationRetry.Reset(); R.TravelProgress.Reset();
     Active.RemoveAtSwap(Cursor); continue;
    }
@@ -462,7 +462,7 @@ void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& 
   for(auto* H:VS->GetDockingStations()) if(IsValid(H)) UE_LOG(LogFILN,Log,TEXT("station %s name=%s node=%s"),*H->GetPathName(),*H->GetStationName().ToString(),*H->GetPathNodeGUID().ToString());
   return;
  }
- if(Command==TEXT("legacyJournal") && Args.Num()==1) { ImportLegacyJournal(Args[0]); return; }
+ if(Command==TEXT("legacyJournal") && Args.Num()==2 && (Args[0]==TEXT("preview") || Args[0]==TEXT("import"))) { ImportLegacyJournal(Args[1],Args[0]==TEXT("import")); return; }
  if(Command==TEXT("legacy") && Args.Num()==1 && (Args[0]==TEXT("preview") || Args[0]==TEXT("import"))) { ImportLegacy(Args[0]==TEXT("import")); return; }
  if(Command==TEXT("removeStation") && Args.Num()==1) {
   for(auto* Station:VS->GetDockingStations()) if(IsValid(Station) && Station->GetPathName()==Args[0]) { RemoveStation(Station); return; }

@@ -49,6 +49,8 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) bool CargoOriginKnown = false;
  UPROPERTY(SaveGame) bool CargoOriginStorage = false;
  UPROPERTY(SaveGame) bool Automatic = false;
+ // Imported cargo is observed, never credited as a historical transfer.
+ UPROPERTY(SaveGame) bool LegacyDelivery = false;
  UPROPERTY(SaveGame) bool Held = false;
  UPROPERTY(SaveGame) TArray<FGuid> IdleRoute;
  UPROPERTY(SaveGame) TSubclassOf<UFGItemDescriptor> Resource;
@@ -93,7 +95,7 @@ private:
  uint64 ScanRoadRevision=0;
  int32 FuelCursor=0;
  void ImportLegacy(bool Apply);
- void ImportLegacyJournal(const FString& Filename);
+ void ImportLegacyJournal(const FString& Filename,bool Apply);
  bool AdoptLegacyHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Home,bool Apply);
  bool RemoveStation(AFGDockingStationIdentifier* Station);
  void ServiceFuel();

@@ -111,10 +111,10 @@ bool ALogisticsSubsystem::AdoptLegacyHome(AFGWheeledVehicleIdentifier* V,AFGDock
  if(!Apply) return !HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(H));
  return Pair(V,H); // adoption branch performs no native route/AP writes
 }
-void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename) {
+void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename,bool Apply) {
  check(IsInGameThread());
  if(!HasAuthority() || bDispatchBlocked || bAutoDispatchEnabled) return;
- // Explicit server-console preview only. File is supplied by operator in Saved/FILN.
+ // Explicit server-console preview/import. File is supplied by operator in Saved/FILN.
  // Never read the running Lua mod's journal or assume it belongs to this save.
  if(Filename!=TEXT("dispatch-journal.tsv")) return;
  const FString Path=FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("FILN"),Filename);
@@ -126,6 +126,16 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename) {
  }
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
  MigrationReport.Empty();
+ if(Reservations.Size()!=0 || !Active.IsEmpty()) { UE_LOG(LogFILN,Error,TEXT("Finish existing native jobs before legacy journal import")); return; }
+ // Resolve only unique actual node identifiers. Never guess a destination by name.
+ auto Resolve=[VS](const std::string& Key)->AFGDockingStationIdentifier* {
+  AFGDockingStationIdentifier* Found=nullptr;
+  for(auto* ID:VS->GetDockingStations()) if(IsValid(ID) && Key==TCHAR_TO_UTF8(*ID->GetPathNodeGUID().ToString(EGuidFormats::Digits).ToLower())) {
+   if(Found) return nullptr;
+   Found=ID;
+  }
+  return Found;
+ };
  for(const auto& E:Entries) {
   int32 Matches=0; AFGWheeledVehicleIdentifier* Candidate=nullptr;
   auto Kind=filn::legacy::RouteMatch::None;
@@ -137,7 +147,57 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename) {
   }
   const FString Home=UTF8_TO_TCHAR(E.home.c_str());
   if(Matches!=1) { MigrationReport.Add(Home+TEXT(": missing/ambiguous journal vehicle; untouched")); continue; }
-  MigrationReport.Add(Home+FString::Printf(TEXT(": matched %s route kind=%d; active transfer counters cannot be reconstructed from journal alone; no route or cargo changed"),*Candidate->GetPathName(),static_cast<int32>(Kind)));
+  auto* H=Resolve(E.home); auto* Q=Resolve(E.requester);
+  auto* HB=IsValid(H)?H->GetStation():nullptr; auto* QB=IsValid(Q)?Q->GetStation():nullptr;
+  auto* O=Candidate->GetOwnerVehicle(); auto* Cargo=IsValid(O)?O->GetStorageInventory():nullptr;
+  const auto* Config=StationConfigs.FindByPredicate([Q](const FFILNStationConfig& C){return C.Station==Q;});
+  const auto Recipe=IsValid(HB)?HB->GetBuiltWithRecipe():TSubclassOf<UFGRecipe>();
+  if(!IsValid(HB) || !IsValid(QB) || !Recipe || Recipe->GetPathName()!=TEXT("/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop") ||
+     !ValidHome(H) || QB->GetIsInLoadMode() || !Config || !Config->Resource || !Cargo || !Candidate->IsAutopilotEnabled() || O->GetDriver()) {
+   MigrationReport.Add(Home+TEXT(": invalid endpoint, recipe, filter, owner or player opt-in; untouched")); continue;
+  }
+  if(Kind==filn::legacy::RouteMatch::Idle) {
+   const bool Ok=AdoptLegacyHome(Candidate,H,Apply);
+   MigrationReport.Add(Home+(Ok?TEXT(": idle adoption compatible"):TEXT(": idle adoption rejected"))); continue;
+  }
+  if(ByVehicle.Contains(Candidate) || HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(H))) {
+   MigrationReport.Add(Home+TEXT(": already registered or home claimed; untouched")); continue;
+  }
+  bool Exclusive=true;
+  for(auto* Other:VS->GetAllVehicles()) if(IsValid(Other) && Other!=Candidate && Other->GetVehicleRoute().Contains(H->GetPathNodeGUID())) Exclusive=false;
+  TArray<FInventoryStack> Stacks; Cargo->GetInventoryStacks(Stacks);
+  bool Mixed=false;
+  for(const auto& Stack:Stacks) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=Config->Resource) Mixed=true;
+  const int32 Quantity=Cargo->GetNumItems(Config->Resource);
+  const int32 TargetIndex=Candidate->GetCurrentTargetWaypointIndex();
+  const auto& Current=Candidate->GetVehicleRoute();
+  const bool TargetValid=Current.IsValidIndex(TargetIndex);
+  const bool AtRequester=TargetValid && Current[TargetIndex]==Q->GetPathNodeGUID();
+  const bool AtHome=TargetValid && Current[TargetIndex]==H->GetPathNodeGUID();
+  // Never resume a route whose next waypoint could pick up again. Legacy cargo
+  // origin is unknown and an imported shipment must not be redirected.
+  const auto Decision=filn::legacy::Restore(Exclusive,Mixed,Quantity,AtRequester,AtHome,Kind==filn::legacy::RouteMatch::Delivery,
+    filn::dispatch::IsStorage(TCHAR_TO_UTF8(*Q->GetStationName().ToString())));
+  if(Decision==filn::legacy::RestoreAction::Reject || Candidate->IsCurrentlyDocking() || QB->GetDockedActor()==O || HB->GetDockedActor()==O) {
+   MigrationReport.Add(Home+TEXT(": active route/cargo cannot safely resume without possible repeat pickup; untouched")); continue;
+  }
+  if(!Apply) { MigrationReport.Add(Home+TEXT(": compatible active delivery/return adoption available")); continue; }
+  FFILNRegistration R;
+  R.TruckId=FGuid::NewGuid(); R.BayId=StationId(H); R.JobId=FGuid::NewGuid();
+  R.Vehicle=Candidate; R.Home=H; R.Requester=Q; R.Resource=Config->Resource;
+  R.Automatic=true; R.RetainedCargo=true; R.LegacyDelivery=true; R.RouteIntent=Current;
+  R.ExpectedCargo=FMath::Max(1,Quantity); R.LastCargo=Quantity; R.LastObserved=GetWorld()->GetTimeSeconds();
+  R.State=static_cast<uint8>(Decision==filn::legacy::RestoreAction::Deliver?filn::State::ToRequester:filn::State::Returning);
+  // Existing route must contain no provider; returning empty is not delivery success.
+  if(!Reservations.AcquireDelivery(TCHAR_TO_UTF8(*R.JobId.ToString()),TCHAR_TO_UTF8(*R.TruckId.ToString()),TCHAR_TO_UTF8(*StationId(Q).ToString()))) {
+   MigrationReport.Add(Home+TEXT(": reservation conflict; untouched")); continue;
+  }
+  if(!Ownership.Pair(TCHAR_TO_UTF8(*R.TruckId.ToString()),TCHAR_TO_UTF8(*R.BayId.ToString()))) {
+   Reservations.Release(TCHAR_TO_UTF8(*R.JobId.ToString())); MigrationReport.Add(Home+TEXT(": ownership conflict; untouched")); continue;
+  }
+  R.Diagnostic=TEXT("Legacy route adopted; only future native transfer events counted");
+  HomeStations.Add(H); const int32 Index=Registrations.Add(R); ByVehicle.Add(Candidate,Index); WatchTransfers(Registrations[Index]); Active.AddUnique(Index);
+  ResetScan(); MigrationReport.Add(Home+TEXT(": active legacy delivery/return adopted without native route or cargo write"));
  }
- for(const auto& Line:MigrationReport) UE_LOG(LogFILN,Log,TEXT("JOURNAL PREVIEW %s"),*Line);
+ for(const auto& Line:MigrationReport) UE_LOG(LogFILN,Log,TEXT("JOURNAL %s"),*Line);
 }

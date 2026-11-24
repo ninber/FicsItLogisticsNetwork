@@ -64,3 +64,6 @@
 
 - [x] T055 Implement native travel progress watchdog and bounded stall retries; restore home-only route before successful automatic completion and release reservations only after route/AP readback.
 - [ ] T056 Verify actual native docking, hold, route restoration and stalled/repaired road behavior; alternate destination recovery and destroyed actor cleanup remain open.
+
+- [x] T057 Implement explicit legacy journal import for unique delivery-only routes with matching cargo or empty home return; preserve native route/AP, acquire leases and count only future transfer events. Expose server console preview/import.
+- [ ] T058 Extend migration to legacy pickup/alternate recovery routes without repeating pickups; verify imported jobs in actual save. Physical actor conversion remains open.
