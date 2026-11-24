@@ -7,3 +7,7 @@ trap 'rm -rf -- "$build_dir"' EXIT
 "${CXX:-g++}" -std=c++20 -Wall -Wextra -Wpedantic -Werror -O2 \
  -I"$plugin/Source/FicsItLogisticsNetwork/Public" "$plugin/tests/core_tests.cpp" -o "$build_dir/core_tests"
 "$build_dir/core_tests"
+
+"${CXX:-g++}" -std=c++20 -Wall -Wextra -Wpedantic -Werror -O2 \
+ -I"$plugin/Source/FicsItLogisticsNetwork/Public" "$plugin/tests/dispatch_policy_tests.cpp" -o "$build_dir/dispatch_policy_tests"
+"$build_dir/dispatch_policy_tests"
