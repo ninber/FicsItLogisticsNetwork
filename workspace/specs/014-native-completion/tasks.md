@@ -67,3 +67,7 @@
 
 - [x] T057 Implement explicit legacy journal import for unique delivery-only routes with matching cargo or empty home return; preserve native route/AP, acquire leases and count only future transfer events. Expose server console preview/import.
 - [ ] T058 Extend migration to legacy pickup/alternate recovery routes without repeating pickups; verify imported jobs in actual save. Physical actor conversion remains open.
+
+- [x] T059 Implement shared transactional station filter restoration and guarded uninstall preflight; rollback owned writes on failure and retain conflicting state.
+- [x] T060 Implement bounded cleanup for positively observed destroyed vehicle identifiers; release only that registration's owned leases and repair indices.
+- [ ] T061 Verify destruction lifecycle and independent uninstall/save load; unresolved references and surviving vehicles with missing endpoints remain fail-closed.

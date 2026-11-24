@@ -2,6 +2,7 @@
 #include "LogisticsSubsystem.h"
 #include "FILNDispatchPolicy.h"
 #include "FILNEnrollment.h"
+#include "FILNRestore.h"
 #include "FILNStationControls.h"
 #include "FILNTransferObserver.h"
 #include "Resources/FGItemDescriptor.h"
@@ -163,27 +164,61 @@ bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,
  if(!B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
  ResetScan(); return true;
 }
-bool ALogisticsSubsystem::PrepareStationsForUninstall() {
- if(!HasAuthority() || bDispatchBlocked || Reservations.Size()!=0) return false;
- // Validate the complete operation before changing any station. Cargo need not be empty.
- for(const auto& R:Registrations) if(StateOf(R)!=S::Idle) return false;
- for(const auto& C:StationConfigs) {
-  auto* B=Building(C.Station); if(!IsValid(B)) continue;
-  auto* Inventory=B->GetInventory();
-  if(!Inventory || B->GetDockedActor() || Inventory->GetSizeLinear()!=C.OriginalFilters.Num()) return false;
-  for(int32 I=0;I<Inventory->GetSizeLinear();++I) if(Inventory->GetAllowedItemOnIndex(I)!=C.Resource) return false;
- }
- for(const auto& C:StationConfigs) {
-  auto* B=Building(C.Station); if(!IsValid(B)) continue;
-  for(int32 I=0;I<B->GetInventory()->GetSizeLinear();++I) B->GetInventory()->SetAllowedItemOnIndex(I,C.OriginalFilters[I]);
- }
- bAutoDispatchEnabled=false;
- for(const auto& C:StationConfigs) {
-  auto* B=Building(C.Station); if(!IsValid(B)) continue;
-  for(int32 I=0;I<B->GetInventory()->GetSizeLinear();++I) if(B->GetInventory()->GetAllowedItemOnIndex(I)!=C.OriginalFilters[I]) {
-   bDispatchBlocked=true; UE_LOG(LogFILN,Error,TEXT("Uninstall filter restoration readback failed; saved recovery metadata retained")); return false;
+bool ALogisticsSubsystem::RestoreStationFilters(const TArray<int32>& Indices) {
+ struct FSlot { TWeakObjectPtr<UFGInventoryComponent> Inventory; int32 Slot; };
+ TArray<FSlot> Slots;
+ using Resource=TSubclassOf<UFGItemDescriptor>;
+ std::vector<Resource> Before,After;
+ for(int32 Index:Indices) {
+  if(!StationConfigs.IsValidIndex(Index)) return false;
+  const auto& C=StationConfigs[Index];
+  auto* B=Building(C.Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
+  if(!Inventory || B->GetDockedActor() || !C.Resource || Inventory->GetSizeLinear()!=C.OriginalFilters.Num()) return false;
+  for(int32 I=0;I<Inventory->GetSizeLinear();++I) {
+   if(Inventory->GetAllowedItemOnIndex(I)!=C.Resource) return false;
+   Slots.Add({Inventory,I}); Before.push_back(C.Resource); After.push_back(C.OriginalFilters[I]);
   }
  }
+ // A missing inventory must not be interpreted as a legitimate unrestricted slot.
+ bool Invalid=false;
+ auto Read=[&](std::size_t I)->Resource {
+  const auto& S=Slots[static_cast<int32>(I)];
+  auto* Inventory=S.Inventory.Get();
+  if(!Inventory || S.Slot>=Inventory->GetSizeLinear()) { Invalid=true; return {}; }
+  return Inventory->GetAllowedItemOnIndex(S.Slot);
+ };
+ auto Write=[&](std::size_t I,Resource Value) {
+  const auto& S=Slots[static_cast<int32>(I)];
+  auto* Inventory=S.Inventory.Get();
+  if(!Inventory || S.Slot>=Inventory->GetSizeLinear()) { Invalid=true; return; }
+  Inventory->SetAllowedItemOnIndex(S.Slot,Value);
+ };
+ const auto Result=filn::restore::Transaction(Before,After,Read,Write);
+ if(Invalid || Result==filn::restore::Result::Conflict) {
+  bDispatchBlocked=true; bAutoDispatchEnabled=false;
+  UE_LOG(LogFILN,Error,TEXT("Filter transaction conflict; dispatch locked and saved metadata retained"));
+  return false;
+ }
+ return Result==filn::restore::Result::Success;
+}
+bool ALogisticsSubsystem::PrepareStationsForUninstall() {
+ check(IsInGameThread());
+ if(!HasAuthority() || bDispatchBlocked || Reservations.Size()!=0 || !Active.IsEmpty()) return false;
+ // Do not discard an active job, an unresolved endpoint or a vehicle that could
+ // resume a multi-stop cargo route when the parking hook disappears.
+ for(const auto& R:Registrations) {
+  if(StateOf(R)!=S::Idle || !IsValid(R.Vehicle) || !IsValid(R.Home)) return false;
+  auto* O=R.Vehicle->GetOwnerVehicle(); auto* H=Building(R.Home);
+  if(!IsValid(O) || !IsValid(H) || !H->GetDockingPathNode() || O->GetDriver() ||
+     FMath::Abs(O->GetForwardSpeed())>1.f ||
+     FVector::DistSquared(O->GetVehicleLocation(),H->GetDockingPathNode()->GetActorLocation())>FMath::Square(800.f)) return false;
+  const TArray<FGuid> HomeRoute={R.Home->GetPathNodeGUID()};
+  if(R.Vehicle->IsAutopilotEnabled() && R.Vehicle->GetVehicleRoute()!=HomeRoute) return false;
+ }
+ TArray<int32> Indices;
+ for(int32 I=0;I<StationConfigs.Num();++I) Indices.Add(I);
+ if(!RestoreStationFilters(Indices)) return false;
+ bAutoDispatchEnabled=false;
  for(const auto& C:StationConfigs) if(auto* B=Building(C.Station); IsValid(B)) {
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
@@ -371,6 +406,7 @@ bool ALogisticsSubsystem::Dispatch(FFILNRegistration& R,AFGDockingStationIdentif
 }
 void ALogisticsSubsystem::Observe() {
  check(IsInGameThread());
+ AuditLostRegistrations();
  ServiceFuel();
  // Bounded round-robin across active jobs only. Recovery and idle records are not scanned.
  const int32 Budget=FMath::Min(16,Active.Num());
@@ -453,6 +489,41 @@ void ALogisticsSubsystem::Observe() {
    Recover(R,TEXT("Autopilot stopped before confirmed return"));
   ++Cursor;
  }
+}
+// A destroyed identifier can be conclusively removed only while its UObject
+// still exists and reports destruction. Null/unresolved saved references are
+// not proof of destruction and keep their recovery record.
+void ALogisticsSubsystem::AuditLostRegistrations() {
+ if(!HasAuthority() || bDispatchBlocked || Registrations.IsEmpty()) return;
+ const int32 Budget=FMath::Min(4,Registrations.Num());
+ for(int32 Count=0;Count<Budget && !Registrations.IsEmpty();++Count) {
+  LostCursor%=Registrations.Num();
+  if(!RemoveLostRegistration(LostCursor)) ++LostCursor;
+ }
+}
+bool ALogisticsSubsystem::RemoveLostRegistration(int32 Index) {
+ if(!Registrations.IsValidIndex(Index)) return false;
+ auto& R=Registrations[Index];
+ auto* V=R.Vehicle.Get();
+ // A live vehicle with a missing home is not eligible for automatic deletion.
+ // Never release leases for a surviving truck that might still carry cargo.
+ if(!V || !V->IsActorBeingDestroyed()) return false;
+ if(R.JobId.IsValid() && !Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { bDispatchBlocked=true; return false; }
+ if(!Ownership.Unpair(Key(R.TruckId),Key(R.BayId))) { bDispatchBlocked=true; return false; }
+ if(R.JobId.IsValid()) Reservations.Release(Key(R.JobId));
+ if(IsValid(R.Home)) HomeStations.Remove(TWeakObjectPtr<AFGDockingStationIdentifier>(R.Home.Get()));
+ ByVehicle.Remove(V);
+ for(int32 I=TransferObservers.Num()-1;I>=0;--I) if(!TransferObservers[I] || TransferObservers[I]->IsBoundTo(V)) {
+  if(TransferObservers[I]) TransferObservers[I]->Unbind();
+  TransferObservers.RemoveAtSwap(I);
+ }
+ Active.Remove(Index);
+ Registrations.RemoveAt(Index);
+ for(auto& Entry:ByVehicle) if(Entry.Value>Index) --Entry.Value;
+ for(auto& I:Active) if(I>Index) --I;
+ ResetScan();
+ UE_LOG(LogFILN,Warning,TEXT("Destroyed vehicle registration removed; its leases and home ownership released"));
+ return true;
 }
 void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& Args) {
  check(IsInGameThread()); if(!HasAuthority()) return;

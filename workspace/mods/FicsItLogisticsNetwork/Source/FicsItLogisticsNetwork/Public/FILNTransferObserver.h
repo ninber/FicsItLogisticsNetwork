@@ -12,6 +12,7 @@ class FICSITLOGISTICSNETWORK_API UFILNTransferObserver : public UObject {
 public:
  void Bind(ALogisticsSubsystem* Subsystem,AFGWheeledVehicleIdentifier* Vehicle,UFGInventoryComponent* Inventory);
  void Unbind();
+ bool IsBoundTo(AFGWheeledVehicleIdentifier* V) const { return Vehicle.GetEvenIfUnreachable()==V; }
 private:
  TWeakObjectPtr<ALogisticsSubsystem> Owner;
  TWeakObjectPtr<AFGWheeledVehicleIdentifier> Vehicle;

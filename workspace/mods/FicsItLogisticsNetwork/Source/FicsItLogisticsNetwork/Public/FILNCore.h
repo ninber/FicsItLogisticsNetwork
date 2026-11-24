@@ -25,6 +25,11 @@ public:
   if(Bays.contains(bay)) return false;
   Trucks.emplace(truck,bay); Bays.emplace(bay,truck); return true;
  }
+ bool Unpair(const std::string& truck,const std::string& bay) {
+  auto t=Trucks.find(truck), b=Bays.find(bay);
+  if(t==Trucks.end()||b==Bays.end()||t->second!=bay||b->second!=truck) return false;
+  Trucks.erase(t); Bays.erase(b); return true;
+ }
 };
 // Only called on the authoritative game thread. No partial mutation on ordinary rejection.
 // M1 capacity is one; M2 can replace slot keys while preserving this atomic contract.
@@ -51,6 +56,10 @@ public:
   auto it=Jobs.find(job); if(it==Jobs.end()) return;
   for(const auto& key:it->second) Occupied.erase(key);
   Jobs.erase(it);
+ }
+ bool OwnsJob(const std::string& job,const std::string& truck) const {
+  const auto i=Jobs.find(job);
+  return i!=Jobs.end()&&i->second[0]=="truck:"+truck;
  }
  bool StationBusy(const std::string& station) const { return Occupied.contains("station:"+station); }
  std::size_t Size() const { return Jobs.size(); }

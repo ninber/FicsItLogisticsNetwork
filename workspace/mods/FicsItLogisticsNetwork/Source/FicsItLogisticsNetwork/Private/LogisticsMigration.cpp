@@ -23,11 +23,7 @@ bool ALogisticsSubsystem::RemoveStation(AFGDockingStationIdentifier* Station) {
  auto* B=Station->GetStation(); auto* I=IsValid(B)?B->GetInventory():nullptr;
  const auto& C=StationConfigs[Index];
  if(!I || B->GetDockedActor() || I->GetSizeLinear()!=C.OriginalFilters.Num()) return false;
- for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) if(I->GetAllowedItemOnIndex(Slot)!=C.Resource) return false;
- for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) I->SetAllowedItemOnIndex(Slot,C.OriginalFilters[Slot]);
- for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) if(I->GetAllowedItemOnIndex(Slot)!=C.OriginalFilters[Slot]) {
-  bDispatchBlocked=true; UE_LOG(LogFILN,Error,TEXT("Station filter restoration readback failed; metadata retained")); return false;
- }
+ if(!RestoreStationFilters(TArray<int32>{Index})) return false;
  if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  StationConfigs.RemoveAt(Index); ResetScan(); return true;
 }

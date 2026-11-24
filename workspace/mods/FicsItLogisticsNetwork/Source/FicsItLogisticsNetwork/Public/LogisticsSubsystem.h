@@ -126,11 +126,15 @@ private:
  void Rebuild();
  bool ConfigureStation(AFGDockingStationIdentifier* Station, TSubclassOf<UFGItemDescriptor> Resource, bool ImportExisting=false);
  bool PrepareStationsForUninstall();
+ bool RestoreStationFilters(const TArray<int32>& Indices);
  bool ApplyStationFilter(const FFILNStationConfig& Config,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);
  void Observe();
  bool RetryNavigation(FFILNRegistration& R, double Now, bool Stalled=false);
  bool RestoreHomeRoute(FFILNRegistration& R);
  void Recover(FFILNRegistration& R, const FString& Why);
+ bool RemoveLostRegistration(int32 Index);
+ void AuditLostRegistrations();
+ int32 LostCursor=0;
  bool Pair(AFGWheeledVehicleIdentifier* Vehicle, AFGDockingStationIdentifier* Home);
  bool Dispatch(FFILNRegistration& R, AFGDockingStationIdentifier* Provider, AFGDockingStationIdentifier* Requester);
  bool Parked(const FFILNRegistration& R) const;
