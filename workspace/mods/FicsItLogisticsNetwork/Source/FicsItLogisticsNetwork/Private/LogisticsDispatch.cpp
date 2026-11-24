@@ -14,16 +14,25 @@ namespace {
 std::string Id(const FGuid& G) { return TCHAR_TO_UTF8(*G.ToString()); }
 std::string Descriptor(TSubclassOf<UFGItemDescriptor> D) { return D?TCHAR_TO_UTF8(*D->GetPathName()):""; }
 bool Inventory(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor> Resource,int& Kinds,int& Quantity,int& Capacity,std::string* Cargo=nullptr) {
- if(!I || I->GetSizeLinear()>4096) return false;
+ if(!IsValid(I) || !Resource || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
  TArray<FInventoryStack> Stacks; I->GetInventoryStacks(Stacks);
  TSet<UClass*> Types; int64 Amount=0, Size=0;
- for(const auto& S:Stacks) if(S.NumItems>0) { Types.Add(S.Item.GetItemClass()); Amount+=S.NumItems; if(Cargo) *Cargo=Descriptor(S.Item.GetItemClass()); }
+ if(Cargo) Cargo->clear();
+ for(const auto& S:Stacks) {
+  if(S.NumItems<0 || (S.NumItems>0 && !S.Item.GetItemClass())) return false;
+  if(S.NumItems>0) { Types.Add(S.Item.GetItemClass()); Amount+=S.NumItems; if(Cargo) *Cargo=Descriptor(S.Item.GetItemClass()); }
+ }
  for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) {
   auto Filter=I->GetAllowedItemOnIndex(Slot);
-  if(!Filter || Filter==Resource) Size+=I->GetSlotSizeForItem(Slot,Resource);
+  if(!Filter || Filter==Resource) { const auto Capacity=I->GetSlotSizeForItem(Slot,Resource); if(Capacity<0) return false; Size+=Capacity; }
  }
  if(Amount>MAX_int32 || Size>MAX_int32 || Size<0) return false;
  Kinds=Types.Num(); Quantity=static_cast<int>(Amount); Capacity=static_cast<int>(Size); return true;
+}
+bool ExactFilter(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor> Resource) {
+ if(!IsValid(I) || !Resource || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
+ for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) if(I->GetAllowedItemOnIndex(Slot)!=Resource) return false;
+ return true;
 }
 bool TransportMedium(const UObject* Object,filn::dispatch::Medium& Out) {
  const auto* Property=Object?FindFProperty<FBoolProperty>(Object->GetClass(),TEXT("mIsFluidStorageInventory")):nullptr;
@@ -33,10 +42,10 @@ bool TransportMedium(const UObject* Object,filn::dispatch::Medium& Out) {
 }
 }
 void ALogisticsSubsystem::ResetScan() {
- bScanning=false; bCheckingRetained=true; Rankings.Empty(); ProviderCandidates.Empty(); ScanVehicle=0; ScanProvider=0; BestOffer.reset(); BestVehicle=INDEX_NONE; BestProvider=INDEX_NONE;
+ bScanning=false; bCheckingRetained=true; Rankings.Empty(); ProviderCandidates.Empty(); ScanVehicle=0; ScanProvider=0; FirstEligibleProviderDistance=-1; BestOffer.reset(); BestVehicle=INDEX_NONE; BestProvider=INDEX_NONE;
 }
 bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Offer& O,bool QueryRoads,bool& Pending) {
- Pending=false;
+ Pending=false; O={};
  if(!HasAuthority() || bDispatchBlocked || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !ProviderCandidates.IsValidIndex(P))) return false;
  auto& R=Registrations[V]; const auto& C=StationConfigs[Q];
  if(R.State!=static_cast<uint8>(filn::State::Idle) || !R.Held || R.JobId.IsValid()) return false;
@@ -45,24 +54,30 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  auto* QB=IsValid(C.Station)?C.Station->GetStation():nullptr;
  auto* HB=IsValid(R.Home)?R.Home->GetStation():nullptr;
  if(!IsValid(Owner) || !IsValid(QB) || !IsValid(HB) || !C.Resource || !ValidHome(R.Home)) return false;
- if(!IsValid(Owner)) return false;
  if(Owner->GetDriver()) { R.Diagnostic=TEXT("Player-controlled vehicle excluded"); return false; }
  if(!R.Vehicle->IsAutopilotEnabled()) { R.Diagnostic=TEXT("Autopilot disabled; explicit player opt-in required"); return false; }
  if(!Owner->HasFuel() || !FuelReady(R)) { R.Diagnostic=TEXT("Awaiting full compatible native fuel inventory at assigned home"); return false; }
  if(QB->GetIsInLoadMode() || !QB->HasPower() || QB->IsProductionPaused()) { R.Diagnostic=TEXT("Requester mode/power/standby ineligible"); return false; }
  if(!QB->GetInventory() || !QB->GetInventory()->IsEmpty()) { R.Diagnostic=TEXT("Requester is not empty"); return false; }
+ if(!ExactFilter(QB->GetInventory(),C.Resource)) { R.Diagnostic=TEXT("Requester native filter no longer matches FILN resource"); return false; }
  // Automatic scheduling never opts a truck back in after a player disables autopilot.
  // Existing vanilla valid route and a native home docking observation are prerequisites.
- if(!R.Vehicle->IsAutopilotEnabled() || Owner->GetDriver() || (HB->GetDockedActor()!=Owner && !R.Held) || FMath::Abs(Owner->GetForwardSpeed())>1.f ||
-    !R.Vehicle->CanEnableAutopilot() || R.Vehicle->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None) return false;
- if(FVector::DistSquared(Owner->GetVehicleLocation(),HB->GetDockingPathNode()->GetActorLocation())>FMath::Square(500.f)) return false;
- if(R.Held && R.Vehicle->GetVehicleRoute()!=R.IdleRoute) return false;
+ if(!R.Vehicle->IsAutopilotEnabled() || Owner->GetDriver() || !R.Vehicle->CanEnableAutopilot() ||
+    R.Vehicle->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None || !HB->GetDockingPathNode()) return false;
+ const FVector Delta=Owner->GetVehicleLocation()-HB->GetDockingPathNode()->GetActorLocation();
+ const TArray<FGuid> HomeRoute={R.Home->GetPathNodeGUID()};
+ if(!HomeRoute[0].IsValid() || R.IdleRoute!=HomeRoute || R.Vehicle->GetVehicleRoute()!=HomeRoute ||
+    !filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,Owner->GetForwardSpeed(),HB->GetDockedActor() && HB->GetDockedActor()!=Owner)) return false;
  auto& Truck=O.vehicle; auto& Request=O.requester;
  Truck.cargoOriginKnown=R.CargoOriginKnown; Truck.cargoOriginStorage=R.CargoOriginStorage;
  Truck.id=Id(R.TruckId); Truck.home=Id(R.BayId); Truck.enrolled=true;
  Truck.homeReady=HB->HasPower() && !HB->IsProductionPaused(); Truck.idle=R.State==static_cast<uint8>(filn::State::Idle);
  Truck.autopilot=R.Vehicle->IsAutopilotEnabled(); Truck.driver=Owner->GetDriver()!=nullptr; Truck.fuelReady=true; // checked once above
  if(!TransportMedium(Owner,Truck.medium)) return false;
+ const auto Form=UFGItemDescriptor::GetForm(C.Resource);
+ const bool Fluid=Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS;
+ if((!Fluid && Form!=EResourceForm::RF_SOLID) || Fluid!=(Truck.medium==filn::dispatch::Medium::Fluid)) return false;
+ if(Fluid && QB->GetCurrentFluidDescriptor() && QB->GetCurrentFluidDescriptor()!=C.Resource) return false;
  if(!Inventory(Owner->GetStorageInventory(),C.Resource,Truck.cargoKinds,Truck.cargoQuantity,Truck.cargoCapacity,&Truck.cargoResource)) return false;
  Request.id=Id(StationId(C.Station)); Request.label=TCHAR_TO_UTF8(*C.Station->GetStationName().ToString()); Request.resource=Descriptor(C.Resource);
  Request.explicitFilter=true; Request.loadMode=QB->GetIsInLoadMode(); Request.powered=QB->HasPower(); Request.paused=QB->IsProductionPaused();
@@ -73,7 +88,8 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
   auto* ID=ProviderCandidates[P].Get(); auto* PB=IsValid(ID)?ID->GetStation():nullptr;
   if(!IsValid(PB) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode()) return false;
   const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& Entry){return Entry.Station==ID;});
-  if(PC && PC->Resource!=C.Resource) return false;
+  if(PC && (PC->Resource!=C.Resource || !ExactFilter(PB->GetInventory(),C.Resource))) return false;
+  if(Fluid && PB->GetCurrentFluidDescriptor() && PB->GetCurrentFluidDescriptor()!=C.Resource) return false;
   filn::dispatch::Station Provider;
   Provider.id=Id(StationId(ID)); Provider.label=TCHAR_TO_UTF8(*ID->GetStationName().ToString()); Provider.explicitFilter=PC!=nullptr;
   Provider.loadMode=PB->GetIsInLoadMode(); Provider.powered=PB->HasPower(); Provider.paused=PB->IsProductionPaused();
@@ -121,7 +137,7 @@ void ALogisticsSubsystem::Schedule() {
   // Native roster enumeration once per requester scan, never per offer.
   // Eligibility and inventory are read lazily under the existing work budget.
   for(auto* ID:VS->GetDockingStations()) if(IsValid(ID)) ProviderCandidates.Add(ID);
-  ScanRoadRevision=RoadCache.Invalidations; bScanning=true; ScanVehicle=0; ScanProvider=0;
+  ScanRoadRevision=RoadCache.Invalidations; bScanning=true; ScanVehicle=0; ScanProvider=0; FirstEligibleProviderDistance=-1;
  }
  auto Finish=[&]() {
   if(ScanRoadRevision!=RoadCache.Invalidations) { ResetScan(); return; }
@@ -133,18 +149,18 @@ void ALogisticsSubsystem::Schedule() {
  const double Deadline=FPlatformTime::Seconds()+0.001;
  for(int32 Work=0;Work<8 && FPlatformTime::Seconds()<Deadline;++Work) {
   if(ScanVehicle>=Registrations.Num()) {
-   if(bCheckingRetained && !BestOffer) { bCheckingRetained=false; ScanVehicle=0; ScanProvider=0; }
+   if(bCheckingRetained && !BestOffer) { bCheckingRetained=false; ScanVehicle=0; ScanProvider=0; FirstEligibleProviderDistance=-1; }
    else { Finish(); return; }
   }
   auto& R=Registrations[ScanVehicle];
   auto* Owner=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
   auto* Home=IsValid(R.Home)?R.Home->GetStation():nullptr;
   if(!IsValid(Owner) || !IsValid(Home) || R.State!=static_cast<uint8>(filn::State::Idle) ||
-     !R.Vehicle->IsAutopilotEnabled() || Owner->GetDriver() || (Home->GetDockedActor()!=Owner && !R.Held)) { ++ScanVehicle; ScanProvider=0; continue; }
+     !R.Vehicle->IsAutopilotEnabled() || Owner->GetDriver() || (Home->GetDockedActor()!=Owner && !R.Held)) { ++ScanVehicle; ScanProvider=0; FirstEligibleProviderDistance=-1; continue; }
   int32 Provider=INDEX_NONE;
   if(!bCheckingRetained) {
    auto* Preset=Owner->GetVehiclePathPreset();
-   if(!Preset) { ++ScanVehicle; continue; }
+   if(!Preset || !Owner->GetStorageInventory() || !Owner->GetStorageInventory()->IsEmpty()) { ++ScanVehicle; ScanProvider=0; FirstEligibleProviderDistance=-1; continue; }
    auto& Rank=Rankings.FindOrAdd(Preset);
    if(!Rank.Sorted) {
     if(Rank.Cursor<ProviderCandidates.Num()) {
@@ -159,16 +175,17 @@ void ALogisticsSubsystem::Schedule() {
     }
     Rank.Entries.Sort([](const auto& A,const auto& B){return A.Key==B.Key?A.Value<B.Value:A.Key<B.Key;}); Rank.Sorted=true;
    }
-   if(!Rank.Entries.IsValidIndex(ScanProvider)) { ++ScanVehicle; ScanProvider=0; continue; }
+   if(!Rank.Entries.IsValidIndex(ScanProvider) || !filn::dispatch::WithinNearestGroup(FirstEligibleProviderDistance,Rank.Entries[ScanProvider].Key)) { ++ScanVehicle; ScanProvider=0; FirstEligibleProviderDistance=-1; continue; }
    Provider=Rank.Entries[ScanProvider].Value;
   }
   filn::dispatch::Offer Offer; bool Pending=false;
   if(BuildOffer(ScanVehicle,RequestCursor,Provider,Offer,true,Pending)) {
    auto Choice=filn::dispatch::Evaluate(Offer);
    if(Choice && (!BestOffer || filn::dispatch::Better(*Choice,*BestOffer))) { BestOffer=Choice; BestVehicle=ScanVehicle; BestProvider=Provider; }
-   // First eligible provider in this preset's road ordering is sufficient for this
-   // truck. Depot proximity never overrides nearest-provider-to-requester ordering.
-   ++ScanVehicle; ScanProvider=0;
+   // Equal provider-to-requester distances must be compared by empty travel.
+   // Never discard a cheaper empty leg merely because of native roster order.
+   if(!bCheckingRetained && Choice) { FirstEligibleProviderDistance=Choice->providerDistance; ++ScanProvider; }
+   else { ++ScanVehicle; ScanProvider=0; FirstEligibleProviderDistance=-1; }
   } else if(Pending) return;
   else if(bCheckingRetained) ++ScanVehicle;
   else ++ScanProvider;
@@ -189,14 +206,20 @@ bool ALogisticsSubsystem::CommitOffer(int32 V,int32 Q,int32 P) {
  R.JobId=Job; R.Provider=Provider; R.Requester=Requester; R.AbortReturn=false;
  R.ProviderLease=Provider?StationId(Provider):FGuid(); R.RequesterLease=StationId(Requester); R.RetainedCargo=Provider==nullptr; R.Automatic=true;
  R.Resource=StationConfigs[Q].Resource; R.ExpectedCargo=Choice->amount; R.LastCargo=Offer.vehicle.cargoQuantity; R.LoadedCargo=0; R.DeliveredCargo=0;
- R.State=static_cast<uint8>(filn::State::Reserved); R.Elapsed=0; R.LastObserved=GetWorld()->GetTimeSeconds(); R.NavigationRetry.Reset(); R.TravelProgress.Reset();
+ R.State=static_cast<uint8>(filn::State::Reserved); if(Provider) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; } R.Elapsed=0; R.LastObserved=GetWorld()->GetTimeSeconds(); R.NavigationRetry.Reset(); R.TravelProgress.Reset();
  // Home is an explicit first waypoint so native target-index reset can be read back.
  R.RouteIntent={R.Home->GetPathNodeGUID()};
  if(Provider) R.RouteIntent.Add(Provider->GetPathNodeGUID());
  R.RouteIntent.Add(Requester->GetPathNodeGUID()); R.RouteIntent.Add(R.Home->GetPathNodeGUID());
+ const auto CanContinue=[&]() {
+  return R.State==static_cast<uint8>(filn::State::Reserved) && IsValid(R.Vehicle) && IsValid(R.Vehicle->GetOwnerVehicle()) &&
+   !R.Vehicle->GetOwnerVehicle()->GetDriver() && R.Vehicle->IsAutopilotEnabled() &&
+   R.Vehicle->GetVehicleRoute()==R.RouteIntent && Reservations.OwnsJob(Id(R.JobId),Id(R.TruckId));
+ };
  R.Vehicle->SetVehicleRoute(R.RouteIntent);
+ if(!CanContinue()) { Recover(R,TEXT("Native route write interrupted; reservations retained")); return false; }
  R.Vehicle->SetCurrentTargetWaypoint(1);
- if(R.Vehicle->GetVehicleRoute()!=R.RouteIntent || R.Vehicle->GetCurrentTargetWaypointIndex()!=1 || !R.Vehicle->IsAutopilotEnabled()) {
+ if(!CanContinue() || R.Vehicle->GetCurrentTargetWaypointIndex()!=1) {
   Recover(R,TEXT("Native route/target/autopilot readback failed; reservations retained")); return false;
  }
  R.State=static_cast<uint8>(Provider?filn::State::ToProvider:filn::State::ToRequester);

@@ -31,7 +31,9 @@ FFuelSnapshot Inspect(const FFILNRegistration& R,double Now) {
     R.State!=static_cast<uint8>(filn::State::Idle) || O->GetDriver() || !V->IsAutopilotEnabled() ||
     !H->HasPower() || H->IsProductionPaused() || FMath::Abs(O->GetForwardSpeed())>1.f ||
     (H->GetDockedActor() && H->GetDockedActor()!=O) ||
-    FVector::DistSquared(O->GetVehicleLocation(),H->GetDockingPathNode()->GetActorLocation())>FMath::Square(800.f)) return Result;
+    R.JobId.IsValid()) return Result;
+ const FVector Delta=O->GetVehicleLocation()-H->GetDockingPathNode()->GetActorLocation();
+ if(!filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,O->GetForwardSpeed(),H->GetDockedActor() && H->GetDockedActor()!=O)) return Result;
  const TArray<FGuid> HomeRoute={R.Home->GetPathNodeGUID()};
  if(V->GetVehicleRoute()!=HomeRoute || R.IdleRoute!=HomeRoute) return Result;
  auto* Source=H->GetFuelInventory(); auto* Target=O->GetFuelInventory();

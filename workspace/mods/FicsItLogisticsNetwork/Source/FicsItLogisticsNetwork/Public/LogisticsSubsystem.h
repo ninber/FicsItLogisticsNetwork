@@ -122,6 +122,7 @@ private:
  FFILNRoadCache RoadCache;
  int32 RequestCursor=0, ScanVehicle=0, ScanProvider=-1;
  int32 BestVehicle=INDEX_NONE, BestProvider=INDEX_NONE;
+ double FirstEligibleProviderDistance=-1;
  struct FProviderRanking { int32 Cursor=0; bool Sorted=false; TArray<TPair<double,int32>> Entries; };
  TMap<const UFGVehiclePathPreset*,FProviderRanking> Rankings;
  // Snapshot native identifiers, not stock. Weak references survive deletion during a scan.

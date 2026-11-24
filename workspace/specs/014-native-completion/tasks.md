@@ -117,3 +117,6 @@
 
 - [x] T092 Remove embedded legacy importers, saved import metadata, legacy recipe detection, migration console/RPC/UI actions and importer policy tests. Keep general native enrollment, recovery and uninstall. External save tools are not shipped in the mod.
 - [ ] T093 Verify the standalone native package has no legacy import or save-specific dependency; rerun current-head tests/build.
+
+- [x] T094 Remove separate AP-enabling/manual unmeasured dispatch path; use common native offer/commit path. Verify live slot filters and medium, protect reserved route writes against reentrant state change, compare equal nearest-provider distances by empty leg, unify parked radius/vertical/foreign-dock checks.
+- [ ] T095 Verify actual native dispatch, road ties, live filter changes and route setter reentrancy in runtime; portable checks do not prove game API behavior.

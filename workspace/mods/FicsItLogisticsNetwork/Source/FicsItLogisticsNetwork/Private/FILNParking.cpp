@@ -15,14 +15,13 @@ bool ALogisticsSubsystem::HoldVehicle(AFGWheeledVehicleIdentifier* V) {
  const auto* Index=ByVehicle.Find(V); if(!Index || !Registrations.IsValidIndex(*Index)) return false;
  auto& R=Registrations[*Index]; auto* Owner=IsValid(V)?V->GetOwnerVehicle():nullptr;
  auto* Home=IsValid(R.Home)?R.Home->GetStation():nullptr;
- if(!R.Held || R.State!=static_cast<uint8>(filn::State::Idle)) return false;
+ if(!R.Held || R.State!=static_cast<uint8>(filn::State::Idle) || R.JobId.IsValid()) return false;
  if(!IsValid(Owner) || Owner->GetDriver() || !V->IsAutopilotEnabled() || !IsValid(Home) || !Home->GetDockingPathNode() ||
     V->GetVehicleRoute()!=R.IdleRoute || R.IdleRoute.Num()!=1 || R.IdleRoute[0]!=R.Home->GetPathNodeGUID()) { R.Held=false; return false; }
  // O(1) for a held truck, with no road or world queries in the tick hook.
  // A vehicle moved away from its bay must not remain frozen by a saved Held bit.
  const FVector Delta=Owner->GetVehicleLocation()-Home->GetDockingPathNode()->GetActorLocation();
- if(FMath::Abs(Delta.Z)>250.f || Delta.SizeSquared()>FMath::Square(800.f) ||
-    FMath::Abs(Owner->GetForwardSpeed())>1.f || (Home->GetDockedActor() && Home->GetDockedActor()!=Owner)) { R.Held=false; return false; }
+ if(!filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,Owner->GetForwardSpeed(),Home->GetDockedActor() && Home->GetDockedActor()!=Owner)) { R.Held=false; return false; }
  return true;
 }
 void ALogisticsSubsystem::InstallParkingHook() {

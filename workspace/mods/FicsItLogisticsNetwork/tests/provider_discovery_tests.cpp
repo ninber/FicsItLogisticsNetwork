@@ -2,6 +2,7 @@
 #include "FILNDispatchPolicy.h"
 #include <iostream>
 #include <cstdlib>
+#include <limits>
 using namespace filn::dispatch;
 #define CHECK(x) do { ++checks; if(!(x)) { std::cerr<<__LINE__<<": "<<#x<<'\n'; return EXIT_FAILURE; } } while(false)
 int main() {
@@ -25,5 +26,16 @@ int main() {
  o.provider->quantity=99; CHECK(!Evaluate(o)); o.provider->quantity=100;
  o.provider->medium=Medium::Fluid; CHECK(!Evaluate(o));
  o.provider->medium=Medium::Solid; o.provider->label="[s]"; o.requester.label="[S]"; CHECK(!Evaluate(o));
+ CHECK(WithinNearestGroup(-1,0)); CHECK(WithinNearestGroup(10,10)); CHECK(!WithinNearestGroup(10,10.01));
+ CHECK(!WithinNearestGroup(-1,-1)); CHECK(!WithinNearestGroup(10,std::numeric_limits<double>::infinity()));
+ CHECK(HomePositionReady(800.0*800.0,250,1,false));
+ CHECK(!HomePositionReady(800.0*800.0+1,0,0,false));
+ CHECK(!HomePositionReady(100,251,0,false)); CHECK(!HomePositionReady(100,0,-1.1,false));
+ CHECK(!HomePositionReady(100,0,0,true));
+ CHECK(!HomePositionReady(std::numeric_limits<double>::quiet_NaN(),0,0,false));
+ CHECK(!HomePositionReady(-1,0,0,false));
+ o.provider->label="Factory"; o.requester.label="Factory";
+ Offer equal=o; equal.provider->id="closer-empty"; equal.roads.homeToProvider=0;
+ CHECK(Select({o,equal})->provider=="closer-empty");
  std::cout<<checks<<" provider discovery policy checks passed\n";
 }

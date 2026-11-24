@@ -99,6 +99,16 @@ struct Choice {
 inline bool ProviderResourceMatches(std::string_view requested,std::string_view observed,int kinds,std::string_view configured) {
  return !requested.empty() && kinds==1 && observed==requested && (configured.empty() || configured==requested);
 }
+// Ranking can stop only after all equal-cost providers have been considered.
+inline bool WithinNearestGroup(double firstEligible,double candidate) {
+ return std::isfinite(candidate) && candidate>=0 &&
+  (firstEligible<0 || (std::isfinite(firstEligible) && candidate<=firstEligible));
+}
+inline bool HomePositionReady(double distanceSquared,double verticalDistance,double speed,bool foreignDock) {
+ return !foreignDock && std::isfinite(distanceSquared) && distanceSquared>=0 && distanceSquared<=800.0*800.0 &&
+  std::isfinite(verticalDistance) && std::abs(verticalDistance)<=250.0 &&
+  std::isfinite(speed) && std::abs(speed)<=1.0;
+}
 inline bool ValidCost(double cost) { return std::isfinite(cost) && cost >= 0.0; }
 
 inline std::optional<Choice> Evaluate(const Offer& offer) {

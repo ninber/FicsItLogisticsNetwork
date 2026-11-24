@@ -393,60 +393,18 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  return true;
 }
 bool ALogisticsSubsystem::Dispatch(FFILNRegistration& R,AFGDockingStationIdentifier* P,AFGDockingStationIdentifier* Q) {
- auto* PB=Building(P); auto* QB=Building(Q);
- if(bDispatchBlocked || StateOf(R)!=S::Idle || !Parked(R) || !ValidHome(R.Home) ||
-  !IsValid(PB) || !IsValid(QB) || P==Q || P==R.Home || Q==R.Home || !PB->GetIsInLoadMode() || QB->GetIsInLoadMode()) return false;
- if(!filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*P->GetStationName().ToString()),TCHAR_TO_UTF8(*Q->GetStationName().ToString()))) return false;
- if(R.Vehicle->GetOwnerVehicle()->GetDriver() || !R.Vehicle->GetOwnerVehicle()->HasFuel()) return false;
- const auto* Config=StationConfigs.FindByPredicate([Q](const FFILNStationConfig& C){return C.Station==Q;});
- if(!Config || !Config->Resource || !QB->GetInventory() || !QB->GetInventory()->IsEmpty() || !PB->GetInventory()) return false;
- const auto Form=UFGItemDescriptor::GetForm(Config->Resource);
- const bool Fluid=Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS;
- if(!Fluid && Form!=EResourceForm::RF_SOLID) return false;
- for(const UObject* Object:{static_cast<const UObject*>(PB),static_cast<const UObject*>(QB),static_cast<const UObject*>(R.Vehicle->GetOwnerVehicle())}) {
-  const auto* Property=FindFProperty<FBoolProperty>(Object->GetClass(),TEXT("mIsFluidStorageInventory"));
-  if(!Property || Property->GetPropertyValue_InContainer(Object)!=Fluid) return false;
- }
- auto* CargoInventory=R.Vehicle->GetOwnerVehicle()->GetStorageInventory();
- if(!CargoInventory) return false;
- int64 FullLoad=0;
- for(int32 I=0;I<CargoInventory->GetSizeLinear();++I) FullLoad+=CargoInventory->GetSlotSizeForItem(I,Config->Resource);
- if(FullLoad<=0 || FullLoad>MAX_int32) return false;
- TArray<FInventoryStack> Stock; PB->GetInventory()->GetInventoryStacks(Stock);
- for(const auto& Stack:Stock) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=Config->Resource) return false;
- if(PB->GetInventory()->GetNumItems(Config->Resource)<FullLoad ||
-    !QB->GetInventory()->HasEnoughSpaceForStack(FInventoryStack(static_cast<int32>(FullLoad),Config->Resource))) return false;
- if(!R.Vehicle->GetOwnerVehicle()->GetStorageInventory() || !R.Vehicle->GetOwnerVehicle()->GetStorageInventory()->IsEmpty()) return false;
- for(const auto& Other:Registrations) if(Other.Home==P || Other.Home==Q) return false;
- const auto* Preset=R.Vehicle->GetOwnerVehicle()->GetVehiclePathPreset();
- auto* Vehicles=AFGVehicleSubsystem::Get(GetWorld());
- if(!Preset || !Vehicles) return false;
- const FGuid Nodes[]={R.Home->GetPathNodeGUID(),P->GetPathNodeGUID(),Q->GetPathNodeGUID(),R.Home->GetPathNodeGUID()};
- // Only explicit dispatch invokes these bounded three game queries. No inventory callback does.
- for(int32 I=0;I<3;++I) {
-  if(!Nodes[I].IsValid() || !Nodes[I+1].IsValid()) return false;
-  auto* N=Vehicles->FindNetworkByPathNodeGuid(Nodes[I]);
-  TArray<FGuid> Path;
-  if(!N || N!=Vehicles->FindNetworkByPathNodeGuid(Nodes[I+1]) || !N->FindVehiclePath(Nodes[I],Nodes[I+1],Preset,Path)) {
-   UE_LOG(LogFILN,Warning,TEXT("Dispatch rejected: directed leg %d is unreachable"),I); return false;
-  }
- }
- const FGuid Job=FGuid::NewGuid();
- if(!Reservations.Acquire(Key(Job),Key(R.TruckId),Key(StationId(P)),Key(StationId(Q)))) return false;
- R.Automatic=false; R.RetainedCargo=false;
- R.JobId=Job; R.Provider=P; R.Requester=Q; R.Elapsed=0; R.LastObserved=GetWorld()->GetTimeSeconds();
- R.RouteIntent={Nodes[1],Nodes[2],Nodes[3]}; SetState(R,S::Reserved);
- R.Vehicle->SetAutopilotEnabled(false);
- R.Vehicle->SetVehicleRoute(R.RouteIntent);
- if(R.Vehicle->GetVehicleRoute()!=R.RouteIntent || !R.Vehicle->CanEnableAutopilot()) {
-  Recover(R,TEXT("Game rejected route or autopilot; target-index reset semantics require runtime investigation")); return false;
- }
- SetState(R,S::ToProvider);
- R.Vehicle->SetAutopilotEnabled(true);
- if(!R.Vehicle->IsAutopilotEnabled()) { Recover(R,TEXT("Autopilot enable did not take effect")); return false; }
- Active.AddUnique(ByVehicle.FindChecked(R.Vehicle));
- UE_LOG(LogFILN,Log,TEXT("job=%s TO_PROVIDER route=%s -> %s -> home %s; transfer amounts unmeasured"),*Job.ToString(),*Nodes[1].ToString(),*Nodes[2].ToString(),*Nodes[3].ToString());
- return true;
+ check(IsInGameThread());
+ if(!HasAuthority() || bDispatchBlocked || !IsValid(P) || !IsValid(Q) || !IsValid(R.Vehicle)) return false;
+ const auto* Index=ByVehicle.Find(R.Vehicle);
+ const int32 Request=StationConfigs.IndexOfByPredicate([Q](const FFILNStationConfig& C){return C.Station==Q;});
+ if(!Index || !Registrations.IsValidIndex(*Index) || Request==INDEX_NONE) return false;
+ // Explicit commands use the same AP-on eligibility, measured ledger and leases
+ // as automatic scheduling. No second dispatcher and no AP override.
+ ResetScan(); ProviderCandidates.Add(P); ScanRoadRevision=RoadCache.Invalidations;
+ const bool Accepted=CommitOffer(*Index,Request,0);
+ ResetScan();
+ if(!Accepted) UE_LOG(LogFILN,Log,TEXT("Explicit dispatch rejected or road calculation pending; inspect filn.status and retry only if eligible"));
+ return Accepted;
 }
 void ALogisticsSubsystem::Observe() {
  check(IsInGameThread());
