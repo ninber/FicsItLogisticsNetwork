@@ -407,11 +407,19 @@ void ALogisticsSubsystem::Observe() {
     Recover(R,TEXT("Station departed without measured matching cargo transfer")); ++Cursor; continue;
    }
   }
-  if(R.Vehicle->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None) {
-   if(!R.Automatic || !RetryNavigation(R,Now)) Recover(R,FString::Printf(TEXT("Native autopilot error=%d; automatic retry is unsafe"),static_cast<int32>(R.Vehicle->GetAutopilotErrorStatus())));
+  const bool Travelling=Before==S::ToProvider || Before==S::ToRequester || Before==S::Returning;
+  const FVector Location=Owner->GetVehicleLocation();
+  const int32 Waypoint=R.Vehicle->GetCurrentTargetWaypointIndex();
+  const bool Moved=!R.TravelProgress.initialized || Waypoint!=R.ProgressWaypoint ||
+    FVector::DistSquared(Location,R.ProgressLocation)>=FMath::Square(200.f);
+  const bool Docking=!Travelling || AtP || AtQ || AtH || R.Vehicle->IsCurrentlyDocking();
+  if(Moved || Docking) { R.ProgressLocation=Location; R.ProgressWaypoint=Waypoint; }
+  const bool Stalled=R.TravelProgress.Sample(Now,Moved,Docking);
+  if((Stalled || R.Vehicle->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None) && !Docking) {
+   if(!R.Automatic || !RetryNavigation(R,Now,Stalled)) Recover(R,FString::Printf(TEXT("Native autopilot error=%d; automatic retry is unsafe"),static_cast<int32>(R.Vehicle->GetAutopilotErrorStatus())));
    ++Cursor; continue;
   }
-  if(R.NavigationRetry.waiting) {
+  if(R.NavigationRetry.waiting && (Moved || Docking)) {
    R.NavigationRetry.Reset(); R.Elapsed=0;
    R.Diagnostic=TEXT("Native navigation fault cleared; continuing reserved journey, no transfer inferred");
   }
@@ -421,11 +429,13 @@ void ALogisticsSubsystem::Observe() {
   else if(Before==S::ToRequester && AtQ) Next=filn::Advance(Before,filn::Event::RequesterDock);
   else if(Before==S::Unloading && !AtQ) Next=filn::Advance(Before,filn::Event::RequesterLeave);
   else if(Before==S::Returning && AtH) {
-   if(R.Automatic) { R.Held=true; R.IdleRoute=R.Vehicle->GetVehicleRoute(); }
-   else R.Vehicle->SetAutopilotEnabled(false);
+   if(!R.Automatic) R.Vehicle->SetAutopilotEnabled(false);
    auto* Cargo=Owner->GetStorageInventory();
    if(!Cargo || (!R.Automatic && !Cargo->IsEmpty()) || (R.Automatic && R.DeliveredCargo<=0)) { Recover(R,TEXT("Returned with cargo: incomplete unload requires operator recovery")); ++Cursor; continue; }
-   if((R.Automatic && R.Held && FMath::Abs(Owner->GetForwardSpeed())<=1.f) || Parked(R)) Next=filn::Advance(Before,filn::Event::HomeStopped);
+   if(R.Automatic && FMath::Abs(Owner->GetForwardSpeed())<=1.f) {
+    if(!RestoreHomeRoute(R)) { Recover(R,TEXT("Home route restoration failed; reservations retained")); ++Cursor; continue; }
+    Next=filn::Advance(Before,filn::Event::HomeStopped);
+   } else if(!R.Automatic && Parked(R)) Next=filn::Advance(Before,filn::Event::HomeStopped);
   }
   else if((Before==S::ToProvider && AtQ) || (Before==S::ToRequester && AtH) || (Before==S::Returning && AtP)) Next=S::Recovery;
   if(Next==S::Recovery) Recover(R,TEXT("Out-of-order docking observed; journey cannot be proven"));
@@ -434,6 +444,8 @@ void ALogisticsSubsystem::Observe() {
    UE_LOG(LogFILN,Log,TEXT("job=%s state=%d; docking observation only, transfer unverified"),*R.JobId.ToString(),R.State);
    if(Next==S::Completed) {
     Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
+    R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty();
+    R.NavigationRetry.Reset(); R.TravelProgress.Reset();
     Active.RemoveAtSwap(Cursor); continue;
    }
   }

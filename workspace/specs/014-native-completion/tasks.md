@@ -61,3 +61,6 @@
 
 - [x] T053 Add legacy recipe-based idle depot adoption and strict bounded Lua dispatch journal parser/route matching preview.
 - [ ] T054 Complete active journal job restoration and physical class/recipe conversion; verify actual migration and save reload. Journal preview is not job migration.
+
+- [x] T055 Implement native travel progress watchdog and bounded stall retries; restore home-only route before successful automatic completion and release reservations only after route/AP readback.
+- [ ] T056 Verify actual native docking, hold, route restoration and stalled/repaired road behavior; alternate destination recovery and destroyed actor cleanup remain open.

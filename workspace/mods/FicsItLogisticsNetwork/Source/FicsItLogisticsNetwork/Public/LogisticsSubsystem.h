@@ -59,6 +59,9 @@ struct FFILNRegistration {
  double LastObserved = 0;
  // Runtime-only clock: saved journey identity and phase remain authoritative on reload.
  filn::recovery::RetryClock NavigationRetry;
+ filn::recovery::Progress TravelProgress;
+ FVector ProgressLocation=FVector::ZeroVector;
+ int32 ProgressWaypoint=INDEX_NONE;
 };
 /** Native server-only prototype. Dedicated empty vanilla LOAD station is the home bay fallback. */
 UCLASS()
@@ -123,7 +126,8 @@ private:
  bool PrepareStationsForUninstall();
  bool ApplyStationFilter(const FFILNStationConfig& Config,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);
  void Observe();
- bool RetryNavigation(FFILNRegistration& R, double Now);
+ bool RetryNavigation(FFILNRegistration& R, double Now, bool Stalled=false);
+ bool RestoreHomeRoute(FFILNRegistration& R);
  void Recover(FFILNRegistration& R, const FString& Why);
  bool Pair(AFGWheeledVehicleIdentifier* Vehicle, AFGDockingStationIdentifier* Home);
  bool Dispatch(FFILNRegistration& R, AFGDockingStationIdentifier* Provider, AFGDockingStationIdentifier* Requester);

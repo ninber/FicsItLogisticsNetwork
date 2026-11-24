@@ -172,7 +172,7 @@ bool ALogisticsSubsystem::CommitOffer(int32 V,int32 Q,int32 P) {
  R.Held=false; R.IdleRoute.Empty();
  R.JobId=Job; R.Provider=Provider; R.Requester=Requester; R.RetainedCargo=Provider==nullptr; R.Automatic=true;
  R.Resource=StationConfigs[Q].Resource; R.ExpectedCargo=Choice->amount; R.LastCargo=Offer.vehicle.cargoQuantity; R.LoadedCargo=0; R.DeliveredCargo=0;
- R.State=static_cast<uint8>(filn::State::Reserved); R.Elapsed=0; R.LastObserved=GetWorld()->GetTimeSeconds(); R.NavigationRetry.Reset();
+ R.State=static_cast<uint8>(filn::State::Reserved); R.Elapsed=0; R.LastObserved=GetWorld()->GetTimeSeconds(); R.NavigationRetry.Reset(); R.TravelProgress.Reset();
  // Home is an explicit first waypoint so native target-index reset can be read back.
  R.RouteIntent={R.Home->GetPathNodeGUID()};
  if(Provider) R.RouteIntent.Add(Provider->GetPathNodeGUID());

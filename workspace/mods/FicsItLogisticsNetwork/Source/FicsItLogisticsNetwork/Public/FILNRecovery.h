@@ -18,6 +18,19 @@ struct RetryClock {
  }
  void Reset() { *this=RetryClock{}; }
 };
+// Track cumulative displacement from the last progress point, not speed alone.
+struct Progress {
+ double since=0;
+ bool initialized=false;
+ bool Sample(double now,bool moved,bool docking) {
+  if(!initialized || moved || docking || now<since) { since=now; initialized=true; }
+  return !docking && now-since>=60.0;
+ }
+ void Reset(){ *this=Progress{}; }
+};
+inline bool SafeHomeCompletion(bool authority,bool ownedRoute,bool autopilot,bool driver,bool docked,bool stopped,bool cargoVerified) {
+ return authority&&ownedRoute&&autopilot&&!driver&&docked&&stopped&&cargoVerified;
+}
 enum class Action { Stop, DriverWait, FuelWait, RetryWait, Replan, Resume };
 struct Snapshot {
  bool autopilot=false, driver=false, routeMatches=false, travelling=false;

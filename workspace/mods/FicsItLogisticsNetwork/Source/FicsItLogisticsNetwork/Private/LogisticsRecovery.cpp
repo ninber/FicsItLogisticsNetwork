@@ -7,7 +7,7 @@
 #include "FGInventoryComponent.h"
 #include "Engine/World.h"
 
-bool ALogisticsSubsystem::RetryNavigation(FFILNRegistration& R,double Now) {
+bool ALogisticsSubsystem::RetryNavigation(FFILNRegistration& R,double Now,bool Stalled) {
  using S=filn::State;
  using A=filn::recovery::Action;
  check(IsInGameThread());
@@ -36,7 +36,7 @@ bool ALogisticsSubsystem::RetryNavigation(FFILNRegistration& R,double Now) {
  const filn::recovery::Snapshot Snapshot{
   V->IsAutopilotEnabled(),Owner->GetDriver()!=nullptr,Matches(),true,Docking(),
   Owner->GetStorageInventory()->GetNumItems(R.Resource)==R.LastCargo,
-  Owner->HasFuel(),V->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None};
+  Owner->HasFuel(),Stalled || V->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None};
  const auto Action=filn::recovery::Decide(Snapshot,Clock,Now);
  if(Action==A::Stop || Action==A::DriverWait) return false;
  Clock.waiting=true;
@@ -62,5 +62,26 @@ bool ALogisticsSubsystem::RetryNavigation(FFILNRegistration& R,double Now) {
  V->SetCurrentTargetWaypoint(Waypoint);
  if(!Matches() || !V->IsAutopilotEnabled() || Owner->GetDriver()) return false;
  R.Diagnostic=TEXT("Navigation recovery: native route/target reapplied and read back; awaiting actual fault clearance");
+ return true;
+}
+
+bool ALogisticsSubsystem::RestoreHomeRoute(FFILNRegistration& R) {
+ check(IsInGameThread());
+ if(!HasAuthority() || !IsValid(R.Vehicle) || !IsValid(R.Home)) return false;
+ auto* V=R.Vehicle.Get(); auto* O=V->GetOwnerVehicle(); auto* H=R.Home->GetStation();
+ if(!IsValid(O) || !IsValid(H) || !O->GetStorageInventory() || !ValidHome(R.Home)) return false;
+ if(!filn::recovery::SafeHomeCompletion(true,V->GetVehicleRoute()==R.RouteIntent,V->IsAutopilotEnabled(),
+    O->GetDriver()!=nullptr,H->GetDockedActor()==O,FMath::Abs(O->GetForwardSpeed())<=1.f,
+    R.Resource && O->GetStorageInventory()->GetNumItems(R.Resource)==R.LastCargo)) return false;
+ const TArray<FGuid> HomeRoute={R.Home->GetPathNodeGUID()};
+ if(!HomeRoute[0].IsValid()) return false;
+ // Hold only after native route and AP readback; no repeated pickup on a completed trip.
+ V->SetVehicleRoute(HomeRoute);
+ if(V->GetVehicleRoute()!=HomeRoute || !V->IsAutopilotEnabled() || O->GetDriver()) {
+  // Preserve the observed intended route if the native write succeeded but AP did not.
+  if(V->GetVehicleRoute()==HomeRoute) R.RouteIntent=HomeRoute;
+  return false;
+ }
+ R.RouteIntent=HomeRoute; R.IdleRoute=HomeRoute; R.Held=true;
  return true;
 }
