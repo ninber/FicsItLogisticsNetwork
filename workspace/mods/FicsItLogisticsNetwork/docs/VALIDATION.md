@@ -89,3 +89,6 @@ M2 automatic scheduler, M3 lazy cache, M4 telemetry and M5 FIN adapter remain de
 
 ## Native dispatch continuation
 At b695eccd84126e910cc24e8bdf0a9e4f07ecdfeb, exact FILNDispatchPolicy.h (blob 7a494e1f9687da5bc0672b4a5540d37c17267347) and provider_discovery_tests.cpp (blob bf6cd121f52ae1b5d05a645f71cbe77bcc8b279e) compiled with GCC 14.2 and Clang 17, C++20 -O2 -Wall -Wextra -Wpedantic -Werror. Both runs printed 26 checks passed. The full portable suite and current Unreal adapters are not verified by these runs.
+
+## Native registry and lifecycle continuation
+At c16b81332eeced1baf7887dc1a610f093ce8e581, the exact FILNRegistryPolicy.h (6eaa62859075946911570c806b950c9e00016e4b), registry_tests.cpp (dc2c0bc478948ed9b6d5632b03aa4931265e64e5) and FILNCore.h (e67ac1b96e0645a384e8308c4daccb09b070b445) were compiled locally with GCC 14.2 and Clang 17 using C++20 -O2 -Wall -Wextra -Wpedantic -Werror. Both runs passed 528 policy checks. The same unchanged, hash-matched rehome and transfer ledger tests were rerun at 557cf30: 2056 and 20 checks passed per compiler. Including provider discovery (26), four portable suites passed 2630 assertions per compiler. Full portable test script, UHT/UBT, actual actor destruction/streaming, native save/load and package remain unverified on the current branch. No legacy migration work or game/save modification in this continuation.
