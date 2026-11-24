@@ -45,3 +45,26 @@ recipe requirements and geometry-scaled material deltas, and checks complete bin
 Keep .sbpcfg bytes unchanged. Back up and hash-check source files before atomic installation;
 never call live category refresh or automate build-gun previews. Native material quotes remain
 a manual validation item. Regression: `node upgrade-filn-conveyors.test.cjs`.
+
+## Copy-only conversion from legacy classes to native FILN
+
+Use an isolated copy of a quiescent save. Select exact actor paths explicitly:
+`{"sha256":"<input SHA256>","stations":["<actor path>"]}`.
+Run `node scripts/save-tools/convert-native-stations.cjs INPUT OUTPUT SELECTION.json`
+for preview; append `--write` to write a new copy outside SaveGames.
+The converter changes only known solid station classes/recipes and removes the
+explicit programmable filter after exporting it. It writes a .native.tsv resource
+and depot manifest plus a .report.json receipt. The original save is never edited.
+Remaining references to legacy mods are reported, not removed. Do not disable
+those mods until a disposable independent load proves the save no longer needs them.
+
+After manually loading the disposable converted save in the native mod, with Lua
+dispatch disabled and native dispatch disabled, copy the manifest to
+FactoryGame/Saved/FILN/converted-stations.tsv. Run
+`filn.convertedStations preview`, review the report, then
+`filn.convertedStations import`. Native import revalidates actor class, recipe,
+road GUID, role, inventory, resource and ownership. A depot with an active route
+is deliberately not adopted; finish legacy jobs before conversion.
+Preview is not a guarantee of native setter acceptance. No game process is
+started or stopped by these tools. Test with
+`node --test scripts/save-tools/native-station-conversion.test.cjs`.

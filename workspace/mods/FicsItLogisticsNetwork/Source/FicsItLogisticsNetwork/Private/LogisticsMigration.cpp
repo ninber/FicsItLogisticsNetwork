@@ -200,3 +200,70 @@ void ALogisticsSubsystem::ImportLegacyJournal(const FString& Filename,bool Apply
  }
  for(const auto& Line:MigrationReport) UE_LOG(LogFILN,Log,TEXT("JOURNAL %s"),*Line);
 }
+
+void ALogisticsSubsystem::ImportConvertedStations(bool Apply) {
+ check(IsInGameThread());
+ if(!HasAuthority() || bDispatchBlocked || bAutoDispatchEnabled || Reservations.Size()!=0 || !Active.IsEmpty()) return;
+ const FString Path=FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("FILN"),TEXT("converted-stations.tsv"));
+ const int64 Size=IFileManager::Get().FileSize(*Path);
+ FString Data;
+ if(Size<0 || Size>65536 || !FFileHelper::LoadFileToString(Data,*Path)) return;
+ TArray<FString> Lines; Data.ParseIntoArrayLines(Lines,false);
+ if(Lines.IsEmpty() || Lines[0]!=TEXT("FILN_NATIVE_STATIONS_V1") || Lines.Num()>130) return;
+ auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
+ struct FRow { AFGDockingStationIdentifier* Station; TSubclassOf<UFGItemDescriptor> Resource; bool Depot; };
+ TArray<FRow> Rows; TSet<FGuid> Seen;
+ for(int32 I=1;I<Lines.Num();++I) {
+  if(I==Lines.Num()-1 && Lines[I].IsEmpty()) continue;
+  TArray<FString> Fields; Lines[I].ParseIntoArray(Fields,TEXT("\t"),false);
+  FGuid Node;
+  if(Fields.Num()!=4 || !filn::legacy::Guid(TCHAR_TO_UTF8(*Fields[1])) ||
+     !FGuid::ParseExact(Fields[1],EGuidFormats::Digits,Node) || Seen.Contains(Node) ||
+     (Fields[3]!=TEXT("LOAD") && Fields[3]!=TEXT("UNLOAD"))) return;
+  Seen.Add(Node);
+  AFGDockingStationIdentifier* ID=nullptr;
+  for(auto* Candidate:VS->GetDockingStations()) if(IsValid(Candidate) && Candidate->GetPathNodeGUID()==Node) {
+   if(ID) return;
+   ID=Candidate;
+  }
+  auto* B=IsValid(ID)?ID->GetStation():nullptr;
+  if(!IsValid(B) || B->GetClass()->GetPathName()!=TEXT("/Game/FactoryGame/Buildable/Factory/TruckStation/Build_TruckStation.Build_TruckStation_C") ||
+     B->GetIsInLoadMode()!=(Fields[3]==TEXT("LOAD"))) return;
+  const auto Recipe=B->GetBuiltWithRecipe();
+  if(!Recipe || Recipe->GetPathName()!=TEXT("/Game/FactoryGame/Recipes/Buildings/Recipe_TruckStation.Recipe_TruckStation_C")) return;
+  if(Fields[0]==TEXT("depot") && Fields[2]==TEXT("-") && ValidHome(ID)) { Rows.Add({ID,nullptr,true}); continue; }
+  if(Fields[0]!=TEXT("station") || !Fields[2].StartsWith(TEXT("/Game/FactoryGame/Resource/"))) return;
+  const auto Resource=LoadClass<UFGItemDescriptor>(nullptr,*Fields[2]);
+  if(!Resource) return;
+  const auto* Existing=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
+  if(Existing && Existing->Resource!=Resource) return;
+  auto* Inventory=B->GetInventory();
+  if(!Inventory || B->GetDockedActor() || HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(ID))) return;
+  TArray<FInventoryStack> Stacks; Inventory->GetInventoryStacks(Stacks);
+  for(const auto& Stack:Stacks) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=Resource) return;
+  for(int32 Slot=0;Slot<Inventory->GetSizeLinear();++Slot) {
+   auto Filter=Inventory->GetAllowedItemOnIndex(Slot);
+   if(Filter && Filter!=Resource) return;
+  }
+  Rows.Add({ID,Resource,false});
+ }
+ MigrationReport.Empty();
+ for(const auto& Row:Rows) {
+  if(Row.Depot) {
+   // A converted depot no longer has legacy recipe identity. Only explicit
+   // manifest rows authorize adoption, and Pair revalidates unique ownership.
+   AFGWheeledVehicleIdentifier* V=nullptr; int32 Claims=0;
+   for(auto* Candidate:VS->GetAllVehicles()) if(IsValid(Candidate) && Candidate->GetVehicleRoute().Contains(Row.Station->GetPathNodeGUID())) { V=Candidate; ++Claims; }
+   const TArray<FGuid> Route={Row.Station->GetPathNodeGUID()};
+   const bool Compatible=Claims==1 && IsValid(V) && V->IsAutopilotEnabled() && V->GetVehicleRoute()==Route;
+   const bool Ok=Compatible && (!Apply || Pair(V,Row.Station));
+   MigrationReport.Add(Row.Station->GetPathName()+(Ok?TEXT(": compatible converted depot"):TEXT(": no safe idle depot adoption; untouched")));
+  } else {
+   const auto* Existing=StationConfigs.FindByPredicate([&Row](const FFILNStationConfig& C){return C.Station==Row.Station;});
+   const bool Ok=Existing || !Apply || ConfigureStation(Row.Station,Row.Resource,true);
+   MigrationReport.Add(Row.Station->GetPathName()+(Ok?TEXT(": converted station resource compatible"):TEXT(": resource import rejected")));
+  }
+  if(bDispatchBlocked) break;
+ }
+ for(const auto& Line:MigrationReport) UE_LOG(LogFILN,Log,TEXT("CONVERTED %s"),*Line);
+}

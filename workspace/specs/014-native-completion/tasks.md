@@ -79,3 +79,6 @@
 - [x] T065 Adopt legacy pickup-route suffixes after the provider, only with exact safe requester/home remainder and compatible observed cargo; refuse pre-pickup and ambiguous routes.
 - [x] T066 Port full compatible native fuel readiness, pending stationary docking observation, measured fuel receipts and retry cooldown from DepotFuelService.lua.
 - [ ] T067 Verify real-game native refueling/slot capacity, receipt timing and migration of in-flight pickup suffixes; legacy trips before pickup remain intentionally unresolved.
+
+- [x] T068 Implement copy-only inverse legacy class/recipe/filter conversion, exact selection/hash guards, inverse body comparison, roundtrip check and native resource/depot manifest import.
+- [ ] T069 Verify actual parser serialization and independent disposable load; resolve residual legacy schematic/component references and unsupported classes. Active depot conversion remains restricted to quiescent saves.

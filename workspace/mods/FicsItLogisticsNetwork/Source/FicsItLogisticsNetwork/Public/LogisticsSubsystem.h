@@ -106,6 +106,7 @@ private:
  int32 FuelCursor=0;
  void ImportLegacy(bool Apply);
  void ImportLegacyJournal(const FString& Filename,bool Apply);
+ void ImportConvertedStations(bool Apply);
  bool AdoptLegacyHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Home,bool Apply);
  bool RemoveStation(AFGDockingStationIdentifier* Station);
  void ServiceFuel();
