@@ -52,10 +52,10 @@ public:
  UFUNCTION(Server,Reliable) void QueryStation(AFGBuildableDockingStation* Station);
  UFUNCTION(Server,Reliable) void Configure(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource,bool Remove);
  UFUNCTION(Server,Reliable) void NetworkOverview(AFGBuildableDockingStation* Station,int32 Page);
- UFUNCTION(Client,Reliable) void OverviewReply(AFGBuildableDockingStation* Station,int32 Page,int32 Pages,const FString& Text);
+ UFUNCTION(Client,Reliable) void OverviewReply(AFGBuildableDockingStation* Station,int32 Page,int32 Pages,const FText& Text);
  UFUNCTION(Server,Reliable) void RegisterVehicle(AFGBuildableDockingStation* Station,AFGWheeledVehicleIdentifier* Vehicle);
  UFUNCTION(Server,Reliable) void AdminAction(AFGBuildableDockingStation* Station,uint8 Action);
- UFUNCTION(Client,Reliable) void StationReply(AFGBuildableDockingStation* Station,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FString& Message);
+ UFUNCTION(Client,Reliable) void StationReply(AFGBuildableDockingStation* Station,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message);
  TWeakObjectPtr<UFILNStationControls> Receiver;
 private:
  UPROPERTY(Replicated) bool NetReady=true;
@@ -74,9 +74,9 @@ class FICSITLOGISTICSNETWORK_API UFILNStationControls : public UUserWidget {
  GENERATED_BODY()
 public:
  void SetContext(AFGBuildableDockingStation* Station,UUserWidget* VanillaWidget);
- void ShowOverview(AFGBuildableDockingStation* Station,int32 Page,int32 Pages,const FString& Text);
+ void ShowOverview(AFGBuildableDockingStation* Station,int32 Page,int32 Pages,const FText& Text);
  void RestoreLabels();
- void Reply(AFGBuildableDockingStation* Station,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FString& Message);
+ void Reply(AFGBuildableDockingStation* Station,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message);
  static void InstallHook();
 protected:
  void NativeOnInitialized() override;
@@ -98,6 +98,10 @@ private:
  UFUNCTION() void ToggleDispatcher();
  UFUNCTION() void PreviewLegacy();
  UFUNCTION() void ImportLegacy();
+ UFUNCTION() void PreviewConverted();
+ UFUNCTION() void ImportConverted();
+ UFUNCTION() void PreviewJournal();
+ UFUNCTION() void ImportJournal();
  UFUNCTION() void PrepareUninstall();
  UFUNCTION() void Apply();
  UFUNCTION() void Remove();

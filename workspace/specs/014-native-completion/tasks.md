@@ -85,3 +85,7 @@
 
 - [x] T070 Port bounded idle home-only vehicle reconciliation: release stale holds, observe native return, retry exact empty home-only route with verified native roads, restore hold only at home.
 - [ ] T071 Verify home-only native retry, actual docking and hold after moving/reloading an enrolled truck. Unmanaged or AP-off trucks are not automatically enrolled.
+
+- [x] T072 Preserve localizable FText through station/overview RPCs, replace numeric FSM states with stable localization keys, and clamp stale overview pages.
+- [x] T073 Expose converted station and legacy journal preview/import through existing administrator-validated management UI; fixed manifest filenames, no arbitrary client file paths.
+- [ ] T074 Verify localized RPC rendering in actual multiplayer and gather/compile translation catalogs; technical diagnostics remain raw English server log text.

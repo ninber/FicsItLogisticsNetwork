@@ -32,6 +32,29 @@
 #include "WheeledVehicles/FGWheeledVehicle.h"
 
 namespace {
+FText StateLabel(uint8 State) {
+ switch(static_cast<filn::State>(State)) {
+  case filn::State::Idle: return NSLOCTEXT("FILN","StateIdle","Idle");
+  case filn::State::Reserved: return NSLOCTEXT("FILN","StateReserved","Reserved");
+  case filn::State::ToProvider: return NSLOCTEXT("FILN","StateToProvider","To provider");
+  case filn::State::Loading: return NSLOCTEXT("FILN","StateLoading","Loading");
+  case filn::State::ToRequester: return NSLOCTEXT("FILN","StateToRequester","To requester");
+  case filn::State::Unloading: return NSLOCTEXT("FILN","StateUnloading","Unloading");
+  case filn::State::Returning: return NSLOCTEXT("FILN","StateReturning","Returning");
+  case filn::State::Completed: return NSLOCTEXT("FILN","StateCompleted","Completed");
+  case filn::State::Recovery: return NSLOCTEXT("FILN","StateRecovery","Recovery required");
+ }
+ return NSLOCTEXT("FILN","StateUnknown","Unknown state");
+}
+FText YesNo(bool Value) {
+ return Value?NSLOCTEXT("FILN","Yes","Yes"):NSLOCTEXT("FILN","No","No");
+}
+FText Enabled(bool Value) {
+ return Value?NSLOCTEXT("FILN","Enabled","Enabled"):NSLOCTEXT("FILN","Disabled","Disabled");
+}
+FText JoinLines(const TArray<FText>& Lines) {
+ return FText::Join(FText::FromString(TEXT("\n")),Lines);
+}
 ALogisticsSubsystem* Subsystem(UWorld* World) {
  auto* Manager=World?World->GetSubsystem<USubsystemActorManager>():nullptr;
  return Manager?Manager->GetSubsystemActor<ALogisticsSubsystem>():nullptr;
@@ -64,12 +87,15 @@ void UFILNRemoteControl::QueryStation_Implementation(AFGBuildableDockingStation*
  if(!ValidateContext(Target)) return;
  auto* S=Subsystem(GetWorld()); if(!S) return;
  const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
- FString Message=C?TEXT("FILN station enrolled"):TEXT("Choose a resource and register this station with FILN");
- if(C && S->Reservations.StationBusy(TCHAR_TO_UTF8(*S->StationId(C->Station).ToString()))) Message=TEXT("Active logistics reservation; resource changes locked");
- Message+=FString::Printf(TEXT("\nDispatcher=%d registered vehicles=%d active deliveries=%d"),S->bAutoDispatchEnabled,S->Registrations.Num(),S->Active.Num());
+ TArray<FText> Lines;
+ Lines.Add(C?NSLOCTEXT("FILN","Enrolled","FILN station enrolled"):NSLOCTEXT("FILN","SelectResource","Choose a resource and register this station with FILN"));
+ if(C && S->Reservations.StationBusy(TCHAR_TO_UTF8(*S->StationId(C->Station).ToString()))) Lines.Add(NSLOCTEXT("FILN","ReservedLocked","Active logistics reservation; resource changes locked"));
+ Lines.Add(FText::Format(NSLOCTEXT("FILN","StationSummary","Dispatcher: {0} | Registered vehicles: {1} | Active deliveries: {2}"),
+  Enabled(S->bAutoDispatchEnabled),FText::AsNumber(S->Registrations.Num()),FText::AsNumber(S->Active.Num())));
  for(const auto& R:S->Registrations) if(R.Home==Target->GetStationIdentifier() || R.Provider==Target->GetStationIdentifier() || R.Requester==Target->GetStationIdentifier()) {
-  Message+=FString::Printf(TEXT("\nVehicle %s state=%d: %s"),*R.TruckId.ToString(),R.State,*R.Diagnostic);
+  Lines.Add(FText::Format(NSLOCTEXT("FILN","RelatedVehicle","Vehicle {0} — {1}: {2}"),FText::FromString(R.TruckId.ToString()),StateLabel(R.State),FText::FromString(R.Diagnostic)));
  }
+ const FText Message=JoinLines(Lines);
  StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Message);
 }
 void UFILNRemoteControl::Configure_Implementation(AFGBuildableDockingStation* Target,TSubclassOf<UFGItemDescriptor> Resource,bool Remove) {
@@ -80,7 +106,7 @@ void UFILNRemoteControl::Configure_Implementation(AFGBuildableDockingStation* Ta
  if(Remove) Accepted=S->RemoveStation(Target->GetStationIdentifier());
  else if(Recipes && Recipes->IsItemDescriptorAvailable(Resource) && Compatible(Resource,Target)) Accepted=S->ConfigureStation(Target->GetStationIdentifier(),Resource);
  const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
- StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Accepted?TEXT("FILN station updated"):TEXT("Rejected: station must be empty, undocked, unreserved and compatible; existing filters must agree"));
+ StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Accepted?NSLOCTEXT("FILN","StationUpdated","FILN station updated"):NSLOCTEXT("FILN","StationRejected","Rejected: station must be empty, undocked, unreserved and compatible; existing filters must agree"));
 }
 void UFILNRemoteControl::NetworkOverview_Implementation(AFGBuildableDockingStation* Target,int32 Page) {
  if(!ValidateContext(Target) || Page<0) return;
@@ -88,24 +114,34 @@ void UFILNRemoteControl::NetworkOverview_Implementation(AFGBuildableDockingStati
  constexpr int32 PageSize=32;
  const int32 Total=S->StationConfigs.Num()+S->Registrations.Num();
  const int32 Pages=FMath::Max(1,FMath::DivideAndRoundUp(Total,PageSize));
- if(Page>=Pages) return;
- FString Text=FString::Printf(TEXT("Stations=%d vehicles/depots=%d active deliveries=%d reservations=%llu dispatcher=%s\n"),S->StationConfigs.Num(),S->Registrations.Num(),S->Active.Num(),static_cast<uint64>(S->Reservations.Size()),S->bAutoDispatchEnabled?TEXT("enabled"):TEXT("disabled"));
+ Page=FMath::Clamp(Page,0,Pages-1);
+ TArray<FText> Lines;
+ Lines.Add(FText::Format(NSLOCTEXT("FILN","NetworkSummary","Stations: {0} | Vehicles/depots: {1} | Active deliveries: {2} | Reservations: {3} | Dispatcher: {4}"),
+  FText::AsNumber(S->StationConfigs.Num()),FText::AsNumber(S->Registrations.Num()),FText::AsNumber(S->Active.Num()),FText::AsNumber(static_cast<int64>(S->Reservations.Size())),Enabled(S->bAutoDispatchEnabled)));
  for(int32 Row=Page*PageSize;Row<FMath::Min(Total,(Page+1)*PageSize);++Row) {
   if(Row<S->StationConfigs.Num()) {
    const auto& C=S->StationConfigs[Row]; auto* B=IsValid(C.Station)?C.Station->GetStation():nullptr;
-   if(!IsValid(B)) { Text+=TEXT("Station removed / unavailable\n"); continue; }
+   if(!IsValid(B)) { Lines.Add(NSLOCTEXT("FILN","StationMissing","Station removed or unavailable")); continue; }
    const auto* Fluid=FindFProperty<FBoolProperty>(B->GetClass(),TEXT("mIsFluidStorageInventory"));
    const bool Reserved=S->Reservations.StationBusy(TCHAR_TO_UTF8(*S->StationId(C.Station).ToString()));
-   Text+=FString::Printf(TEXT("%s | %s | %s | %s | cargo=%d | %s\n"),*C.Station->GetStationName().ToString(),B->GetIsInLoadMode()?TEXT("PROVIDER"):TEXT("REQUESTER"),Fluid && Fluid->GetPropertyValue_InContainer(B)?TEXT("fluid"):TEXT("solid"),C.Resource?*UFGItemDescriptor::GetItemName(C.Resource).ToString():TEXT("missing resource"),C.Resource && B->GetInventory()?B->GetInventory()->GetNumItems(C.Resource):0,Reserved?TEXT("reserved"):TEXT("unreserved"));
+   Lines.Add(FText::Format(NSLOCTEXT("FILN","StationRow","{0} | {1} | {2} | {3} | Cargo: {4} | {5}"),
+    C.Station->GetStationName(),B->GetIsInLoadMode()?NSLOCTEXT("FILN","Provider","PROVIDER"):NSLOCTEXT("FILN","Requester","REQUESTER"),
+    Fluid && Fluid->GetPropertyValue_InContainer(B)?NSLOCTEXT("FILN","Fluid","Fluid"):NSLOCTEXT("FILN","Solid","Solid"),
+    C.Resource?UFGItemDescriptor::GetItemName(C.Resource):NSLOCTEXT("FILN","MissingResource","Missing resource"),
+    FText::AsNumber(C.Resource && B->GetInventory()?B->GetInventory()->GetNumItems(C.Resource):0),
+    Reserved?NSLOCTEXT("FILN","Reserved","Reserved"):NSLOCTEXT("FILN","Unreserved","Unreserved")));
   } else {
    const auto& R=S->Registrations[Row-S->StationConfigs.Num()]; auto* Owner=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
-   if(!IsValid(Owner)) { Text+=TEXT("Registered vehicle removed / unavailable\n"); continue; }
-   Text+=FString::Printf(TEXT("%s | home=%s | state=%d | AP=%s | fuel=%s | driver=%s | held=%d | delivered=%d\n  %s\n"),*R.Vehicle->GetVehicleName().ToString(),IsValid(R.Home)?*R.Home->GetStationName().ToString():TEXT("missing"),R.State,R.Vehicle->IsAutopilotEnabled()?TEXT("on"):TEXT("off"),Owner->HasFuel()?TEXT("available"):TEXT("empty"),Owner->GetDriver()?TEXT("present"):TEXT("none"),R.Held,R.DeliveredCargo,*R.Diagnostic);
+   if(!IsValid(Owner)) { Lines.Add(NSLOCTEXT("FILN","VehicleMissing","Registered vehicle removed or unavailable")); continue; }
+   Lines.Add(FText::Format(NSLOCTEXT("FILN","VehicleRow","{0} | Home: {1} | {2} | Autopilot: {3} | Fuel available: {4} | Driver present: {5} | Held: {6} | Delivered: {7}\n  {8}"),
+    R.Vehicle->GetVehicleName(),IsValid(R.Home)?R.Home->GetStationName():NSLOCTEXT("FILN","MissingHome","Missing depot"),StateLabel(R.State),
+    Enabled(R.Vehicle->IsAutopilotEnabled()),YesNo(Owner->HasFuel()),YesNo(Owner->GetDriver()!=nullptr),YesNo(R.Held),FText::AsNumber(R.DeliveredCargo),FText::FromString(R.Diagnostic)));
   }
  }
+ const FText Text=JoinLines(Lines);
  OverviewReply(Target,Page,Pages,Text);
 }
-void UFILNRemoteControl::OverviewReply_Implementation(AFGBuildableDockingStation* Target,int32 Page,int32 Pages,const FString& Text) {
+void UFILNRemoteControl::OverviewReply_Implementation(AFGBuildableDockingStation* Target,int32 Page,int32 Pages,const FText& Text) {
  if(Receiver.IsValid()) Receiver->ShowOverview(Target,Page,Pages,Text);
 }
 void UFILNRemoteControl::RegisterVehicle_Implementation(AFGBuildableDockingStation* Target,AFGWheeledVehicleIdentifier* Vehicle) {
@@ -113,7 +149,7 @@ void UFILNRemoteControl::RegisterVehicle_Implementation(AFGBuildableDockingStati
  auto* S=Subsystem(GetWorld()); if(!S) return;
  const bool Accepted=S->Pair(Vehicle,Target->GetStationIdentifier());
  const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
- StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Accepted?TEXT("Vehicle registered: native home-only route and autopilot enabled"):TEXT("Enrollment rejected: needs a unique unclaimed empty LOAD depot and empty stopped undriven truck within 8m; existing non-home or disabled routes are not changed"));
+ StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Accepted?NSLOCTEXT("FILN","VehicleRegistered","Vehicle registered: native home-only route and autopilot enabled"):NSLOCTEXT("FILN","VehicleRejected","Enrollment rejected: needs a unique unclaimed empty LOAD depot and empty stopped undriven truck within 8 m; existing non-home or disabled routes are not changed"));
 }
 void UFILNRemoteControl::AdminAction_Implementation(AFGBuildableDockingStation* Target,uint8 Action) {
  if(!ValidateContext(Target)) return;
@@ -122,20 +158,32 @@ void UFILNRemoteControl::AdminAction_Implementation(AFGBuildableDockingStation* 
  if(!Session || !Session->IsPlayerAdmin(GetOwnerPlayerController())) {
   if(auto* S=Subsystem(GetWorld())) {
    const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
-   StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),TEXT("Server administrator permission required"));
+   StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),NSLOCTEXT("FILN","AdminRequired","Server administrator permission required"));
   }
   return;
  }
  auto* S=Subsystem(GetWorld()); if(!S) return;
- FString Message;
- if(Action==0) { S->bAutoDispatchEnabled=!S->bAutoDispatchEnabled; S->ResetScan(); Message=FString::Printf(TEXT("Automatic dispatcher=%d; existing deliveries continue"),S->bAutoDispatchEnabled); }
- else if(Action==1 || Action==2) { S->ImportLegacy(Action==2); Message=TEXT("Legacy settings report; no physical actor conversion performed\n")+FString::Join(S->MigrationReport,TEXT("\n")); }
- else if(Action==3) Message=S->PrepareStationsForUninstall()?TEXT("Restrictions restored. Save required; mod-disabled load still needs independent verification"):TEXT("Preparation rejected: active jobs or station/filter conflict");
- else return;
+ FText Message;
+ if(Action==0) { S->bAutoDispatchEnabled=!S->bAutoDispatchEnabled; S->ResetScan(); Message=FText::Format(NSLOCTEXT("FILN","DispatcherChanged","Automatic dispatcher: {0}; existing deliveries continue"),Enabled(S->bAutoDispatchEnabled)); }
+ else if(Action==3) Message=S->PrepareStationsForUninstall()?NSLOCTEXT("FILN","UninstallPrepared","Restrictions restored. Save required; mod-disabled load still needs independent verification"):NSLOCTEXT("FILN","UninstallRejected","Preparation rejected: active jobs or station/filter conflict");
+ else if(Action==1 || Action==2 || (Action>=4 && Action<=7)) {
+  S->MigrationReport.Empty();
+  if(S->bAutoDispatchEnabled || S->Reservations.Size()!=0 || !S->Active.IsEmpty()) Message=NSLOCTEXT("FILN","MigrationBusy","Disable dispatch and finish active jobs before migration.");
+  else {
+   if(Action<=2) S->ImportLegacy(Action==2);
+   else if(Action<=5) S->ImportConvertedStations(Action==5);
+   else S->ImportLegacyJournal(TEXT("dispatch-journal.tsv"),Action==7);
+   TArray<FText> Lines;
+   Lines.Add(NSLOCTEXT("FILN","MigrationReport","Migration report (technical details follow; independent save verification required)"));
+   if(S->MigrationReport.IsEmpty()) Lines.Add(NSLOCTEXT("FILN","MigrationNoRows","No report rows returned. Check server logs and manifest preconditions; no success inferred."));
+   else for(const auto& Line:S->MigrationReport) Lines.Add(FText::FromString(Line));
+   Message=JoinLines(Lines);
+  }
+ } else return;
  const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
  StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Message);
 }
-void UFILNRemoteControl::StationReply_Implementation(AFGBuildableDockingStation* Target,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FString& Message) {
+void UFILNRemoteControl::StationReply_Implementation(AFGBuildableDockingStation* Target,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message) {
  if(Receiver.IsValid()) Receiver->Reply(Target,Enrolled,Resource,Message);
 }
 void UFILNStationControls::NativeOnInitialized() {
@@ -156,6 +204,10 @@ void UFILNStationControls::NativeOnInitialized() {
  AddAction(NSLOCTEXT("FILN","ToggleDispatcher","Enable / disable automatic dispatch (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ToggleDispatcher);
  AddAction(NSLOCTEXT("FILN","PreviewLegacy","Preview legacy settings import (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviewLegacy);
  AddAction(NSLOCTEXT("FILN","ImportLegacy","Import compatible legacy settings (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ImportLegacy);
+ AddAction(NSLOCTEXT("FILN","PreviewConverted","Preview converted station manifest (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviewConverted);
+ AddAction(NSLOCTEXT("FILN","ImportConverted","Import converted station manifest (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ImportConverted);
+ AddAction(NSLOCTEXT("FILN","PreviewJournal","Preview legacy delivery journal (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviewJournal);
+ AddAction(NSLOCTEXT("FILN","ImportJournal","Import compatible legacy deliveries (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ImportJournal);
  AddAction(NSLOCTEXT("FILN","PrepareUninstall","Prepare for uninstall (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PrepareUninstall);
  AddAction(NSLOCTEXT("FILN","Overview","Network overview / refresh"))->OnClicked.AddDynamic(this,&UFILNStationControls::QueryOverview);
  AddAction(NSLOCTEXT("FILN","PreviousPage","Previous page"))->OnClicked.AddDynamic(this,&UFILNStationControls::PreviousPage);
@@ -222,9 +274,9 @@ void UFILNStationControls::SetContext(AFGBuildableDockingStation* Target,UUserWi
  if(auto* R=Remote()) { R->Receiver=this; R->QueryStation(Target); }
  else Feedback->SetText(NSLOCTEXT("FILN","NoRemote","FILN server control unavailable"));
 }
-void UFILNStationControls::Reply(AFGBuildableDockingStation* Target,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FString& Message) {
+void UFILNStationControls::Reply(AFGBuildableDockingStation* Target,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message) {
  if(Target!=Station) return;
- Feedback->SetText(FText::FromString(Message));
+ Feedback->SetText(Message);
  const int32 Selected=Resources.IndexOfByKey(Resource); if(Selected!=INDEX_NONE) Selector->SetSelectedIndex(Selected);
  for(const auto& Binding:LabelBindings) if(IsValid(Binding->Label)) { Binding->Enrolled=Enrolled; Binding->Label->SynchronizeProperties(); }
 }
@@ -233,9 +285,9 @@ void UFILNStationControls::Apply() {
  if(auto* R=Remote(); R && Resources.IsValidIndex(Index)) { R->Receiver=this; R->Configure(Station,Resources[Index],false); }
 }
 void UFILNStationControls::Remove() { if(auto* R=Remote()) { R->Receiver=this; R->Configure(Station,nullptr,true); } }
-void UFILNStationControls::ShowOverview(AFGBuildableDockingStation* Target,int32 Page,int32 Pages,const FString& Text) {
+void UFILNStationControls::ShowOverview(AFGBuildableDockingStation* Target,int32 Page,int32 Pages,const FText& Text) {
  if(Target!=Station) return; OverviewPage=Page; OverviewPages=Pages;
- Overview->SetText(FText::FromString(FString::Printf(TEXT("Page %d/%d\n"),Page+1,Pages)+Text));
+ Overview->SetText(FText::Format(NSLOCTEXT("FILN","OverviewPage","Page {0}/{1}\n{2}"),FText::AsNumber(Page+1),FText::AsNumber(Pages),Text));
 }
 void UFILNStationControls::QueryOverview() { if(auto* R=Remote()) { R->Receiver=this; R->NetworkOverview(Station,OverviewPage); } }
 void UFILNStationControls::NextPage() { if(OverviewPage+1<OverviewPages) { ++OverviewPage; QueryOverview(); } }
@@ -247,6 +299,10 @@ void UFILNStationControls::EnrollVehicle() {
 void UFILNStationControls::ToggleDispatcher() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,0); } }
 void UFILNStationControls::PreviewLegacy() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,1); } }
 void UFILNStationControls::ImportLegacy() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,2); } }
+void UFILNStationControls::PreviewConverted() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,4); } }
+void UFILNStationControls::ImportConverted() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,5); } }
+void UFILNStationControls::PreviewJournal() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,6); } }
+void UFILNStationControls::ImportJournal() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,7); } }
 void UFILNStationControls::PrepareUninstall() { if(auto* R=Remote()) { R->Receiver=this; R->AdminAction(Station,3); } }
 void UFILNStationControls::InstallHook() {
  if(WITH_EDITOR) return;
