@@ -11,6 +11,8 @@
 class AFGBuildableDockingStation;
 class UFGItemDescriptor;
 class UComboBoxString;
+class UVerticalBox;
+class UButton;
 class UTextBlock;
 class AFGWheeledVehicleIdentifier;
 class UFILNStationControls;
@@ -54,6 +56,7 @@ public:
  UFUNCTION(Server,Reliable) void NetworkOverview(AFGBuildableDockingStation* Station,int32 Page);
  UFUNCTION(Client,Reliable) void OverviewReply(AFGBuildableDockingStation* Station,int32 Page,int32 Pages,const FText& Text);
  UFUNCTION(Server,Reliable) void RegisterVehicle(AFGBuildableDockingStation* Station,AFGWheeledVehicleIdentifier* Vehicle);
+ UFUNCTION(Server,Reliable) void UnregisterVehicle(AFGBuildableDockingStation* Station,AFGWheeledVehicleIdentifier* Vehicle);
  UFUNCTION(Server,Reliable) void RehomeVehicle(AFGBuildableDockingStation* Station,AFGWheeledVehicleIdentifier* Vehicle);
  UFUNCTION(Server,Reliable) void AdminAction(AFGBuildableDockingStation* Station,uint8 Action);
  UFUNCTION(Client,Reliable) void StationReply(AFGBuildableDockingStation* Station,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message);
@@ -83,6 +86,8 @@ protected:
  void NativeOnInitialized() override;
 private:
  UPROPERTY() TObjectPtr<AFGBuildableDockingStation> Station;
+ UPROPERTY() TObjectPtr<UVerticalBox> Panel;
+ UPROPERTY() TObjectPtr<UButton> OpenButton;
  UPROPERTY() TObjectPtr<UComboBoxString> Selector;
  UPROPERTY() TObjectPtr<UTextBlock> Feedback;
  UPROPERTY() TObjectPtr<UComboBoxString> Vehicles;
@@ -96,6 +101,8 @@ private:
  UFUNCTION() void NextPage();
  UFUNCTION() void PreviousPage();
  UFUNCTION() void EnrollVehicle();
+ UFUNCTION() void UnregisterVehicle();
+ UFUNCTION() void OpenPanel();
  UFUNCTION() void RecoverVehicle();
  UFUNCTION() void RegisterDepot();
  UFUNCTION() void RemoveDepot();

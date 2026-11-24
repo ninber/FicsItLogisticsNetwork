@@ -613,6 +613,26 @@ bool ALogisticsSubsystem::RemoveLostRegistration(int32 Index) {
  // are gone. The explicit identifier event is required even if the saved
  // reference later becomes null. Never reclaim a lease on pointer absence alone.
  if(!filn::registry::MayReclaimDestroyed(Proof!=nullptr,Proof && Proof->BoundOwner.IsValid(),Proof && Proof->LastOwner.IsValid())) return false;
+ if(!RemoveRegistrationAt(Index)) return false;
+ UE_LOG(LogFILN,Warning,TEXT("Destroyed vehicle registration removed; its leases and home ownership released"));
+ return true;
+}
+bool ALogisticsSubsystem::UnpairParkedVehicle(int32 Index,AFGDockingStationIdentifier* Home) {
+ check(IsInGameThread());
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters || !Registrations.IsValidIndex(Index)) return false;
+ auto& R=Registrations[Index];
+ if(R.Home!=Home || StateOf(R)!=S::Idle || R.JobId.IsValid() || R.FuelPending || !IsValid(R.Vehicle) || !IsValid(Home)) return false;
+ auto* V=R.Vehicle.Get(); auto* O=V->GetOwnerVehicle(); auto* B=Building(Home);
+ if(!IsValid(O) || !IsValid(B) || !B->GetDockingPathNode() || V->IsAutopilotEnabled() || O->GetDriver()) return false;
+ const FVector Delta=O->GetVehicleLocation()-B->GetDockingPathNode()->GetActorLocation();
+ if(!filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,O->GetForwardSpeed(),B->GetDockedActor() && B->GetDockedActor()!=O)) return false;
+ // Explicitly release an idle, AP-off truck without changing route or cargo.
+ // The station remains a designated rest stop for its next owner.
+ return RemoveRegistrationAt(Index);
+}
+bool ALogisticsSubsystem::RemoveRegistrationAt(int32 Index) {
+ if(!Registrations.IsValidIndex(Index)) return false;
+ auto& R=Registrations[Index];
  if(R.JobId.IsValid() && !Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { bDispatchBlocked=true; return false; }
  if(!Ownership.Unpair(Key(R.TruckId),Key(R.BayId))) { bDispatchBlocked=true; return false; }
  if(R.JobId.IsValid()) Reservations.Release(Key(R.JobId));
@@ -628,7 +648,6 @@ bool ALogisticsSubsystem::RemoveLostRegistration(int32 Index) {
  for(auto& Entry:ByVehicle) if(Entry.Value>Index) --Entry.Value;
  for(auto& I:Active) if(I>Index) --I;
  ResetScan();
- UE_LOG(LogFILN,Warning,TEXT("Destroyed vehicle registration removed; its leases and home ownership released"));
  return true;
 }
 void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& Args) {
@@ -677,6 +696,7 @@ void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& 
  else if(V) if(const auto* I=ByVehicle.Find(V); I && Registrations.IsValidIndex(*I)) {
   auto& R=Registrations[*I];
   if(Command==TEXT("dispatch") && Args.Num()==3) Ok=Dispatch(R,FindStation(Args[1]),FindStation(Args[2]));
+  if(Command==TEXT("unpair") && Args.Num()==1) Ok=UnpairParkedVehicle(*I,R.Home);
   if(Command==TEXT("reset") && Args.Num()==1) Ok=RehomeParkedVehicle(*I,R.Home);
   if(Command==TEXT("rehome") && Args.Num()==2) Ok=RehomeParkedVehicle(*I,FindStation(Args[1]));
  }

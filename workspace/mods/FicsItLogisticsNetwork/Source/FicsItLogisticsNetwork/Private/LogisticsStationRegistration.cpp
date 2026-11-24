@@ -6,7 +6,7 @@
 #include "FGInventoryComponent.h"
 
 bool ALogisticsSubsystem::RemoveStation(AFGDockingStationIdentifier* Station) {
- if(!HasAuthority() || bDispatchBlocked || !IsValid(Station)) return false;
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters || !IsValid(Station) || Station->GetWorld()!=GetWorld()) return false;
  const int32 Index=StationConfigs.IndexOfByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
  if(Index==INDEX_NONE) return true;
  if(Reservations.StationBusy(TCHAR_TO_UTF8(*StationId(Station).ToString()))) return false;

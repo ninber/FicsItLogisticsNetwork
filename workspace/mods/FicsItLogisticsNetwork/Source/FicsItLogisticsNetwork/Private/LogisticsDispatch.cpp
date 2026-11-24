@@ -169,7 +169,7 @@ void ALogisticsSubsystem::Schedule() {
   auto* Owner=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
   auto* Home=IsValid(R.Home)?R.Home->GetStation():nullptr;
   if(!IsValid(Owner) || !IsValid(Home) || R.State!=static_cast<uint8>(filn::State::Idle) ||
-     !R.Vehicle->IsAutopilotEnabled() || Owner->GetDriver() || (Home->GetDockedActor()!=Owner && !R.Held)) { ++ScanVehicle; ScanProvider=0; FirstEligibleProviderDistance=-1; continue; }
+     !R.Vehicle->IsAutopilotEnabled() || Owner->GetDriver() || !R.Held || R.JobId.IsValid() || (Home->GetDockedActor() && Home->GetDockedActor()!=Owner) || !Owner->HasFuel()) { ++ScanVehicle; ScanProvider=0; FirstEligibleProviderDistance=-1; continue; }
   int32 Provider=INDEX_NONE;
   if(!bCheckingRetained) {
    auto* Preset=Owner->GetVehiclePathPreset();
@@ -179,7 +179,15 @@ void ALogisticsSubsystem::Schedule() {
     if(Rank.Cursor<ProviderCandidates.Num()) {
      auto* ID=ProviderCandidates[Rank.Cursor].Get(); const auto& Q=StationConfigs[RequestCursor];
      auto* B=IsValid(ID)?ID->GetStation():nullptr;
-     if(IsValid(B) && B->GetIsInLoadMode() && ID!=Q.Station && !IsDepot(ID) && IsValid(Q.Station)) {
+     if(IsValid(B) && B->GetIsInLoadMode() && ID!=Q.Station && !IsDepot(ID) && IsValid(Q.Station) && Q.Resource &&
+        B->HasPower() && !B->IsProductionPaused() && !B->GetDockedActor() && IsValid(B->GetInventory())) {
+      // Ignore irrelevant/mixed/empty cargo before scheduling expensive graph
+      // work. Stock is not a road cache key; every new scan resamples it.
+      int Kinds=0,Quantity=0,Capacity=0; std::string Actual;
+      const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
+      if((PC && PC->Resource!=Q.Resource) || !Inventory(B->GetInventory(),Q.Resource,Kinds,Quantity,Capacity,&Actual) ||
+         !filn::dispatch::ProviderResourceMatches(Descriptor(Q.Resource),Actual,Kinds,PC?Descriptor(PC->Resource):std::string()) ||
+         !filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*ID->GetStationName().ToString()),TCHAR_TO_UTF8(*Q.Station->GetStationName().ToString()))) { ++Rank.Cursor; continue; }
       double Cost=-1;
       if(!RoadCache.Distance(AFGVehicleSubsystem::Get(GetWorld()),ID->GetPathNodeGUID(),Q.Station->GetPathNodeGUID(),Preset,Cost)) return;
       if(Cost>=0) Rank.Entries.Emplace(Cost,Rank.Cursor);

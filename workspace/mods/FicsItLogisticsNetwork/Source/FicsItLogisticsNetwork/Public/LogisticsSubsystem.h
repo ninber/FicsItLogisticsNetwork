@@ -164,6 +164,8 @@ private:
  TMap<FGuid,FDestroyedVehicleProof> DestroyedVehicles;
  void NoteVehicleDestroyed(const FGuid& Truck,AFGWheeledVehicleIdentifier* Vehicle,TWeakObjectPtr<AFGWheeledVehicle> BoundOwner);
  bool RemoveLostRegistration(int32 Index);
+ bool RemoveRegistrationAt(int32 Index);
+ bool UnpairParkedVehicle(int32 Index,AFGDockingStationIdentifier* Home);
  void AuditLostRegistrations();
  void AuditIdleFleet();
  int32 IdleCursor=0;

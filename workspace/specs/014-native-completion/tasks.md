@@ -134,3 +134,7 @@
 - [x] T103 Revalidate active resource/role/storage constraints and prevent an invalid endpoint route from continuing while asynchronous recovery is pending; use native directed queries to a safe unclaimed depot anchor or fail closed.
 - [x] T104 Discover all portable test files and run GCC/Clang regression CI; do not claim native compilation from portable CI.
 - [ ] T105 Verify consolidated source on current SDK and runtime, including observer replacement, filter rollback, AP-off uninstall, safe abort and save behavior.
+
+- [x] T106 Make normal station interaction expose a compact FILN registration entry; add administrator parked unregistration, job/road diagnostics and avoid graph ranking for irrelevant cargo. Preserve ordinary switch labels.
+- [x] T107 Remove retired canonical importer sources from generated StarterProject copies on installation; update the current native README instead of retaining contradictory prototype instructions.
+- [ ] T108 Verify actual UI attachment/layout, unregistration, provider ranking performance and the refreshed build copy with current Unreal SDK.

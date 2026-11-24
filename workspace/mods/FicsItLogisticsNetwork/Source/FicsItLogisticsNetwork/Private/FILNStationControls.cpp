@@ -30,6 +30,7 @@
 #include "FGGameSession.h"
 #include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
 #include "WheeledVehicles/FGWheeledVehicle.h"
+#include "WheeledVehicles/FGVehicleSubsystem.h"
 
 namespace {
 FText StateLabel(uint8 State) {
@@ -118,6 +119,7 @@ void UFILNRemoteControl::NetworkOverview_Implementation(AFGBuildableDockingStati
  const int32 Pages=FMath::Max(1,FMath::DivideAndRoundUp(Total,PageSize));
  Page=FMath::Clamp(Page,0,Pages-1);
  TArray<FText> Lines;
+ Lines.Add(FText::Format(NSLOCTEXT("FILN","RoadSummary","Registry valid: {0} | Dispatch blocked: {1} | Road cache hits: {2} | Misses: {3} | Invalidations: {4}"),YesNo(S->bRegistryValidated),YesNo(S->bDispatchBlocked),FText::AsNumber(S->RoadCache.Hits),FText::AsNumber(S->RoadCache.Misses),FText::AsNumber(S->RoadCache.Invalidations)));
  Lines.Add(FText::Format(NSLOCTEXT("FILN","NetworkSummary","Stations: {0} | Vehicles/depots: {1} | Active deliveries: {2} | Reservations: {3} | Dispatcher: {4}"),
   FText::AsNumber(S->StationConfigs.Num()),FText::AsNumber(S->Registrations.Num()),FText::AsNumber(S->Active.Num()),FText::AsNumber(static_cast<int64>(S->Reservations.Size())),Enabled(S->bAutoDispatchEnabled)));
  for(int32 Row=Page*PageSize;Row<FMath::Min(Total,(Page+1)*PageSize);++Row) {
@@ -138,6 +140,7 @@ void UFILNRemoteControl::NetworkOverview_Implementation(AFGBuildableDockingStati
    Lines.Add(FText::Format(NSLOCTEXT("FILN","VehicleRow","{0} | Home: {1} | {2} | Autopilot: {3} | Fuel available: {4} | Driver present: {5} | Held: {6} | Delivered: {7}\n  {8}"),
     R.Vehicle->GetVehicleName(),IsValid(R.Home)?R.Home->GetStationName():NSLOCTEXT("FILN","MissingHome","Missing depot"),StateLabel(R.State),
     Enabled(R.Vehicle->IsAutopilotEnabled()),YesNo(Owner->HasFuel()),YesNo(Owner->GetDriver()!=nullptr),YesNo(R.Held),FText::AsNumber(R.DeliveredCargo),FText::FromString(R.Diagnostic)));
+   if(R.JobId.IsValid()) Lines.Add(FText::Format(NSLOCTEXT("FILN","JobDetails","  Job {0} | {1} → {2} | {3} | Planned: {4} | Loaded: {5} | Delivered: {6} | Cargo: {7} (native units)"),FText::FromString(R.JobId.ToString()),IsValid(R.Provider)?R.Provider->GetStationName():NSLOCTEXT("FILN","NoPickup","No pickup"),IsValid(R.Requester)?R.Requester->GetStationName():NSLOCTEXT("FILN","MissingRequester","Missing requester"),R.Resource?UFGItemDescriptor::GetItemName(R.Resource):NSLOCTEXT("FILN","MissingResource","Missing resource"),FText::AsNumber(R.ExpectedCargo),FText::AsNumber(R.LoadedCargo),FText::AsNumber(R.DeliveredCargo),FText::AsNumber(R.LastCargo)));
   } else {
    auto* D=Unclaimed[Row-S->StationConfigs.Num()-S->Registrations.Num()];
    Lines.Add(FText::Format(NSLOCTEXT("FILN","UnclaimedDepot","{0} | Unclaimed rest stop | Eligible: {1}"),D->GetStationName(),YesNo(S->ValidHome(D))));
@@ -155,6 +158,18 @@ void UFILNRemoteControl::RegisterVehicle_Implementation(AFGBuildableDockingStati
  const bool Accepted=S->Pair(Vehicle,Target->GetStationIdentifier());
  const auto* C=S->StationConfigs.FindByPredicate([Target](const FFILNStationConfig& Entry){return Entry.Station && Entry.Station->GetStation()==Target;});
  StationReply(Target,C!=nullptr,C?C->Resource:TSubclassOf<UFGItemDescriptor>(),Accepted?NSLOCTEXT("FILN","VehicleRegistered","Vehicle registered: native home-only route and autopilot enabled"):NSLOCTEXT("FILN","VehicleRejected","Enrollment rejected: needs a unique unclaimed empty LOAD depot and empty stopped undriven truck within 8 m; existing non-home or disabled routes are not changed"));
+}
+void UFILNRemoteControl::UnregisterVehicle_Implementation(AFGBuildableDockingStation* Target,AFGWheeledVehicleIdentifier* Vehicle) {
+ if(!ValidateContext(Target) || !IsValid(Vehicle) || Vehicle->GetWorld()!=GetWorld()) return;
+ auto* S=Subsystem(GetWorld()); if(!S) return;
+ auto* Mode=GetWorld()->GetAuthGameMode<AGameMode>();
+ auto* Session=Mode?Cast<AFGGameSession>(Mode->GameSession):nullptr;
+ const bool Admin=Session && Session->IsPlayerAdmin(GetOwnerPlayerController());
+ const auto* Index=S->ByVehicle.Find(Vehicle);
+ const bool Accepted=Admin && Index && S->UnpairParkedVehicle(*Index,Target->GetStationIdentifier());
+ StationReply(Target,false,nullptr,!Admin?NSLOCTEXT("FILN","AdminRequired","Server administrator permission required"):
+  Accepted?NSLOCTEXT("FILN","VehicleUnregistered","Vehicle unregistered; route, cargo and rest-stop role preserved"):
+  NSLOCTEXT("FILN","UnregisterRejected","Unregister rejected. Finish the job and refueling, park at the assigned depot and turn off autopilot."));
 }
 void UFILNRemoteControl::RehomeVehicle_Implementation(AFGBuildableDockingStation* Target,AFGWheeledVehicleIdentifier* Vehicle) {
  if(!ValidateContext(Target) || !IsValid(Vehicle) || Vehicle->GetWorld()!=GetWorld()) return;
@@ -202,7 +217,13 @@ void UFILNRemoteControl::StationReply_Implementation(AFGBuildableDockingStation*
 }
 void UFILNStationControls::NativeOnInitialized() {
  Super::NativeOnInitialized();
- auto* Box=WidgetTree->ConstructWidget<UVerticalBox>(); WidgetTree->RootWidget=Box;
+ auto* Root=WidgetTree->ConstructWidget<UVerticalBox>(); WidgetTree->RootWidget=Root;
+ OpenButton=WidgetTree->ConstructWidget<UButton>();
+ auto* OpenLabel=WidgetTree->ConstructWidget<UTextBlock>(); OpenLabel->SetText(NSLOCTEXT("FILN","OpenControls","FILN logistics"));
+ OpenButton->AddChild(OpenLabel); Root->AddChildToVerticalBox(OpenButton);
+ OpenButton->OnClicked.AddDynamic(this,&UFILNStationControls::OpenPanel);
+ Panel=WidgetTree->ConstructWidget<UVerticalBox>(); Root->AddChildToVerticalBox(Panel);
+ auto* Box=Panel.Get();
  Feedback=WidgetTree->ConstructWidget<UTextBlock>(); Box->AddChildToVerticalBox(Feedback);
  Selector=WidgetTree->ConstructWidget<UComboBoxString>(); Box->AddChildToVerticalBox(Selector);
  auto* Buttons=WidgetTree->ConstructWidget<UHorizontalBox>(); Box->AddChildToVerticalBox(Buttons);
@@ -217,6 +238,7 @@ void UFILNStationControls::NativeOnInitialized() {
  AddAction(NSLOCTEXT("FILN","RegisterDepot","Designate this station as a rest stop (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::RegisterDepot);
  AddAction(NSLOCTEXT("FILN","RemoveDepot","Remove rest-stop role (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::RemoveDepot);
  AddAction(NSLOCTEXT("FILN","EnrollVehicle","Register selected vehicle at this depot"))->OnClicked.AddDynamic(this,&UFILNStationControls::EnrollVehicle);
+ AddAction(NSLOCTEXT("FILN","UnregisterVehicle","Unregister selected parked truck (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::UnregisterVehicle);
  AddAction(NSLOCTEXT("FILN","RecoverVehicle","Recover selected parked truck at this rest stop (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::RecoverVehicle);
  AddAction(NSLOCTEXT("FILN","ToggleDispatcher","Enable / disable automatic dispatch (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::ToggleDispatcher);
  AddAction(NSLOCTEXT("FILN","PrepareUninstall","Prepare for uninstall (admin)"))->OnClicked.AddDynamic(this,&UFILNStationControls::PrepareUninstall);
@@ -281,8 +303,18 @@ void UFILNStationControls::SetContext(AFGBuildableDockingStation* Target,UUserWi
    VehicleChoices.Add(Vehicle); Vehicles->AddOption(FString::Printf(TEXT("%s (%d)"),*Vehicle->GetVehicleName().ToString(),VehicleChoices.Num()));
   }
  }
+ // Ordinary stations keep their original switch and layout, with only a
+ // collapsed FILN entry point. Do not issue an RPC until the player opens it.
+ const bool Show=Target && (Target->FindComponentByClass<UFILNStationMarker>() || Cast<UFILNStationWindow>(Vanilla));
+ Panel->SetVisibility(Show?ESlateVisibility::Visible:ESlateVisibility::Collapsed);
+ OpenButton->SetVisibility(Show?ESlateVisibility::Collapsed:ESlateVisibility::Visible);
+ if(Show) OpenPanel();
+}
+void UFILNStationControls::OpenPanel() {
+ if(!IsValid(Station)) return;
+ Panel->SetVisibility(ESlateVisibility::Visible); OpenButton->SetVisibility(ESlateVisibility::Collapsed);
  Feedback->SetText(NSLOCTEXT("FILN","Loading","Reading station state from server"));
- if(auto* R=Remote()) { R->Receiver=this; R->QueryStation(Target); }
+ if(auto* R=Remote()) { R->Receiver=this; R->QueryStation(Station); }
  else Feedback->SetText(NSLOCTEXT("FILN","NoRemote","FILN server control unavailable"));
 }
 void UFILNStationControls::Reply(AFGBuildableDockingStation* Target,bool Enrolled,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message) {
@@ -307,6 +339,10 @@ void UFILNStationControls::EnrollVehicle() {
  const int32 Index=Vehicles->GetSelectedIndex();
  if(auto* R=Remote(); R && VehicleChoices.IsValidIndex(Index)) { R->Receiver=this; R->RegisterVehicle(Station,VehicleChoices[Index]); }
 }
+void UFILNStationControls::UnregisterVehicle() {
+ const int32 Index=Vehicles->GetSelectedIndex();
+ if(auto* R=Remote(); R && VehicleChoices.IsValidIndex(Index)) { R->Receiver=this; R->UnregisterVehicle(Station,VehicleChoices[Index]); }
+}
 void UFILNStationControls::RecoverVehicle() {
  const int32 Index=Vehicles->GetSelectedIndex();
  if(auto* R=Remote(); R && VehicleChoices.IsValidIndex(Index)) { R->Receiver=this; R->RehomeVehicle(Station,VehicleChoices[Index]); }
@@ -323,15 +359,6 @@ void UFILNStationControls::InstallHook() {
   if(!Widget || !Widget->WidgetTree || !Target || !HUD->GetOwningPlayerController()) return;
   UFILNStationControls* Controls=nullptr;
   Widget->WidgetTree->ForEachWidget([&](UWidget* Child){if(auto* Existing=Cast<UFILNStationControls>(Child)) Controls=Existing;});
-  if(!Target->FindComponentByClass<UFILNStationMarker>()) {
-   if(Controls) {
-    Controls->RestoreLabels(); Controls->RemoveFromParent();
-    if(auto* Wrapper=Cast<UVerticalBox>(Widget->WidgetTree->RootWidget); Wrapper && Wrapper->GetChildrenCount()==1) {
-     auto* Original=Wrapper->GetChildAt(0); Wrapper->RemoveChild(Original); Widget->WidgetTree->RootWidget=Original;
-    }
-   }
-   return;
-  }
   if(!Controls) {
    Controls=CreateWidget<UFILNStationControls>(HUD->GetOwningPlayerController()); if(!Controls) return;
    auto* Root=Widget->WidgetTree->RootWidget.Get();
