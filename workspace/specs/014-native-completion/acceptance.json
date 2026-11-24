@@ -47,7 +47,7 @@
     {
       "id": "single-resource-ingress",
       "status": "not-verified",
-      "reason": "Headless automation ran both cases: 0 succeeded, 2 failed; native Resize(2) leaves 0 slots in generated FactoryGame implementation; exit 1",
+      "reason": "Current-head headless tests executed: both fail because generated FGInventoryComponent Resize(2) yields 0 slots. Assertions retained; real game ingress unverified.",
       "history": [
         {
           "date": "2026-11-24",
@@ -56,10 +56,10 @@
       ],
       "implementation": "ConfigureStation + NativeInventoryTests.cpp",
       "verification_method": "FILN.NativeInventory.Solid/Fluid; then conveyor/pipe/docking ingress in game",
-      "actual_result": "Headless automation ran both cases: 0 succeeded, 2 failed; native Resize(2) leaves 0 slots in generated FactoryGame implementation; exit 1",
+      "actual_result": "0 succeeded, 2 failed; actual exit 1.",
       "evidence": [
-        "logs/continue-native/integration-fixed-fixture.log",
-        "logs/native-integration.AS1DCr/index.json"
+        "workspace/test-results/gh-native-9623afb-20261124T221741Z/native-inventory-index.json",
+        "workspace/test-results/gh-native-9623afb-20261124T221741Z/gh-integration.log"
       ]
     },
     {
@@ -302,17 +302,27 @@
     },
     {
       "id": "native-package",
-      "status": "not-verified",
-      "reason": "Blocked before entering Distrobox: Podman runtime read-only; exit 1",
+      "status": "verified",
+      "reason": "Current GitHub implementation compiled/linked for Linux and both Win64 targets; Alpakit cook/stage/archive and static layout/PE checks passed. Gameplay/SMM loading remain unverified.",
       "history": [
         {
           "date": "2026-11-24",
           "previous_reason": "No verified Win64 archive produced"
+        },
+        {
+          "previous_reason": "Blocked before entering Distrobox: Podman runtime read-only; exit 1",
+          "github_baseline": "9623afb"
         }
       ],
       "implementation": "dev-exec.sh + headless.sh package + verifier",
       "verification_method": "Real Win64 Alpakit archive and SMM artifact validation",
-      "actual_result": "Blocked before entering Distrobox: Podman runtime read-only; exit 1"
+      "actual_result": "PASS actual package exit 0; preserved receipt hashes match canonical, installed and verification source.",
+      "evidence": [
+        "workspace/test-results/gh-native-9623afb-20261124T221741Z/receipt.json",
+        "workspace/test-results/gh-native-9623afb-20261124T221741Z/FicsItLogisticsNetwork-Windows.zip",
+        "workspace/test-results/gh-native-9623afb-20261124T221741Z/gh-win64-package-fixed.log",
+        "workspace/test-results/gh-native-9623afb-20261124T221741Z/gh-package-verification.log"
+      ]
     }
   ]
 }

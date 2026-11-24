@@ -13,9 +13,11 @@ try:
         if bad:
             raise ValueError('CRC failure: ' + bad)
         names = archive.namelist()
+        if len({name.casefold() for name in names}) != len(names):
+            raise ValueError('Duplicate or case-colliding archive paths')
         for name in names:
             p = PurePosixPath(name)
-            if p.is_absolute() or '..' in p.parts or '\\' in name:
+            if p.is_absolute() or '..' in p.parts or '\\' in name or ':' in name:
                 raise ValueError('Unsafe archive path: ' + name)
             if any(part.lower() in {'source', 'intermediate', 'tests', '.git', 'node_modules'} for part in p.parts) or p.suffix.lower() in {'.lua', '.py', '.cpp', '.h'}:
                 raise ValueError('Development/legacy dependency file: ' + name)
@@ -36,8 +38,23 @@ try:
             if len(data) < 64 or data[:2] != b'MZ':
                 raise ValueError('Invalid PE DOS header: ' + name)
             offset = int.from_bytes(data[60:64], 'little')
-            if data[offset:offset+6] != b'PE\0\0d\x86':
+            if offset < 64 or offset + 24 > len(data) or data[offset:offset+6] != b'PE\0\0d\x86':
                 raise ValueError('Expected x64 PE binary: ' + name)
+            sections = int.from_bytes(data[offset+6:offset+8], 'little')
+            optional_size = int.from_bytes(data[offset+20:offset+22], 'little')
+            flags = int.from_bytes(data[offset+22:offset+24], 'little')
+            optional = offset + 24
+            table = optional + optional_size
+            if (not 1 <= sections <= 96 or optional_size < 112 or
+                    table + sections * 40 > len(data) or
+                    data[optional:optional+2] != b'\x0b\x02' or flags & 0x2002 != 0x2002):
+                raise ValueError('Invalid x64 PE DLL structure: ' + name)
+            for index in range(sections):
+                section = table + index * 40
+                size = int.from_bytes(data[section+16:section+20], 'little')
+                start = int.from_bytes(data[section+20:section+24], 'little')
+                if size and (start < table + sections * 40 or start + size > len(data)):
+                    raise ValueError('Truncated/invalid PE section: ' + name)
         print('PASS archive integrity, metadata, dependency list, Win64 PE and file exclusions')
         print('Cooked asset completeness, SMM loading and runtime compatibility require independent acceptance.')
 except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:

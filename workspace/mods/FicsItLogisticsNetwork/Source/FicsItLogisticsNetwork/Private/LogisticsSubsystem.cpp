@@ -397,12 +397,12 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  }
  for(const auto& R:Registrations) if(R.Home==H || (StateOf(R)!=S::Idle && (R.Provider==H || R.Requester==H))) return false;
  for(const auto& C:StationConfigs) if(C.Station==H) return false;
- auto* Owner=V->GetOwnerVehicle(); auto* Home=Building(H);
+ auto* VehicleActor=V->GetOwnerVehicle(); auto* Home=Building(H);
  auto* VS=AFGVehicleSubsystem::Get(GetWorld());
- if(!IsValid(Owner) || !Owner->HasAuthority() || !VS || !Owner->GetStorageInventory() || !Home->GetDockingPathNode()) return false;
+ if(!IsValid(VehicleActor) || !VehicleActor->HasAuthority() || !VS || !VehicleActor->GetStorageInventory() || !Home->GetDockingPathNode()) return false;
  const FGuid Node=H->GetPathNodeGUID();
  const FVector HomeLocation=Home->GetDockingPathNode()->GetActorLocation();
- FVector Position; FRotator Rotation; Owner->GetVehicleLocationAndRotation(Position,Rotation);
+ FVector Position; FRotator Rotation; VehicleActor->GetVehicleLocationAndRotation(Position,Rotation);
  const auto Near=[](const FVector& A,const FVector& B) {
   return FMath::Abs(A.Z-B.Z)<=250.f && FVector::DistSquared(A,B)<=FMath::Square(800.f);
  };
@@ -430,8 +430,8 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  const bool BeforeAP=V->IsAutopilotEnabled();
  const TArray<FGuid> Intended={Node};
  const Route ExistingRoute=Before.IsEmpty()?Route::Empty:Before==Intended?Route::HomeOnly:Route::Other;
- const Snapshot Facts{true,(!Home->GetDockedActor() || Home->GetDockedActor()==Owner),UniqueHome,UniqueTruck,
-  Owner->GetDriver()!=nullptr,FMath::Abs(Owner->GetForwardSpeed())<=1.f,Owner->GetStorageInventory()->IsEmpty(),Near(Position,HomeLocation),BeforeAP,ExistingRoute};
+ const Snapshot Facts{true,(!Home->GetDockedActor() || Home->GetDockedActor()==VehicleActor),UniqueHome,UniqueTruck,
+  VehicleActor->GetDriver()!=nullptr,FMath::Abs(VehicleActor->GetForwardSpeed())<=1.f,VehicleActor->GetStorageInventory()->IsEmpty(),Near(Position,HomeLocation),BeforeAP,ExistingRoute};
  const auto Verdict=Evaluate(Facts);
  if(Verdict==Decision::Reject) return false;
  FFILNRegistration R; R.Vehicle=V; R.Home=H; R.TruckId=FGuid::NewGuid(); R.BayId=StationId(H);
@@ -440,7 +440,7 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  // No native writes for adoption of an already opted-in home-only truck.
  const auto Rollback=[&]() {
   if(Verdict!=Decision::AssignHome) return;
-  if(Owner->GetDriver() || V->GetVehicleRoute()!=Intended) {
+  if(VehicleActor->GetDriver() || V->GetVehicleRoute()!=Intended) {
    bDispatchBlocked=true;
    UE_LOG(LogFILN,Error,TEXT("Enrollment rollback conflict; dispatch locked; inspect vehicle route manually"));
    return;
@@ -452,18 +452,18 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
    UE_LOG(LogFILN,Error,TEXT("Enrollment rollback readback failed; dispatch locked"));
   }
  };
- if(Owner->GetDriver() || V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()!=BeforeAP ||
-    !Owner->GetStorageInventory()->IsEmpty() || !ValidHome(H)) return false;
+ if(VehicleActor->GetDriver() || V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()!=BeforeAP ||
+    !VehicleActor->GetStorageInventory()->IsEmpty() || !ValidHome(H)) return false;
  if(Verdict==Decision::AssignHome) {
   V->SetVehicleRoute(Intended);
   if(V->GetVehicleRoute()!=Intended) {
    if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()!=BeforeAP) Rollback();
    return false;
   }
-  if(Owner->GetDriver()) { Rollback(); return false; }
+  if(VehicleActor->GetDriver()) { Rollback(); return false; }
   V->SetAutopilotEnabled(true);
  }
- if(Owner->GetDriver() || V->GetVehicleRoute()!=Intended || !V->IsAutopilotEnabled()) { Rollback(); return false; }
+ if(VehicleActor->GetDriver() || V->GetVehicleRoute()!=Intended || !V->IsAutopilotEnabled()) { Rollback(); return false; }
  if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) { Rollback(); return false; }
  R.Held=true; R.IdleRoute=Intended;
  R.Diagnostic=TEXT("Explicit home-only enrollment; native route and autopilot read back");
@@ -516,13 +516,13 @@ void ALogisticsSubsystem::Observe() {
   if(R.Vehicle->GetVehicleRoute()!=R.RouteIntent) {
    Recover(R,TEXT("Native route changed outside FILN")); ++Cursor; continue;
   }
-  auto* Owner=R.Vehicle->GetOwnerVehicle();
-  if(Owner->GetDriver() || !R.Vehicle->IsAutopilotEnabled()) { Recover(R,TEXT("Player control or autopilot disabled; leave vehicle state untouched")); ++Cursor; continue; }
-  const bool AtP=IsValid(PB) && PB->GetDockedActor()==Owner, AtQ=IsValid(QB) && QB->GetDockedActor()==Owner, AtH=HB->GetDockedActor()==Owner;
+  auto* VehicleActor=R.Vehicle->GetOwnerVehicle();
+  if(VehicleActor->GetDriver() || !R.Vehicle->IsAutopilotEnabled()) { Recover(R,TEXT("Player control or autopilot disabled; leave vehicle state untouched")); ++Cursor; continue; }
+  const bool AtP=IsValid(PB) && PB->GetDockedActor()==VehicleActor, AtQ=IsValid(QB) && QB->GetDockedActor()==VehicleActor, AtH=HB->GetDockedActor()==VehicleActor;
   const S Before=StateOf(R); S Next=Before;
-  if(AtP || AtQ || (!AtH && HB->GetDockingPathNode() && FVector::DistSquared(Owner->GetVehicleLocation(),HB->GetDockingPathNode()->GetActorLocation())>FMath::Square(800.f))) R.DepartedHome=true;
+  if(AtP || AtQ || (!AtH && HB->GetDockingPathNode() && FVector::DistSquared(VehicleActor->GetVehicleLocation(),HB->GetDockingPathNode()->GetActorLocation())>FMath::Square(800.f))) R.DepartedHome=true;
   if(R.Automatic) {
-   auto* Cargo=Owner->GetStorageInventory();
+   auto* Cargo=VehicleActor->GetStorageInventory();
    if(!Cargo || !R.Resource) { Recover(R,TEXT("Cargo inventory/resource missing")); ++Cursor; continue; }
    TArray<FInventoryStack> Stacks; Cargo->GetInventoryStacks(Stacks); bool Mixed=false;
    for(const auto& Stack:Stacks) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=R.Resource) Mixed=true;
@@ -538,7 +538,7 @@ void ALogisticsSubsystem::Observe() {
    }
   }
   const bool Travelling=Before==S::ToProvider || Before==S::ToRequester || Before==S::Returning;
-  const FVector Location=Owner->GetVehicleLocation();
+  const FVector Location=VehicleActor->GetVehicleLocation();
   const int32 Waypoint=R.Vehicle->GetCurrentTargetWaypointIndex();
   const bool Moved=!R.TravelProgress.initialized || Waypoint!=R.ProgressWaypoint ||
     FVector::DistSquared(Location,R.ProgressLocation)>=FMath::Square(200.f);
@@ -563,9 +563,9 @@ void ALogisticsSubsystem::Observe() {
   else if(Before==S::Unloading && !AtQ && !AtH) Next=filn::Advance(Before,filn::Event::RequesterLeave);
   else if((Before==S::Returning || (Before==S::Unloading && !AtQ && R.DeliveredCargo>0)) && AtH) {
    if(!R.Automatic) R.Vehicle->SetAutopilotEnabled(false);
-   auto* Cargo=Owner->GetStorageInventory();
+   auto* Cargo=VehicleActor->GetStorageInventory();
    if(!Cargo || (!R.Automatic && !Cargo->IsEmpty()) || (R.Automatic && R.DeliveredCargo<=0 && !R.AbortReturn)) { Recover(R,TEXT("Returned with cargo: incomplete unload requires operator recovery")); ++Cursor; continue; }
-   if(R.Automatic && FMath::Abs(Owner->GetForwardSpeed())<=1.f) {
+   if(R.Automatic && FMath::Abs(VehicleActor->GetForwardSpeed())<=1.f) {
     if(!RestoreHomeRoute(R)) { Recover(R,TEXT("Home route restoration failed; reservations retained")); ++Cursor; continue; }
     Next=filn::Advance(S::Returning,filn::Event::HomeStopped);
    } else if(!R.Automatic && Parked(R)) Next=filn::Advance(Before,filn::Event::HomeStopped);

@@ -14,8 +14,8 @@ bool ALogisticsSubsystem::RetryNavigation(FFILNRegistration& R,double Now,bool S
  using A=filn::recovery::Action;
  check(IsInGameThread());
  if(!HasAuthority() || bDispatchBlocked || !R.Automatic || !R.JobId.IsValid() || !IsValid(R.Vehicle)) return false;
- auto* V=R.Vehicle.Get(); auto* Owner=V->GetOwnerVehicle();
- if(!IsValid(Owner) || !Owner->GetStorageInventory() || !R.Resource) return false;
+ auto* V=R.Vehicle.Get(); auto* VehicleActor=V->GetOwnerVehicle();
+ if(!IsValid(VehicleActor) || !VehicleActor->GetStorageInventory() || !R.Resource) return false;
  const auto Phase=static_cast<S>(R.State);
  auto* Target=Phase==S::ToProvider?R.Provider.Get():Phase==S::ToRequester?R.Requester.Get():Phase==S::Returning?R.Home.Get():nullptr;
  if(!IsValid(Target) || !IsValid(Target->GetStation())) return false;
@@ -29,23 +29,23 @@ bool ALogisticsSubsystem::RetryNavigation(FFILNRegistration& R,double Now,bool S
  const auto Docking=[&]() {
   if(V->IsCurrentlyDocking()) return true;
   for(auto* Endpoint:{R.Provider.Get(),R.Requester.Get(),R.Home.Get()})
-   if(IsValid(Endpoint) && IsValid(Endpoint->GetStation()) && Endpoint->GetStation()->GetDockedActor()==Owner) return true;
+   if(IsValid(Endpoint) && IsValid(Endpoint->GetStation()) && Endpoint->GetStation()->GetDockedActor()==VehicleActor) return true;
   return false;
  };
  // Observe() reconciles mixed cargo and measured transfer events before calling
  // us. Preserve that phase and reservation; never invent a pickup or delivery.
  auto& Clock=R.NavigationRetry;
  const filn::recovery::Snapshot Snapshot{
-  V->IsAutopilotEnabled(),Owner->GetDriver()!=nullptr,Matches(),true,Docking(),
-  Owner->GetStorageInventory()->GetNumItems(R.Resource)==R.LastCargo,
-  Owner->HasFuel(),Stalled || V->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None};
+  V->IsAutopilotEnabled(),VehicleActor->GetDriver()!=nullptr,Matches(),true,Docking(),
+  VehicleActor->GetStorageInventory()->GetNumItems(R.Resource)==R.LastCargo,
+  VehicleActor->HasFuel(),Stalled || V->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None};
  const auto Action=filn::recovery::Decide(Snapshot,Clock,Now);
  if(Action==A::Stop || Action==A::DriverWait) return false;
  Clock.waiting=true;
  if(Action==A::FuelWait) { R.Diagnostic=TEXT("Navigation recovery: awaiting native fuel; no fuel synthesized"); return true; }
  if(Action==A::RetryWait || Action==A::Resume) return true;
  auto* VS=AFGVehicleSubsystem::Get(GetWorld());
- auto* Preset=Owner->GetVehiclePathPreset();
+ auto* Preset=VehicleActor->GetVehiclePathPreset();
  const FGuid From=V->GetCurrentToPathNodeGUID();
  if(!From.IsValid() || !VS || !Preset) {
   Clock.Attempt(Now); R.Diagnostic=TEXT("Navigation recovery: no current road segment; manual placement may be required"); return true;
@@ -58,11 +58,11 @@ bool ALogisticsSubsystem::RetryNavigation(FFILNRegistration& R,double Now,bool S
  if(Cost<0) { R.Diagnostic=TEXT("Navigation recovery: destination unreachable; retry scheduled"); return true; }
  // Revalidate immediately before the native write. Never opt an AP-off vehicle
  // back in, change the destination, or reset a vehicle to a guessed waypoint.
- if(Owner->GetDriver() || !V->IsAutopilotEnabled() || !Owner->HasFuel() || !Matches() || Docking()) return false;
+ if(VehicleActor->GetDriver() || !V->IsAutopilotEnabled() || !VehicleActor->HasFuel() || !Matches() || Docking()) return false;
  V->SetVehicleRoute(R.RouteIntent);
- if(Owner->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.RouteIntent) return false;
+ if(VehicleActor->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.RouteIntent) return false;
  V->SetCurrentTargetWaypoint(Waypoint);
- if(!Matches() || !V->IsAutopilotEnabled() || Owner->GetDriver()) return false;
+ if(!Matches() || !V->IsAutopilotEnabled() || VehicleActor->GetDriver()) return false;
  R.Diagnostic=TEXT("Navigation recovery: native route/target reapplied and read back; awaiting actual fault clearance");
  return true;
 }

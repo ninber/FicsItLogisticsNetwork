@@ -2,12 +2,8 @@
 set -euo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/env.sh"
 action=${1:-}; shift || true
-# Wine is a dependency of the target build, not necessarily of this host shell.
-if [[ "$action" == package || "$action" == sdk ]]; then
-  if ! command -v wine >/dev/null && ! command -v wine64 >/dev/null; then
-    exec bash "$SATISFACTORY_MODDING_ROOT/scripts/dev-exec.sh" bash "$SATISFACTORY_MODDING_ROOT/scripts/headless.sh" "$action" "$@"
-  fi
-fi
+# Always execute in this environment. Launch Codex inside the existing development
+# container when its tools are needed; never enter a nested container implicitly.
 mkdir -p "$SATISFACTORY_MODDING_ROOT/logs"
 export uebp_LogFolder="$SATISFACTORY_MODDING_ROOT/logs/uat"
 export uebp_FinalLogFolder="$uebp_LogFolder"
@@ -39,10 +35,12 @@ case "$action" in
   sdk) exec bash "$SATISFACTORY_MODDING_ROOT/scripts/verify-windows-sdk.sh" "$@" ;;
   turnkey) exec "$uat" -NoCompile "-ScriptsForProject=$SATISFACTORY_PROJECT" Turnkey -command=VerifySdk -platform=Win64 "-project=$SATISFACTORY_PROJECT" -utf8output ;;
   package)
+    [[ $# == 0 ]] || { echo 'Package accepts no overrides; deployment/launch is deliberately excluded' >&2; exit 2; }
     exec 9>"$SATISFACTORY_MODDING_ROOT/logs/native-build.lock"
     flock -n 9 || { echo "Native build already running" >&2; exit 75; }
-    [[ $# == 0 ]] || { echo 'Package accepts no overrides; deployment/launch is deliberately excluded' >&2; exit 2; }
     bash "$SATISFACTORY_MODDING_ROOT/scripts/verify-windows-sdk.sh"
+    source "$SATISFACTORY_MODDING_ROOT/scripts/win64-paths.sh"
+    uat="$UE_ROOT/Engine/Build/BatchFiles/RunUAT.sh"
     exec "$uat" -NoCompile "-ScriptsForProject=$SATISFACTORY_PROJECT" PackagePlugin "-project=$SATISFACTORY_PROJECT" -clientconfig=Shipping -serverconfig=Shipping -utf8output -DLCName=FicsItLogisticsNetwork -platform=Win64 -build -nocompileeditor -installed ;;
   *) echo 'Usage: bash scripts/headless.sh {test|build|native|uht|integration|prepare-uat|sdk|turnkey|package}' >&2; exit 2 ;;
 esac

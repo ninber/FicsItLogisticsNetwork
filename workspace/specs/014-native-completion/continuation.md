@@ -191,3 +191,10 @@ truck; marker components are transient and rebuilt from saved external configura
 compatibility uses native class flags for empty inventories; legacy conversion stops at a
 transactional settings import until class/connection/save preservation can be proven. These
 choices do not satisfy the outstanding real-game acceptance gates by themselves.
+
+
+## Current GitHub verification
+
+See [local-verification.md](local-verification.md) for current-main Linux/Win64
+builds, passing host suites, preserved native development archive and the two
+executed failing SDK inventory tests. Historical blockers above are retained.
