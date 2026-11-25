@@ -18,8 +18,8 @@
     },
     {
       "id": "fluid-dispatch",
-      "status": "deferred",
-      "reason": "User explicitly deferred fluid trucks and stations while retaining Smarter Truck Stations.",
+      "status": "not-verified",
+      "reason": "Latest user direction restores existing native fluid stations/trucks as required scope; selector, docking/pipe units and capacity unverified.",
       "history": [
         {
           "date": "2026-11-24",
@@ -28,7 +28,7 @@
       ],
       "implementation": "LogisticsDispatch.cpp + FILNRoadCache.h",
       "verification_method": "Native Fluid Trucks/stations; actual pipe ingress and inventory units/capacity",
-      "actual_result": "Out of current release scope; not verified."
+      "actual_result": "Not implemented end-to-end; not verified."
     },
     {
       "id": "vehicle-resource-compatibility",
@@ -47,7 +47,7 @@
     {
       "id": "single-resource-ingress",
       "status": "not-verified",
-      "reason": "Solid conveyor/docking ingress through required Smarter Truck Stations not yet verified; fluid ingress deferred.",
+      "reason": "Standalone FILN selector and native solid conveyor/fluid pipe/docking enforcement required; earlier generated SDK tests failed.",
       "history": [
         {
           "date": "2026-11-24",
@@ -55,7 +55,7 @@
         }
       ],
       "implementation": "ConfigureStation + NativeInventoryTests.cpp",
-      "verification_method": "Real solid programmable requester FILTERS, conveyor and docking ingress; measured cargo transfer.",
+      "verification_method": "Actual solid and fluid requester selection; wrong resource rejection, native ingress/docking, no cargo loss, save/reload.",
       "actual_result": "0 succeeded, 2 failed; actual exit 1.",
       "evidence": [
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/native-inventory-index.json",
@@ -275,7 +275,7 @@
     {
       "id": "management-ui",
       "status": "out-of-scope",
-      "reason": "User explicitly rejected custom in-game management UI; replaced by original FILTERS and native web telemetry gates.",
+      "reason": "Administrative menu remains rejected; single native-looking FILN resource selector is separately required.",
       "history": [
         {
           "date": "2026-11-24",
@@ -303,7 +303,7 @@
     {
       "id": "native-package",
       "status": "not-verified",
-      "reason": "Earlier package predates required TruckStationSettings dependency and latest native source; recook/repackage required.",
+      "reason": "Standalone SML-only package with authored depot and resource selector assets required; latest native code and cook unverified.",
       "history": [
         {
           "date": "2026-11-24",
@@ -327,7 +327,7 @@
     {
       "id": "simple-player-workflow",
       "status": "not-verified",
-      "reason": "Dedicated depot missing; required Smarter Truck Stations FILTERS integration source exists but runtime unverified.",
+      "reason": "Dedicated depot assets and standalone solid/fluid resource selector missing; previous required third-party selector superseded.",
       "verification_method": "Build depot, place LOAD and UNLOAD stations, select requester item, assign vehicle home route and enable AP; verify actual delivery without FILN menus.",
       "actual_result": "Not verified."
     },
@@ -347,17 +347,17 @@
     },
     {
       "id": "fluid-exclusion",
-      "status": "not-verified",
-      "reason": "New fluid enrollment, resource configuration and dispatch guarded; game test pending.",
+      "status": "out-of-scope",
+      "reason": "Temporary solid-only exclusion superseded by required medium-compatible fluid support.",
       "verification_method": "Assign fluid truck/station to FILN; ensure no new ownership or cargo job, vanilla behavior unchanged.",
-      "actual_result": "Source only; not verified."
+      "actual_result": "Historical gate superseded; not passed."
     },
     {
       "id": "programmable-unload-accounting",
       "status": "not-verified",
-      "reason": "Native station operation results collected into job-scoped synchronized batches on factory or game thread; exact game-thread cargo reconciliation; Unreal runtime unverified.",
+      "reason": "Keep general native result receipt bridge, no third-party unloading dependency; real solid/fluid native transfer and threading unverified.",
       "implementation": "FILNDockReceipts.cpp + FILNTransferObserver.cpp + FILNTransferLedger.h",
-      "verification_method": "Real LOAD/UNLOAD on installed Smarter Truck Stations, worker/game-thread callbacks, full/partial quantities, recipient inventory, ledger, no duplicate credit, owner/route change and teardown",
+      "verification_method": "Actual native LOAD/UNLOAD of solid and fluid, full/partial quantities, endpoint and ledger agreement, worker/game thread, owner/route change and teardown.",
       "actual_result": "Source-only; runtime not run."
     },
     {
@@ -366,6 +366,20 @@
       "reason": "Native recipe discovery, registration and editor authoring script implemented; no authored/cooked assets or real game placement verified.",
       "verification_method": "Run editor authoring, cook, inspect package, build depot via native Build Gun, verify exact recipe identity and actual docking/parking/refueling.",
       "actual_result": "Source only; not run."
+    },
+    {
+      "id": "standalone-resource-selector",
+      "status": "not-verified",
+      "reason": "Original FILN selector for both native station types not implemented; upstream UI reference researched only.",
+      "verification_method": "Actual native-looking selector for solid/fluid, single compatible descriptor, multiplayer authority and visible rejection, reload and reserved/docked/nonempty change guards; no custom management menu.",
+      "actual_result": "Not implemented."
+    },
+    {
+      "id": "no-smarter-truck-stations-dependency",
+      "status": "not-verified",
+      "reason": "Existing branch still declares and reads TruckStationSettings; complete removal required.",
+      "verification_method": "Source/descriptor/cooked import audit, clean editor build and isolated gameplay without TruckStationSettings installed.",
+      "actual_result": "Not implemented."
     }
   ]
 }

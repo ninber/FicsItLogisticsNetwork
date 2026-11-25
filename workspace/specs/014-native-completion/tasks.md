@@ -177,3 +177,14 @@
 - [x] Fix simultaneous home-only claim starvation and avoid full roster scans per alternative depot candidate; revalidate route/node index immediately before mutation. Confirm Build Gun recipe listing through native manager readback.
 - [x] Implement bounded actual per-resource capacity sampling for representative vehicle class/slot types; preserve explicit unknown quantities and exclude fluid vehicles from native dashboard eligibility.
 - [ ] Verify multiple simultaneous AP-on home assignments, foreign multi-stop routes, large fleet timing and capacity parity in isolated game.
+
+## Standalone solid/fluid station correction — latest user direction (2026-11-25)
+
+Supersedes required TruckStationSettings dependency, external FILTERS adapter, fluid deferral/exclusion and Smarter Truck Stations-specific acceptance. Prior commits remain historical evidence; no source completion claimed by this spec update. Reconcile local Codex unity-build and depot-authoring fixes before changing shared native source.
+
+- [ ] Remove TruckStationSettings plugin dependency, reflected external class/filter discovery, package/build prerequisite, and any runtime/cooked hard/soft references. No optional compatibility mode. Preserve original Lua experiment as historical tooling, not native runtime.
+- [ ] Implement own server-authoritative per-station resource selection with explicit medium compatibility, persisted selection/readback and empty/undocked/unreserved transaction; retain normal station actor and physical connections. Handle fluid pipe ingress and units explicitly; no cargo mutation from UI.
+- [ ] Author original native-looking selector assets using base-game docking station widget, native descriptor list/tab components and supported SML widget extension. No global generic panel, relabeling or manual register/apply controls. Verify solid and fluid widget paths independently in fresh editor/game sessions.
+- [ ] Use native public station resource-form and vehicle docking-resource APIs; verify liquid/gas forms against real SDK/game; retain actual native docking result receipt bridge, test full/partial solid and fluid ingress/docking and fail closed on mismatch. Replace temporary solid-only enrollment and dispatch guards only after applicable adapters and docking checks exist.
+- [ ] Reconcile native depot authoring failure using native SML root module discovery (one root per type); explicitly cook/validate assets in clean editor process. Verify shared depot compatibility or provide medium-specific depot if required by actual docking behavior.
+- [ ] Verify standalone build/Win64 package and isolated solid + fluid deliveries with TruckStationSettings, Lua dispatcher and UE4SS absent. Migrate only external copies of legacy saves; do not install or touch original City/running game.
