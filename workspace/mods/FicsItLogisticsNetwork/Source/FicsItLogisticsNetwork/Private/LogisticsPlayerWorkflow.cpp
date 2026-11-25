@@ -135,18 +135,18 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
   if(!O->HasFuel() || !O->GetStorageInventory()->IsEmpty()) { Pending(TEXT("Occupied depot: overflow needs fuel and empty cargo")); return false; }
   const auto From=V->GetCurrentToPathNodeGUID(); auto* Preset=O->GetVehiclePathPreset();
   if(!From.IsValid() || !Preset) { Pending(TEXT("Occupied depot: no native road segment or vehicle preset")); return false; }
-  int32& Cursor=OverflowCursor.FindOrAdd(VehicleKey);
+  int32& DepotSearchCursor=OverflowCursor.FindOrAdd(VehicleKey);
   int32 Queried=0;
   // Retain cursor across bounded passes: an unreachable early depot must
   // not starve a later free one. Pending cache work resumes on that candidate.
   for(int32 Visited=0;Visited<DepotStations.Num() && Queried<4;++Visited) {
-   Cursor%=DepotStations.Num();
-   auto* Candidate=DepotStations[Cursor].Get();
-   if(Candidate==Requested || !Free(Candidate)) { ++Cursor; continue; }
+   DepotSearchCursor%=DepotStations.Num();
+   auto* Candidate=DepotStations[DepotSearchCursor].Get();
+   if(Candidate==Requested || !Free(Candidate)) { ++DepotSearchCursor; continue; }
    ++Queried;
    const auto Node=Candidate->GetPathNodeGUID(); double A=-1,B=-1,C=-1;
    if(!RoadCache.Distance(VS,From,Node,Preset,A) || !RoadCache.Distance(VS,Node,Wanted,Preset,B) || !RoadCache.Distance(VS,Wanted,Node,Preset,C)) { Pending(TEXT("Occupied depot: directed road calculation pending")); return false; }
-   ++Cursor;
+   ++DepotSearchCursor;
    if(A>=0 && B>=0 && C>=0) { Destination=Candidate; break; }
   }
   if(!Destination) Pending(TEXT("Occupied depot: no available reachable alternative in this pass; retrying"));
