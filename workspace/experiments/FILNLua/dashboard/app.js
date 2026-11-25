@@ -59,7 +59,7 @@ async function poll(){try{const r=await fetch('/api/status',{cache:'no-store'});
  const progress=result.progress;const collecting=progress&&progress.started_at>d.exported_at-1&&result.server_time-progress.exported_at<10;
  $('notice').textContent=d.stale?'Telemetry is stale. Is the save loaded and the updated FILN mod running?':d.errors.length?`${d.errors.length} objects could not be sampled. Bottleneck conclusions are incomplete; expand sampling errors below.`:`${d.dispatcher.enabled?'Automatic dispatch enabled':'Automatic dispatch PAUSED'} · ${collecting?`Collecting next snapshot ${progress.completed}/${progress.total}`:'Read-only monitor active'} · full fresh pickups / retained cargo first · empty requesters${scheduling}`;
  $('notice').classList.toggle('warning',d.stale||d.errors.length>0||!d.dispatcher.enabled);if(changed)render();
- }else{$('notice').textContent=result.progress?`Collecting first snapshot: ${result.progress.completed}/${result.progress.total}. Keep the save loaded.`:'Waiting for telemetry. Load a save with updated FILNLua; the first scan takes several seconds.';}
+ }else{$('notice').textContent=result.progress?`Collecting first snapshot: ${result.progress.completed}/${result.progress.total}. Keep the save loaded.`:'Waiting for telemetry. Load a save with FILN running; the first scan takes several seconds.';}
  }catch(e){$('notice').textContent=`Dashboard disconnected: ${e.message}. Start scripts/start-filn-dashboard.sh.`;$('notice').classList.add('warning');}finally{setTimeout(poll,2000);}}
 poll();
 
@@ -107,6 +107,8 @@ $('register-depots').addEventListener('click',async()=>{
 });
 function showRegistration(result){
  registrationToken=result.csrf_token;const reg=result.registration;if(!reg)return;
+ if(result.runtime==='native') { const status=$('registration-status'); if(status) status.textContent='Vehicles are assigned automatically in game. Native dashboard is read-only.'; const results=$('registration-results'); if(results) results.textContent=''; }
+ if(result.runtime==='native') { const button=$('register-depots'); if(button) button.disabled=true; return; }
  const pending=reg.result&&reg.result.status!=='complete';
  $('register-depots').disabled=!reg.supported||pending||!reg.candidates.length;
  $('register-depots').textContent=`Register parked trucks (${reg.candidates.length})`;

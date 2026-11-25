@@ -53,9 +53,11 @@ void ALogisticsSubsystem::BeginPlay() {
  UE_LOG(LogFILN,Log,TEXT("M1 subsystem ready; schema=%d registrations=%d. Runtime acceptance unverified."),SchemaVersion,Registrations.Num());
 }
 void ALogisticsSubsystem::EndPlay(const EEndPlayReason::Type Reason) {
+ ResetTelemetry();
  GetWorldTimerManager().ClearTimer(Watchdog);
  GetWorldTimerManager().ClearTimer(DispatchTimer);
  GetWorldTimerManager().ClearTimer(DeferredRebuild); bRegistryValidated=false; DestroyedVehicles.Empty();
+ ResetTelemetry();
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
  TransferObservers.Empty(); TransferByTruck.Empty();
  Super::EndPlay(Reason);

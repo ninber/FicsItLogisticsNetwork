@@ -164,3 +164,6 @@
 - [x] Add exact native depot recipe identity, bounded discovery, SML Initialization-phase recipe registration and unlock following vanilla truck station availability; provide editor asset authoring script.
 - [ ] Execute editor authoring script, inspect generated .uasset files, cook, verify actual Build Gun placement, docking, save/reload and independent uninstall. Source only; not done.
 - [x] Remove retired menu translation unit from generated StarterProject installs; keep user-authored Content.
+
+- [x] Implement native demand-gated snapshot export and existing browser dashboard native read-only mode; add HTTP/model tests.
+- [ ] Verify real native dashboard snapshots, correct path, no frame-time regression, capacity/route-evidence parity and save/world teardown; no Lua dependency.

@@ -341,9 +341,9 @@
     {
       "id": "native-web-statistics",
       "status": "not-verified",
-      "reason": "Native dashboard telemetry not implemented.",
+      "reason": "Native demand-gated exporter and browser bridge source implemented; Unreal compile, real snapshot and full capacity/routing telemetry parity remain unverified.",
       "verification_method": "Existing web dashboard receives native statistics while Lua dispatcher is disabled.",
-      "actual_result": "Not verified; no runtime claim."
+      "actual_result": "Source only; no runtime acceptance."
     },
     {
       "id": "fluid-exclusion",

@@ -17,8 +17,9 @@ ASSETS = ROOT/'workspace/experiments/FILNLua/dashboard'
 DEFAULT_SCRIPTS = Path.home()/'.local/share/Steam/steamapps/common/Satisfactory/Engine/Binaries/Win64/ue4ss/Mods/FILNLua/Scripts'
 
 class State:
-    def __init__(self, scripts):
+    def __init__(self, scripts, native=False):
         self.scripts, self.history, self.snapshot = scripts, {}, None
+        self.native = native
         self.lock = threading.Lock()
         self.token = secrets.token_hex(24)
 
@@ -33,9 +34,13 @@ class State:
                 data = json.loads((self.scripts/'telemetry.json').read_text())
                 if data.get('schema_version') != 1 or not isinstance(data.get('stations'), list) or not isinstance(data.get('vehicles'), list):
                     raise ValueError('Unsupported telemetry schema')
+                if self.native and data.get('runtime') != 'native':
+                    raise ValueError('Native telemetry required; refusing Lua snapshot')
                 self.snapshot = data
             except (OSError, ValueError, TypeError) as exc:
                 error = str(exc)
+            if self.native:
+                return dict(runtime='native', csrf_token=None, registration=dict(supported=False,candidates=[],result=None), server_time=now, ready=self.snapshot is not None, error=error, progress=None, data=analyze(self.snapshot,now,self.history) if self.snapshot else None)
             progress = None
             try:
                 progress = json.loads((self.scripts/'telemetry-progress.json').read_text())
@@ -55,12 +60,14 @@ class State:
                         data=analyze(self.snapshot,now,self.history) if self.snapshot else None)
 
 
-def make_server(scripts, port=8765):
-    state = State(scripts)
+def make_server(scripts, port=8765, native=False):
+    state = State(scripts,native)
     manifest = json.loads((ASSETS/'icons/manifest.json').read_text())
     icons = set(manifest['assets']) | {'unknown.svg'}
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
+            if state.native:
+                self.send_error(405,'Native dashboard is read-only');return
             host=self.headers.get('Host','')
             allowed=(f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}',f'filn.localhost:{self.server.server_port}')
             if host not in allowed or self.headers.get('Origin')!='http://'+host or not secrets.compare_digest(self.headers.get('X-FILN-Token',''),state.token):
@@ -117,15 +124,21 @@ def make_server(scripts, port=8765):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--scripts-dir',type=Path,default=DEFAULT_SCRIPTS)
+    parser.add_argument('--native-dir',type=Path,help='Native game Saved/FILN directory; read-only browser dashboard')
     parser.add_argument('--with-game-mod',action='store_true',help='Exit when the running mod/game stops')
     args = parser.parse_args()
-    if not (args.scripts_dir/'main.lua').is_file():
+    native = args.native_dir is not None
+    if native:
+        if args.with_game_mod: parser.error('Lua lifetime watcher is not supported in native mode')
+        args.scripts_dir=args.native_dir.resolve()
+        args.scripts_dir.mkdir(parents=True,exist_ok=True)
+    elif not (args.scripts_dir/'main.lua').is_file():
         parser.error('Installed FILNLua Scripts directory not found')
     lifetime = ModLifetime(args.scripts_dir/'dashboard-mod.txt') if args.with_game_mod else None
     if lifetime and not lifetime.alive():
         print('FILN mod is not running; dashboard remains stopped.',flush=True)
         return
-    server = make_server(args.scripts_dir)
+    server = make_server(args.scripts_dir,native=native)
     def watch_mod():
         while lifetime.alive():
             time.sleep(3)
@@ -137,7 +150,7 @@ def main():
         while True:
             (args.scripts_dir/'dashboard-server.txt').write_text(str(int(time.time())))
             time.sleep(5)
-    threading.Thread(target=heartbeat,daemon=True).start()
+    if not native: threading.Thread(target=heartbeat,daemon=True).start()
     print('FILN dashboard: http://filn.localhost:8765/ — open manually in Steam overlay browser',flush=True)
     try:
         server.serve_forever()

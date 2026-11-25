@@ -241,3 +241,36 @@ class StoragePairTests(unittest.TestCase):
         s=fixture()
         for station in s['stations']:station['name']='[S] '+station['name']
         self.assertEqual(analyze(s,100)['requests'][0]['code'],'split_stock')
+
+class NativeDashboardTests(unittest.TestCase):
+    def test_native_never_queues_registration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            d=Path(directory)
+            snap=fixture();snap['runtime']='native';snap['exported_at']=time.time()
+            snap['vehicles'][0]['held']=True
+            (d/'telemetry.json').write_text(json.dumps(snap))
+            server=server_module.make_server(d,0,native=True)
+            thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+            url=f'http://127.0.0.1:{server.server_port}'
+            try:
+                with urllib.request.urlopen(url+'/api/status') as response: data=json.load(response)
+                self.assertEqual(data['runtime'],'native')
+                self.assertTrue(data['ready'])
+                self.assertFalse(data['registration']['supported'])
+                self.assertTrue((d/'dashboard-demand.txt').is_file())
+                self.assertFalse((d/'depot-registration.tsv').exists())
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    urllib.request.urlopen(urllib.request.Request(url+'/api/register-depots',data=b'{}',method='POST'))
+                self.assertEqual(error.exception.code,405)
+            finally:
+                server.shutdown();server.server_close();thread.join()
+    def test_native_rejects_lua_snapshot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            d=Path(directory);(d/'telemetry.json').write_text(json.dumps(fixture()))
+            result=server_module.State(d,native=True).status()
+            self.assertFalse(result['ready']);self.assertIn('refusing Lua',result['error'])
+    def test_native_relocating_and_unheld_not_available(self):
+        s=fixture();s['runtime']='native';v=s['vehicles'][0];v['held']=False
+        self.assertEqual(analyze(s,100)['counts']['available'],0)
+        v['job']={'state':'Relocating'}
+        self.assertEqual(analyze(s,100)['fleet'][0]['status'],'Relocating to free depot')

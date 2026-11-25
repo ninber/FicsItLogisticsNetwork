@@ -66,6 +66,10 @@ def analyze(snapshot, now, history=None):
             status = 'Recovery: ' + str(job.get('recovery') or job.get('error') or job.get('state'))
         elif idle and cargo.get('amount',0)>0 and not (dispatch.get('cargo_reuse_enabled') and cargo.get('item') and cargo.get('kinds',1)==1):
             status = 'Blocked: cargo remains'
+        elif job.get('state') == 'Relocating':
+            status = 'Relocating to free depot'
+        elif snapshot.get('runtime') == 'native' and idle and not v.get('held'):
+            status = 'Returning to depot / awaiting parking'
         elif not v.get('has_fuel'):
             status = 'Out of fuel'
         elif idle and (not fuel.get('capacity') or fuel.get('amount', 0) < fuel['capacity']):
@@ -89,7 +93,7 @@ def analyze(snapshot, now, history=None):
                    requester_name=requester.get('name', '—'), observed_route=observed_route,
                    requester_free_space=free,unload_space_shortfall=max(0,cargo.get('amount',0)-free) if free is not None else None,
                    reconciliation=reconciliation,
-                   dispatcher_reason=(job.get('recovery_details') or {}).get('last_error') or job.get('error') or reconciliation.get('reason') or dispatch.get('reasons', {}).get(v.get('home'), ''))
+                   dispatcher_reason=(job.get('recovery_details') or {}).get('last_error') or job.get('error') or reconciliation.get('reason') or v.get('native_pending_reason') or dispatch.get('reasons', {}).get(v.get('home'), ''))
         fleet.append(row)
     active = [v for v in fleet if v.get('managed') and v.get('home_powered') and v.get('autopilot') and not v.get('driver') and (v.get('job')or{}).get('state')!='Detached']
     available = [v for v in active if v['status'] == 'Available / waiting for dispatch']

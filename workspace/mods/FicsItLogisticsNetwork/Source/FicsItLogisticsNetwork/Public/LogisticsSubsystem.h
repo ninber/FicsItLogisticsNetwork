@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 #include "CoreMinimal.h"
+#include "Async/Future.h"
 #include "Subsystem/ModSubsystem.h"
 #include "FGSaveInterface.h"
 #include "Subsystems/WorldSubsystem.h"
@@ -17,6 +18,8 @@ class AFGDockingStationIdentifier;
 class UFGItemDescriptor;
 class UFILNTransferObserver;
 class AFGBuildableDockingStation;
+class FJsonObject;
+class FJsonValue;
 DECLARE_LOG_CATEGORY_EXTERN(LogFILN, Log, All);
 
 USTRUCT()
@@ -144,6 +147,17 @@ private:
  double NextDispatch=0;
  std::optional<filn::dispatch::Choice> BestOffer;
  void Schedule();
+ void SampleTelemetry();
+ void ResetTelemetry();
+ double NextTelemetryDemandCheck=0, NextTelemetryStart=0;
+ bool bTelemetryDemand=false, bTelemetryCollecting=false;
+ int32 TelemetryStationCursor=0, TelemetryVehicleCursor=0;
+ int64 TelemetryStarted=0, TelemetrySequence=0;
+ FString TelemetryWorld;
+ TArray<TWeakObjectPtr<AFGDockingStationIdentifier>> TelemetryStationQueue;
+ TArray<TWeakObjectPtr<AFGWheeledVehicleIdentifier>> TelemetryVehicleQueue;
+ TArray<TSharedPtr<FJsonValue>> TelemetryStations, TelemetryVehicles, TelemetryErrors;
+ TFuture<bool> TelemetryWrite;
  void ReconcilePlayerConfiguration();
  void EnsureDepotRecipe();
  static bool IsAuthoredDepot(const AFGDockingStationIdentifier* Station);
