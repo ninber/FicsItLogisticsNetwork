@@ -54,11 +54,14 @@ void ALogisticsSubsystem::DiscoverDepots() {
  for(int32 Work=0; Work<2 && PlayerStationCursor<PlayerStationScan.Num(); ++Work) {
   auto* ID=PlayerStationScan[PlayerStationCursor++].Get();
   if(!IsValid(ID)) continue;
-  if(IsAuthoredDepot(ID) && !DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(ID))) TrackDepot(ID);
+  if(IsAuthoredDepot(ID) && !DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(ID))) {
+   TrackDepot(ID);
+   if(auto* B=ID->GetStation(); IsValid(B)) UE_LOG(LogFILN,Log,TEXT("FILN_DEPOT_DISCOVERED node=%s actor=%s class=%s valid_home=%d"),*ID->GetPathNodeGUID().ToString(),*B->GetPathName(),*B->GetClass()->GetPathName(),ValidHome(ID));
+  }
  }
 }
 void ALogisticsSubsystem::DiscoverHomeVehicles() {
- if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || bPreparingUninstall || DepotStations.IsEmpty()) return;
+ if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || bPreparingUninstall) return;
  const double Now=GetWorld()->GetTimeSeconds();
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
  if(PlayerVehicleCursor>=PlayerVehicleScan.Num()) {
@@ -72,13 +75,26 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
   auto* V=PlayerVehicleScan[PlayerVehicleCursor++].Get();
   if(!IsValid(V) || ByVehicle.Contains(V)) continue;
   const auto Route=V->GetVehicleRoute();
-  if(Route.Num()!=1 || !Route[0].IsValid()) continue;
+  if(Route.Num()!=1 || !Route[0].IsValid()) {
+   PendingHomeReason.Remove(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V));
+   OverflowCursor.Remove(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V));
+   continue; // multi-stop vanilla routes are intentionally not opted in
+  }
   AFGDockingStationIdentifier* Requested=nullptr; bool Ambiguous=false;
   for(const auto& D:DepotStations) if(IsValid(D) && D->GetPathNodeGUID()==Route[0]) {
    if(Requested) Ambiguous=true; Requested=D.Get();
   }
   if(Requested && !Ambiguous) AdoptPlayerHome(V,Requested);
-  else { OverflowCursor.Remove(V); PendingHomeReason.Remove(V); }
+  else {
+   OverflowCursor.Remove(V);
+   const FString Why=Ambiguous?TEXT("Assigned home node matches multiple FILN depots"):
+    FString::Printf(TEXT("Assigned home node %s is not a tracked FILN depot"),*Route[0].ToString());
+   auto& Previous=PendingHomeReason.FindOrAdd(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V));
+   if(Previous!=Why) {
+    Previous=Why;
+    UE_LOG(LogFILN,Warning,TEXT("AUTO_HOME_PENDING vehicle=%s reason=%s"),*V->GetPathName(),*Why);
+   }
+  }
  }
 }
 bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDockingStationIdentifier* Requested) {

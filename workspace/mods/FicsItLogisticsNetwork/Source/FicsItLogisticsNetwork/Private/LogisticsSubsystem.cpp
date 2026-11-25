@@ -253,8 +253,11 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
 }
 bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  auto* B=Building(Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
- if(bDispatchBlocked || !bRegistryValidated || bChangingFilters || bPreparingUninstall || !HasAuthority() || !IsValid(Station) || Station->GetWorld()!=GetWorld() || !Inventory || !Resource || !Inventory->IsEmpty() || B->GetDockedActor()) return false;
+ if(bDispatchBlocked || !bRegistryValidated || bChangingFilters || bPreparingUninstall || !HasAuthority() || !IsValid(Station) || Station->GetWorld()!=GetWorld() || !IsValid(Inventory) || !Resource || Inventory->GetSizeLinear()<=0 || Inventory->GetSizeLinear()>4096 || B->GetDockedActor()) return false;
  if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station))) || !StationAcceptsResource(B,Resource)) return false;
+ // Explicit selection, never inference from stock. ChangeStationFilters
+ // preflights every cargo stack before any write, including nonempty inventories.
+ // Docked actors and conflicting cargo still fail without mutation.
  FFILNStationConfig* Existing=StationConfigs.FindByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
  if(Existing) {
   if(Existing->ExternalFilter) return false;

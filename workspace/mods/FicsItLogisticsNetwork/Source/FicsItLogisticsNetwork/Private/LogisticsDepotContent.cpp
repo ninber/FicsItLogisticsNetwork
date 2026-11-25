@@ -4,6 +4,7 @@
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
 #include "FGRecipe.h"
 #include "Resources/FGItemDescriptor.h"
+#include "Resources/FGBuildingDescriptor.h"
 #include "FGRecipeManager.h"
 #include "Registry/ModContentRegistry.h"
 #include "Engine/World.h"
@@ -57,6 +58,17 @@ void ALogisticsSubsystem::EnsureDepotRecipe() {
   if(Products.Num()!=1 || !Products[0].ItemClass || Products[0].Amount!=1) {
    Reject(Path,TEXT("Invalid native recipe product")); continue;
   }
+  const auto* ProductClass=Products[0].ItemClass.Get();
+  if(!ProductClass || !ProductClass->IsChildOf(UFGBuildingDescriptor::StaticClass())) {
+   Reject(Path,TEXT("Recipe product is not a building descriptor")); continue;
+  }
+  const auto BuildClass=UFGBuildingDescriptor::GetBuildableClass(TSubclassOf<UFGBuildingDescriptor>(Products[0].ItemClass.Get()));
+  const TCHAR* ExpectedActor=Path==FILNSolidDepotPath?TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNDepot.Build_FILNDepot_C"):
+    Path==FILNFluidDepotPath?TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNFluidDepot.Build_FILNFluidDepot_C"):
+    TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNFluidStation.Build_FILNFluidStation_C");
+  if(!BuildClass || !BuildClass->IsChildOf(AFGBuildableDockingStation::StaticClass()) || BuildClass->GetPathName()!=ExpectedActor) {
+   Reject(Path,FString::Printf(TEXT("Expected buildable '%s'; runtime descriptor builds '%s'"),ExpectedActor,BuildClass?*BuildClass->GetPathName():TEXT("<null>"))); continue;
+  }
   const FString RecipeName=UFGRecipe::GetRecipeName(Recipe).ToString();
   const FString ItemName=UFGItemDescriptor::GetItemName(Products[0].ItemClass).ToString();
   if(RecipeName!=Expected || ItemName!=Expected) {
@@ -70,5 +82,5 @@ void ALogisticsSubsystem::EnsureDepotRecipe() {
  // Solid recipe may become available earlier than fluid; continue checking
  // until all vanilla prerequisites are unlocked. Never load classes on tick.
  bDepotRecipeReady=AllReady;
- if(AllReady) UE_LOG(LogFILN,Log,TEXT("FILN_STATION_RECIPES_READY effective_recipe_and_descriptor_names_verified=true; actual menu and placement remain runtime acceptance"));
+ if(AllReady) UE_LOG(LogFILN,Log,TEXT("FILN_STATION_RECIPES_READY effective_recipe_descriptor_names_and_build_class_verified=true; actual menu and placement remain runtime acceptance"));
 }
