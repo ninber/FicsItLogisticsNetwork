@@ -15,3 +15,7 @@ Remaining gates: Unreal compile and real native file path/serialization, actual 
 ## Capacity follow-up
 
 The exporter now samples actual allowed-slot capacity for one representative managed vehicle per observed class/slot-count type and each configured solid resource. One capacity calculation per callback; no matrix work spike. Inventory replacement/invalid capacity emits sampling error rather than fabricated values. Distinct constraints within one class/slot count are not separately modeled; dashboard capacity is representative, not an individual dispatch authority. Native runtime and full parity remain unverified.
+
+## Fluid telemetry follow-up
+
+The prior solid-only exporter is superseded. Native samples carry medium and quantity_unit; representative capacities use matching vehicle class/slot count/medium and native slot capacities only. Browser model filters providers and vehicles by medium and reports raw native fluid units, not liters or m3. Legacy snapshot with solid_supported=false and no medium remains excluded. Actual fluid quantity semantics and dashboard/game performance still require verification.

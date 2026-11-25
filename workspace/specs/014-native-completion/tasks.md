@@ -194,3 +194,12 @@ Supersedes required TruckStationSettings dependency, external FILTERS adapter, f
 
 - [x] Remove native third-party manifest dependency, reflected programmable-class/filter reader, and external development prerequisites; reject non-SML metadata; old saved unowned-filter marker only blocks eligibility. Static source regression and standalone prerequisite tests added.
 - [ ] Integrate local unity-build fixes, compile standalone with third-party absent, inspect actual cooked assets/imports and verify game. Standalone selector and fluid support remain required and incomplete.
+
+## Fluid station implementation pass (2026-11-25)
+
+- [x] Replace generated root Blueprint with native SML root; author solid depot, fluid depot, fluid logistics station descriptor/recipe pairs from vanilla parents (editor resolves actual recipe path and validates product/medium). Require independent fresh-process reload; reject retired root Blueprint without deleting it.
+- [x] Replace temporary solid-only gates with actual native station/vehicle resource form compatibility in configuration, pairing/overflow, offer construction, active endpoint checks, parking, fuel and recovery. Preserve one resource, exact native capacity, empty requester, transfer receipts and reservations.
+- [x] Export medium-aware native telemetry and capacity samples; never label raw fluid quantities as liters or cubic meters without measurement. Add portable compatibility and dashboard regression cases.
+- [ ] Reconcile local unity-build fixes and retired root asset; run matched Unreal editor compilation, actual authoring/reload, inspect cooked asset paths and place all three buildings in isolated game. Confirm native root discovery/registration and parent unlock behavior.
+- [ ] Verify actual fluid station/vehicle forms, native docking, pipe ingress and descriptor lock, per-slot capacity, returned transfer amount vs cargo delta, actual fuel and same-medium overflow, save/reload and performance. Verify gas independently if permitted by base game.
+- [ ] Author and verify own native-looking single-resource selector for both station types; currently only existing developer console configuration backend is available. No normal player setup claim.

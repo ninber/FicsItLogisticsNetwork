@@ -30,3 +30,7 @@ Active native architecture, headless and gameplay acceptance instructions have a
 ## Follow-up d49e4b4 — dependency removed in source
 
 The earlier dependency findings are resolved in the manifest, native reflected filter adapter and development prerequisite contract. Native discovery now only scans dedicated depot recipe identity. Own slot-filter configuration and generic transfer receipt bridge remain. ExternalFilter is a saved compatibility marker only: no external configuration discovery, no restoration of unowned filters, no new job eligibility, active jobs must validate endpoints before resuming; explicit safe remove/reconfigure required. Historical Lua/migration scripts may still mention old class paths for external tooling, not native dependencies. Static regression checks scan native Source/Config and verify standalone manifest/prerequisites. Local unity fixes, selector, fluid gates, depot authoring/cooking and actual standalone build/game remain unresolved.
+
+## Follow-up fluid building source pass
+
+The old generated root and solid-only gating findings are superseded in source by native root, three recipe/descriptor authoring pairs, native resource-form compatibility checks, and medium-aware telemetry. Existing selector gap, local unity compilation fixes, editor authoring/reload/cooking, real fluid enforcement and runtime acceptance remain open. Do not claim generated buildings exist until editor receipts and actual cooked entries are inspected.

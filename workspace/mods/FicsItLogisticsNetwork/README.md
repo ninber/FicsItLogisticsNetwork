@@ -1,15 +1,15 @@
 # FicsIt Logistics Network — native C++ mod
 
-**Development branch, not a verified release.** Target: SML 3.12.1 / CSS 5.6.1-87 / game CL520140, SML-only dependency, solid and fluid logistics. Native source no longer requires TruckStationSettings; independent selector and fluid cargo remain unfinished release requirements. No Lua or UE4SS native runtime. All migration of older saves is external.
+**Development branch, not a verified release.** Target: SML 3.12.1 / CSS 5.6.1-87 / game CL520140, SML-only dependency, solid and fluid logistics. Native source no longer requires TruckStationSettings; independent selector and real fluid cargo acceptance remain unfinished release requirements. No Lua or UE4SS native runtime. All migration of older saves is external.
 
 ## Intended in-game setup (not yet runtime accepted)
 
-1. Build a dedicated FILN depot (native cooked asset still missing).
-2. Build ordinary LOAD stations for solid or fluid supply.
+1. Build a dedicated FILN Depot or FILN Fluid Depot (native authored/cooked assets still missing).
+2. Build ordinary LOAD stations for solid or fluid supply, or FILN Fluid Logistics Station (recipe authoring source only).
 3. Build ordinary compatible UNLOAD stations and select exactly one resource using FILN's own native-looking selector (not implemented yet).
 4. Use the normal vehicle route/autopilot controls to opt a truck into any depot. FILN adopts it automatically and redirects a second truck to a free reachable depot if necessary.
 
-No FILN management menus, register button or dispatcher switch. Both media are required; existing fluid exclusion is unfinished implementation. Native dashboard telemetry is implemented in source, not gameplay verified. The recorded vanilla depot fallback is development-only, not a substitute for the missing dedicated asset. See the [consistency audit](../../specs/014-native-completion/consistency-audit.md).
+No FILN management menus, register button or dispatcher switch. Both media are required; medium-aware configuration, enrollment, dispatch and telemetry are implemented in source, not gameplay verified. The recorded vanilla depot fallback is development-only, not a substitute for the missing dedicated asset. See the [consistency audit](../../specs/014-native-completion/consistency-audit.md).
 
 ## Build and verification
 
@@ -20,7 +20,8 @@ bash scripts/test-filn.sh
 bash scripts/install-filn.sh
 bash scripts/headless.sh native
 bash scripts/headless.sh integration
-# Depot authoring and standalone selector assets must be fixed and reload verified first.
+bash scripts/headless.sh author-depot # actual editor authoring + independent reload
+# Standalone selector assets must also be implemented and verified before release.
 # Packaging is blocked until current scope is implemented.
 # bash scripts/headless.sh package
 ```

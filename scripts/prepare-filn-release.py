@@ -35,7 +35,7 @@ def main():
         'blockers': [
             'Lua dispatcher is a UE4SS experiment, not an SML runtime module.',
             'Local editor compile/link reported with unpublished unity fixes; current standalone build and Win64 package not verified.',
-            'Native third-party adapter and dependency removed; independent selector, fluid support and depot asset authoring/reload remain blocked.',
+            'Native third-party dependency removed; fluid station/depot source exists, but independent selector, actual authoring/reload and solid/fluid gameplay remain unverified.',
             'Runtime acceptance and dependency compatibility remain pending.',
         ],
         'local_css_engine_present': (ROOT / 'toolchains/UnrealEngineCSS/Engine/Build/BatchFiles/Linux/Build.sh').is_file(),

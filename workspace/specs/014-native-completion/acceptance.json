@@ -19,7 +19,7 @@
     {
       "id": "fluid-dispatch",
       "status": "not-verified",
-      "reason": "Latest user direction restores existing native fluid stations/trucks as required scope; selector, docking/pipe units and capacity unverified.",
+      "reason": "Native fluid configuration, medium-compatible enrollment, dispatch, refuel and recovery source implemented. Actual pipe restrictions, native quantities, dock compatibility and receipt semantics unverified; player selector missing.",
       "history": [
         {
           "date": "2026-11-24",
@@ -28,7 +28,7 @@
       ],
       "implementation": "LogisticsDispatch.cpp + FILNRoadCache.h",
       "verification_method": "Native Fluid Trucks/stations; actual pipe ingress and inventory units/capacity",
-      "actual_result": "Not implemented end-to-end; not verified."
+      "actual_result": "Source implementation only; real fluid delivery not tested."
     },
     {
       "id": "vehicle-resource-compatibility",
@@ -327,7 +327,7 @@
     {
       "id": "simple-player-workflow",
       "status": "not-verified",
-      "reason": "Dedicated depot assets and independent resource selector missing; third-party adapter removed.",
+      "reason": "Own station/depot recipes and medium-aware native backend implemented in source; actual assets, standalone resource selector, and game acceptance missing.",
       "verification_method": "Build depot, place LOAD and UNLOAD stations, select requester item, assign vehicle home route and enable AP; verify actual delivery without FILN menus.",
       "actual_result": "Not verified."
     },
@@ -341,7 +341,7 @@
     {
       "id": "native-web-statistics",
       "status": "not-verified",
-      "reason": "Demand-gated native exporter, read-only browser bridge and bounded representative real capacity samples implemented; native build, runtime snapshot and request route-evidence parity not verified.",
+      "reason": "Native telemetry exports solid/fluid medium and exact native units; Python matching and capacities scoped by medium. Actual game telemetry, unit conversion and route-evidence parity unverified.",
       "verification_method": "Existing web dashboard receives native statistics while Lua dispatcher is disabled.",
       "actual_result": "Source only; no runtime acceptance."
     },
@@ -363,9 +363,9 @@
     {
       "id": "dedicated-depot-buildable",
       "status": "not-verified",
-      "reason": "Native recipe discovery, registration and editor authoring script implemented; no authored/cooked assets or real game placement verified.",
+      "reason": "Native root registration replaces failed Blueprint root; authoring now creates solid depot, fluid depot and fluid logistics station descriptor/recipe pairs and requires fresh reload. Unreal authoring/cook/placement not run.",
       "verification_method": "Run editor authoring, cook, inspect package, build depot via native Build Gun, verify exact recipe identity and actual docking/parking/refueling.",
-      "actual_result": "Source only; not run."
+      "actual_result": "Source only; actual assets not authored."
     },
     {
       "id": "standalone-resource-selector",
@@ -380,6 +380,13 @@
       "reason": "Manifest, reflected third-party runtime adapter and build prerequisites removed; clean standalone native build, cooked import audit and game acceptance not yet run.",
       "verification_method": "Source/descriptor/cooked import audit, clean editor build and isolated gameplay without TruckStationSettings installed.",
       "actual_result": "Source removal implemented; actual standalone runtime/package unverified."
+    },
+    {
+      "id": "fluid-station-buildables",
+      "status": "not-verified",
+      "reason": "Fluid descriptor/recipe authoring, native root registration, matching vanilla unlock and medium-aware depot discovery implemented in source. No editor-generated or cooked assets in remote tree.",
+      "verification_method": "Clean UE editor authoring + independent reload; inspect actual cooked packages, standard Build Gun placement, native actor/pipe/fuel and recipe identity, compatible fluid-only automatic home ownership; fluid logistics LOAD/UNLOAD with verified resource selection and delivery.",
+      "actual_result": "Not authored or runtime tested."
     }
   ]
 }
