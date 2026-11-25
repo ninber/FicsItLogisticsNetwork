@@ -7,4 +7,5 @@ python3 "$SATISFACTORY_MODDING_ROOT/scripts/check-native-prerequisites.py" "$SAT
 mkdir -p "$SATISFACTORY_MODDING_ROOT/logs"
 exec 9>"$SATISFACTORY_MODDING_ROOT/logs/native-build.lock"
 flock -n 9 || { echo "Another FILN build owns the build lock" >&2; exit 75; }
-exec "$UE_ROOT/Engine/Build/BatchFiles/Linux/Build.sh" FactoryEditor Linux Development "-Project=$SATISFACTORY_PROJECT" "-Log=$SATISFACTORY_MODDING_ROOT/logs/ubt.log" "$@"
+ # Parent shell owns the lock; do not let compiler or daemon descendants inherit it.
+"$UE_ROOT/Engine/Build/BatchFiles/Linux/Build.sh" FactoryEditor Linux Development "-Project=$SATISFACTORY_PROJECT" "-Log=$SATISFACTORY_MODDING_ROOT/logs/ubt.log" "$@" 9>&-
