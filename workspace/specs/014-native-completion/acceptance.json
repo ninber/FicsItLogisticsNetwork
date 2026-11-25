@@ -327,7 +327,7 @@
     {
       "id": "simple-player-workflow",
       "status": "not-verified",
-      "reason": "Dedicated depot assets and standalone solid/fluid resource selector missing; previous required third-party selector superseded.",
+      "reason": "Dedicated depot assets and independent resource selector missing; third-party adapter removed.",
       "verification_method": "Build depot, place LOAD and UNLOAD stations, select requester item, assign vehicle home route and enable AP; verify actual delivery without FILN menus.",
       "actual_result": "Not verified."
     },
@@ -377,9 +377,9 @@
     {
       "id": "no-smarter-truck-stations-dependency",
       "status": "not-verified",
-      "reason": "Existing branch still declares and reads TruckStationSettings; complete removal required.",
+      "reason": "Manifest, reflected third-party runtime adapter and build prerequisites removed; clean standalone native build, cooked import audit and game acceptance not yet run.",
       "verification_method": "Source/descriptor/cooked import audit, clean editor build and isolated gameplay without TruckStationSettings installed.",
-      "actual_result": "Not implemented."
+      "actual_result": "Source removal implemented; actual standalone runtime/package unverified."
     }
   ]
 }

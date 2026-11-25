@@ -5,8 +5,8 @@ Current scope: [spec](spec.md), [standalone station requirements](standalone-sta
 | Requirement | Source / current state | Remaining gate |
 |---|---|---|
 | R01 build | Local Codex reports editor compile/link with unpublished unity fixes; GCC/Clang CI baseline passed | Integrate fixes, rebuild current source, SDK/UHT/Win64 |
-| R02 stations | ConfigureStation/ChangeStationFilters, currently rejects fluids and reads external filters | Own compatible persistent selection, conveyor/pipe ingress |
-| R03 selector | Old management menu removed; external FilterItem remains | Original FILN selector and multiplayer/readback for both media |
+| R02 stations | ConfigureStation/ChangeStationFilters, currently rejects fluids; external filter discovery removed | Own compatible persistent selection, conveyor/pipe ingress |
+| R03 selector | Old management menu and external FilterItem reader removed | Original FILN selector and multiplayer/readback for both media |
 | R04 dispatch | LogisticsDispatch, FILNDispatchPolicy; solid-only restrictions remain | Actual solid/fluid capacities, eligibility and delivery |
 | R05 routing | FILNRoadCache, directed checks | Native distance/order/invalidation/performance |
 | R06 transfers | FILNCore, FILNDockReceipts, FILNTransferLedger | Native result, thread and inventory reconciliation |
@@ -16,4 +16,4 @@ Current scope: [spec](spec.md), [standalone station requirements](standalone-sta
 | R10 uninstall | Prepare/restore source | Independent mod-absent reload, recipe reference handling |
 | R11 telemetry | LogisticsTelemetry, native browser; solid-only assumptions | Actual read-only snapshot, both media, units/performance |
 | R12 persistence | Saved IDs/config/leases, recovery | Save/restart, destruction, takeover, reload |
-| R13 release | Verifier now SML-only; manifest/prerequisites still third-party | Remove dependency/imports, author/cook/reload, Win64 artifact + gameplay |
+| R13 release | Manifest, prerequisites and verifier now SML-only | Remove dependency/imports, author/cook/reload, Win64 artifact + gameplay |

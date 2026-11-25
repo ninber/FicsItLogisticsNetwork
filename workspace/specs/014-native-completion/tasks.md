@@ -191,3 +191,6 @@ Supersedes required TruckStationSettings dependency, external FILTERS adapter, f
 
 - [x] Reconcile top-level, workspace, native README, release and traceability instructions with standalone solid/fluid scope; package verifier rejects required/optional/disabled third-party dependencies.
 - [ ] Resolve source inconsistencies enumerated in consistency-audit.md; no runtime/build readiness claim. Reconcile local Codex branch first.
+
+- [x] Remove native third-party manifest dependency, reflected programmable-class/filter reader, and external development prerequisites; reject non-SML metadata; old saved unowned-filter marker only blocks eligibility. Static source regression and standalone prerequisite tests added.
+- [ ] Integrate local unity-build fixes, compile standalone with third-party absent, inspect actual cooked assets/imports and verify game. Standalone selector and fluid support remain required and incomplete.

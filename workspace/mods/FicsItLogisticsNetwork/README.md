@@ -1,6 +1,6 @@
 # FicsIt Logistics Network — native C++ mod
 
-**Development branch, not a verified release.** Target: SML 3.12.1 / CSS 5.6.1-87 / game CL520140, SML-only dependency, solid and fluid logistics. Current source still requires TruckStationSettings and excludes fluid cargo; both are release blockers, not requirements. No Lua or UE4SS native runtime. All migration of older saves is external.
+**Development branch, not a verified release.** Target: SML 3.12.1 / CSS 5.6.1-87 / game CL520140, SML-only dependency, solid and fluid logistics. Native source no longer requires TruckStationSettings; independent selector and fluid cargo remain unfinished release requirements. No Lua or UE4SS native runtime. All migration of older saves is external.
 
 ## Intended in-game setup (not yet runtime accepted)
 

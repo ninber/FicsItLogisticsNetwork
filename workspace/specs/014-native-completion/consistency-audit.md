@@ -26,3 +26,7 @@ Continuation: reconcile unpublished fixes/logs; solve depot native-root and asse
 Native runtime and development prerequisite code intentionally unchanged until coordinated with local fixes. Package metadata enforcement exposes the inconsistency rather than accepting superseded artifacts.
 
 Active native architecture, headless and gameplay acceptance instructions have also been updated; historical UI, depot, dashboard and integration research has explicit scope/evidence notices.
+
+## Follow-up d49e4b4 — dependency removed in source
+
+The earlier dependency findings are resolved in the manifest, native reflected filter adapter and development prerequisite contract. Native discovery now only scans dedicated depot recipe identity. Own slot-filter configuration and generic transfer receipt bridge remain. ExternalFilter is a saved compatibility marker only: no external configuration discovery, no restoration of unowned filters, no new job eligibility, active jobs must validate endpoints before resuming; explicit safe remove/reconfigure required. Historical Lua/migration scripts may still mention old class paths for external tooling, not native dependencies. Static regression checks scan native Source/Config and verify standalone manifest/prerequisites. Local unity fixes, selector, fluid gates, depot authoring/cooking and actual standalone build/game remain unresolved.

@@ -70,6 +70,6 @@ weaken Resize/filter assertions if the header implementation returns default val
 
 Runtime commands are developer-only; see the [native README](../README.md). Old filn.manage and filn.legacy commands and management UI were removed. Automatic player workflow is required. Do not deploy dependency-based draft.
 
-Local Codex reports native Linux editor compilation/linkage after unpublished unity-build fixes; depot authoring and fresh reload failed. Reconcile local work before changing C++. SML native root registration is proposed, not verified. Development prerequisites still require TruckStationSettings; this is a tracked source inconsistency, not a release requirement. Package verifier rejects non-SML dependencies.
+Local Codex reports native Linux editor compilation/linkage after unpublished unity-build fixes; depot authoring and fresh reload failed. Reconcile local work before changing C++. SML native root registration is proposed, not verified. Development prerequisites and package verifier now require the FILN SML-only descriptor; no other gameplay mod source/assets required. Sync canonical source; remove stale third-party project enablement separately in a clean development checkout, not the running game.
 
 Current evidence: [consistency audit](../../../specs/014-native-completion/consistency-audit.md).
