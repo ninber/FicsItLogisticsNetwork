@@ -25,9 +25,11 @@ try:
         if len(descriptors) != 1:
             raise ValueError('Expected exactly one FILN descriptor')
         meta = json.loads(archive.read(descriptors[0]))
-        deps = {dep['Name']: dep for dep in meta.get('Plugins', []) if dep.get('Enabled', False)}
-        if set(deps) != {'SML', 'TruckStationSettings'} or any(not dep.get('SemVersion') for dep in deps.values()):
-            raise ValueError('Expected versioned SML and TruckStationSettings dependencies')
+        deps = meta.get('Plugins', [])
+        if (not isinstance(deps, list) or len(deps) != 1 or not isinstance(deps[0], dict)
+                or deps[0].get('Name') != 'SML' or deps[0].get('Enabled') is not True
+                or deps[0].get('Optional', False) or not deps[0].get('SemVersion')):
+            raise ValueError('Expected required versioned SML-only dependency; no optional third-party dependencies')
         if not meta.get('GameVersion') or not meta.get('SemVersion'):
             raise ValueError('Missing game/mod version metadata')
         binaries = [name for name in names if '/Binaries/Win64/' in '/' + name and 'FicsItLogisticsNetwork' in name and name.endswith('.dll')]
@@ -57,7 +59,7 @@ try:
                     raise ValueError('Truncated/invalid PE section: ' + name)
         cooked = [name for name in names if PurePosixPath(name).suffix.lower() in {'.pak', '.utoc'} and 'ficsitlogisticsnetwork' in name.casefold()]
         if not cooked:
-            raise ValueError('Missing cooked FILN content container (dedicated depot assets required)')
+            raise ValueError('Missing cooked FILN content container (dedicated depot and selector assets required)')
         print('PASS archive integrity, metadata, dependency list, Win64 PE, cooked container presence and file exclusions')
         print('Cooked asset completeness, SMM loading and runtime compatibility require independent acceptance.')
 except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:

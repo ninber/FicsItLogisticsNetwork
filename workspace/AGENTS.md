@@ -1,5 +1,11 @@
 # FILN workspace guidance
 
+## Current authoritative scope (2026-11-25, overrides older guidance below)
+
+Use specs/014-native-completion/spec.md and standalone-station-implementation.md. Standalone native SML-only solid AND fluid logistics are required. Remove Smarter Truck Stations entirely, including optional compatibility; its old UI and Lua experiment are historical references only. Native LOAD/UNLOAD labels stay unchanged. One explicit compatible resource selected through FILN's own native-looking selector; no manual player registration, extra Apply/Register, management menus or browser write actions. Dedicated depot construction, automatic AP-on home adoption and relocation of only the new vehicle to a compatible free depot are required. Browser statistics are read-only. Never infer requester identity from stock. Preserve existing Lua test evidence without interpreting it as native acceptance. Reconcile local Codex unity-build fixes and root-module failure before changing native code. Do not touch the original City save, running game, or automate UI. All unresolved requirements remain failing release gates; passing portable tests or header checks are not native gameplay proof.
+
+Remaining notes are historical or apply to the separate Lua experiment; contradictory older enrollment, Monitor-write, UI or dependency instructions do not apply to native release.
+
 Use CODEX_TASK_FicsIt_Logistics_Network.md as authoritative specification.
 Native completion: specs/014-native-completion (current feature.json). Lua reference current feature: specs/013-depot-registration (feature.json); storage: specs/012-storage-stations; reachability: specs/011-reachability-audit; blueprint upgrade: specs/010-mk4-blueprints; dispatcher: specs/009-dispatch-throughput; cargo/item board: specs/008-cargo-priority-item-board; orphan recovery: specs/007-orphan-fleet-recovery; dashboard evidence: specs/006-bottleneck-dashboard; blueprint evidence: specs/005-filn-blueprint-library; powered fleet/recovery evidence: specs/004-powered-fleet-dispatch; station upgrade evidence: specs/003-filn-station-upgrade; route/delivery evidence remains in specs/002-lua-route-control and native M0/M1 in specs/001-filn-parking-routing.
 Canonical mod source: mods/FicsItLogisticsNetwork. StarterProject is the upstream development

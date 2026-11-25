@@ -1,30 +1,26 @@
 # FicsIt Logistics Network (FILN)
 
-Dynamic truck logistics for Satisfactory: providers, requesters and home depots.
+Automatic solid and fluid truck logistics for Satisfactory: providers, requesters and dedicated home depots.
 
-**Experimental source project. No installable Satisfactory Mod Manager release exists yet.**
+**Experimental source project. No installable SMM release exists yet.** The current scope is [Spec Kit feature 014](workspace/specs/014-native-completion/spec.md); see the [consistency audit](workspace/specs/014-native-completion/consistency-audit.md).
 
-## Implementations
+- `workspace/mods/FicsItLogisticsNetwork`: canonical SML C++ native mod. Automatic dispatch, home ownership/overflow, transfer receipts and native dashboard are implemented in source but gameplay is unverified. Target is standalone solid/fluid logistics with a FILN-owned selector; the current source still has a superseded Smarter Truck Stations dependency and solid-only restrictions. Neither is acceptable for release.
+- `workspace/experiments/FILNLua`: separate historical UE4SS/KDataForge experiment and behavior reference, not native runtime. Its dashboard frontend is reused by the native read-only service. Do not install Lua dispatcher alongside native tests.
 
-- `workspace/mods/FicsItLogisticsNetwork`: native SML C++ prototype for manual pairing and routing. Unreal compilation and runtime acceptance remain pending.
-- `workspace/experiments/FILNLua`: newer UE4SS dispatcher, programmable stations, depot handling and local dashboard. This is a separate experimental runtime, not the native plugin.
+Intended gameplay: build a dedicated depot and ordinary LOAD/UNLOAD stations, select one compatible resource at each requester, assign vehicles through normal depot route/autopilot controls. No management panel or manual registration. Statistics are web-only.
 
-The Lua runtime requires manual UE4SS and KDataForge setup. Follow its [setup and limitations](workspace/experiments/FILNLua/README.md); copying this repository into the game Mods folder will not install it. Canonical defaults disable route writes and automatic dispatch.
-
-See the [release checklist](workspace/RELEASE.md) for the remaining SML integration, Win64 Alpakit packaging and runtime validation work. [Development setup](DEVELOPMENT.md) documents the external toolchain and StarterProject, which are not vendored here.
+See [release requirements](workspace/RELEASE.md), [development setup](DEVELOPMENT.md) and [native build instructions](workspace/mods/FicsItLogisticsNetwork/docs/HEADLESS.md).
 
 ## Host checks
 
 ```bash
 bash scripts/test-filn.sh
-bash scripts/test-filn-lua.sh
 python3 -m unittest discover -s scripts/tests
+python3 scripts/report-native-acceptance.py
 ```
 
-These checks do not prove game compatibility. Some Python tests require localhost sockets.
+The acceptance report must fail while requirements remain unresolved. Host tests do not prove runtime compatibility. Historical Lua tests: `bash scripts/test-filn-lua.sh`.
 
-## Source scope
+Game saves, runtime state, logs, local credentials, downloaded toolchains, upstream StarterProject and generated archives are excluded. Historical evidence may refer to local-only files. Never interrupt the running game, automate its UI, or migrate the original City save.
 
-Game saves, runtime state, logs, local credentials, downloaded toolchains, upstream StarterProject and generated archives are excluded. Historical spec/evidence links in development notes refer to the original workspace and may not be available here.
-
-New FILN code is GPL-3.0-only; see [LICENSE](LICENSE). Game/engine content retains its upstream ownership. Item icon provenance is recorded in `workspace/experiments/FILNLua/dashboard/icons/manifest.json`.
+New FILN code is GPL-3.0-only; see [LICENSE](LICENSE). Game/engine content retains upstream ownership. Item icon provenance is in `workspace/experiments/FILNLua/dashboard/icons/manifest.json`. Smarter Truck Stations is a technical reference only; no redistribution license was identified.

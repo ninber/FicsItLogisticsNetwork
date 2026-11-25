@@ -1,60 +1,19 @@
 # FILN release preparation
 
-FILN is not yet ready for Satisfactory Mod Manager (SMM). This source handoff
-contains no cooked game binaries and must not be uploaded as an installable mod.
+**Release blocked.** The source handoff is not an installable SMM mod.
 
-## Current implementations
+Authoritative scope: [native specification](specs/014-native-completion/spec.md), [standalone station requirements](specs/014-native-completion/standalone-station-implementation.md), [consistency audit](specs/014-native-completion/consistency-audit.md), [acceptance matrix](specs/014-native-completion/acceptance.json).
 
-`mods/FicsItLogisticsNetwork` is the canonical native SML prototype (0.1.0).
-It implements manual pairing/routing primitives. Its host tests do not establish
-Unreal compilation, module startup or game compatibility.
+Canonical native implementation: `mods/FicsItLogisticsNetwork`. Historical Lua experiment: `experiments/FILNLua` (not part of native runtime or package). Browser dashboard may run separately in read-only native mode.
 
-`experiments/FILNLua` contains the newer UE4SS dispatcher and KDataForge building
-definitions. These features are not implemented by the native plugin. Copying
-Lua into an SML plugin or adding a descriptor will not supply a Lua runtime.
-The canonical Config.lua disables route writes and automatic dispatch by default.
+## Release sequence
 
-## Reproduce the preparation
+1. Reconcile unpublished local native compilation fixes; remove required and optional Smarter Truck Stations dependencies from native source, assets, build and package metadata. Do not copy unlicensed assets.
+2. Implement FILN-owned single-resource selection for both existing solid and fluid stations using original game UI. Verify resource form, capacity, ingress, docking and multiplayer authority.
+3. Resolve depot root-module authoring failure with supported native SML root discovery; author and independently reload original depot and UI assets, confirm cook inclusion.
+4. Verify automatic ownership/overflow, delivery/transfer receipts, parking/fuel/recovery, read-only dashboard and performance in isolated game copies, with no Smarter Truck Stations/Lua/UE4SS runtime. Legacy conversion is external; original City and running session untouched.
+5. Build matching CSS/SML Win64 client/server targets, cook with Alpakit, inspect PE, actual cooked content and imports, validate SMM profile. Do not deploy or publish until separately authorized and all release gates verified.
 
-From the outer repository directory:
+Run portable and Python tests, then `python3 scripts/report-native-acceptance.py` (must fail while unresolved). `python3 scripts/prepare-filn-release.py` creates only a source handoff. The package verifier enforces versioned SML-only metadata; older dependency-based archives must fail. This is necessary, not sufficient, for acceptance.
 
-```bash
-bash scripts/test-filn.sh
-bash scripts/test-filn-lua.sh
-python3 -m unittest discover -s scripts/tests
-python3 scripts/prepare-filn-release.py
-```
-
-The allowlisted source ZIP in `workspace/releases` excludes saves, checkpoints,
-logs, command queues, dispatch journals, local configuration, downloaded loaders,
-node_modules and build caches. It includes canonical safe configuration only.
-The JSON report records file hashes and outstanding release blockers.
-The archive is a source handoff, not a complete development environment or installer.
-Dashboard server tooling and the upstream StarterProject stay in the workspace.
-
-## Complete the SMM release
-
-1. Implement the Lua dispatcher/building feature set in the native SML module,
-   or establish and validate an explicitly supported SML Lua runtime integration.
-   The current UE4SS proxy/bootstrap and separate host dashboard service are not
-   supplied by the native plugin.
-2. Install the version-matched CSS engine, MSVC/Wine and Wwise toolchain described
-   in the outer README. Build FactoryEditor, resolve UHT/UBT issues and author/cook
-   the missing native building assets. Keep canonical source outside StarterProject.
-3. Verify exact game/SML compatibility before changing GameVersion or dependency
-   ranges; do not widen the existing ranges based on portable tests.
-4. Run game acceptance on a disposable save with user-controlled session loading.
-   Cover registration, delivery, fueling, return, save/reload and recovery. Record
-   evidence in the validation docs and keep unfinished Spec Kit tasks open.
-5. Package Win64 with Alpakit Release. Linux editor binaries cannot load in the
-   Windows game under Proton. Claim server support only after separate validation.
-6. Inspect and test Alpakit's generated multi-target release archive; complete
-   author/contact, bug reporting, dependency and version metadata for publishing.
-   Upload that generated archive to ficsit.app for SMM distribution.
-
-Official packaging and upload instructions:
-- https://docs.ficsit.app/satisfactory-modding/latest/Development/BeginnersGuide/ReleaseMod.html
-- https://docs.ficsit.app/satisfactory-modding/latest/UploadToSMR.html
-
-No player session, installed game files, Steam launch settings or service setup
-are modified by source preparation.
+Official packaging: https://docs.ficsit.app/satisfactory-modding/latest/Development/BeginnersGuide/ReleaseMod.html

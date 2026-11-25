@@ -34,8 +34,8 @@ def main():
         'native_version': descriptor['SemVersion'],
         'blockers': [
             'Lua dispatcher is a UE4SS experiment, not an SML runtime module.',
-            'Native UHT/UBT compilation and Win64 Alpakit Release packaging have not passed.',
-            'Native automatic dispatch/custom assets do not implement Lua feature parity.',
+            'Local editor compile/link reported with unpublished unity fixes; current standalone build and Win64 package not verified.',
+            'Current source still depends on TruckStationSettings and excludes fluids; independent selector and depot asset authoring/reload remain blocked.',
             'Runtime acceptance and dependency compatibility remain pending.',
         ],
         'local_css_engine_present': (ROOT / 'toolchains/UnrealEngineCSS/Engine/Build/BatchFiles/Linux/Build.sh').is_file(),

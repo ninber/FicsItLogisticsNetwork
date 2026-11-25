@@ -88,3 +88,7 @@ The dependency scanner walks typed values and map keys rather than serializing
 whole objects to JSON (64-bit counters can be BigInt). Native construction
 statistics in `mActorsBuiltCount` are intentionally preserved and reported;
 merging historical maxima for different classes would be an approximation.
+
+## Current standalone scope (2026-11-25)
+
+Native conversion is preparation only: the manifest is not native configured requesters or depots. Do not convert requesters back to TruckStationSettings for native release. Preserve original explicit resource, actor/identifier/road identity, fuel/cargo and connections; apply FILN-owned selection and depot recipe only after assets/APIs are proven. Legacy tools may read old references for external copy-only conversion. Never rewrite original City or mark missing/skipped configuration successful.

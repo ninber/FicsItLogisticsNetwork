@@ -1,15 +1,15 @@
 # FicsIt Logistics Network — native C++ mod
 
-**Development branch, not a verified release.** SML 3.12.1 / CSS 5.6.1-87 / game CL520140 with required Smarter Truck Stations (TruckStationSettings 1.1.x). No dependency on Lua or UE4SS. All migration of older saves is external.
+**Development branch, not a verified release.** Target: SML 3.12.1 / CSS 5.6.1-87 / game CL520140, SML-only dependency, solid and fluid logistics. Current source still requires TruckStationSettings and excludes fluid cargo; both are release blockers, not requirements. No Lua or UE4SS native runtime. All migration of older saves is external.
 
 ## Intended in-game setup (not yet runtime accepted)
 
 1. Build a dedicated FILN depot (native cooked asset still missing).
-2. Build an ordinary LOAD truck station for solid supply.
-3. Build a Smarter Truck Stations programmable UNLOAD station; select exactly one solid item in its existing FILTERS tab.
+2. Build ordinary LOAD stations for solid or fluid supply.
+3. Build ordinary compatible UNLOAD stations and select exactly one resource using FILN's own native-looking selector (not implemented yet).
 4. Use the normal vehicle route/autopilot controls to opt a truck into any depot. FILN adopts it automatically and redirects a second truck to a free reachable depot if necessary.
 
-No FILN menus, register button or dispatcher switch. Fluid trucks/stations are unavailable to FILN for this release; vanilla fluid logistics remain unchanged. Existing web dashboard native telemetry is pending. The recorded vanilla depot fallback is development-only, not a substitute for the missing dedicated asset.
+No FILN management menus, register button or dispatcher switch. Both media are required; existing fluid exclusion is unfinished implementation. Native dashboard telemetry is implemented in source, not gameplay verified. The recorded vanilla depot fallback is development-only, not a substitute for the missing dedicated asset. See the [consistency audit](../../specs/014-native-completion/consistency-audit.md).
 
 ## Build and verification
 
@@ -20,7 +20,9 @@ bash scripts/test-filn.sh
 bash scripts/install-filn.sh
 bash scripts/headless.sh native
 bash scripts/headless.sh integration
-bash scripts/headless.sh package
+# Depot authoring and standalone selector assets must be fixed and reload verified first.
+# Packaging is blocked until current scope is implemented.
+# bash scripts/headless.sh package
 ```
 
 The install script copies canonical source to the ignored StarterProject plugin, removing only retired canonical source files; it preserves editor assets. The portable regression workflow runs GCC and Clang. Earlier UHT/C++/link evidence predates the current branch. Actual native compile, inventory/road/fuel behavior, game acceptance and Win64 packaging remain to be verified. See [headless instructions](docs/HEADLESS.md), [validation](docs/VALIDATION.md), and [current Spec Kit tasks](../../specs/014-native-completion/tasks.md). No automatic game launch, installation or publication is part of the build.

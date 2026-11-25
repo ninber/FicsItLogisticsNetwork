@@ -10,12 +10,12 @@ requirements supply the actual safety/behavior constraints.
 workflows idempotent, locked and observable. Preserve all caches and existing dependencies.
 3. Import PR #1 policy by pinned SHA; audit Lua/API/spec differences and add traceability.
 4. Extend vanilla station persistence with native slot restrictions and safe restoration.
-5. Implement native resource/mode UI; validate inventory/pipe ingress and capacities.
+5. Remove all Smarter Truck Stations dependencies; implement FILN-owned single-resource selector on both station types without changing LOAD/UNLOAD labels; validate inventory/pipe ingress and capacities.
 6. Add bounded dirty-state snapshots, shared dispatcher, native graph adapter and lazy
 requester cache. Atomic reservations followed by native route and autopilot readback.
-7. Native depots/refueling, measured transfers, retained-cargo FSM, recovery and save lifecycle.
+7. Resolve native root discovery/asset authoring, independently reload and cook depot and selector assets; verify compatible depots/refueling, automatic enrollment/overflow, measured transfers, retained-cargo FSM, recovery and save lifecycle.
 8. Legacy migration is external; native source provides ordinary registration and safe uninstall only.
-9. Complete management UI, disabled-state semantics and isolated uninstall preparation/load.
+9. Complete read-only browser telemetry for both media, disabled-state semantics and isolated uninstall preparation/load. No in-game management UI.
 10. Run pure, Unreal integration, multiplayer and isolated game acceptance separately; produce
 and inspect Win64 package only after these gates. Never deploy to the active installation.
 

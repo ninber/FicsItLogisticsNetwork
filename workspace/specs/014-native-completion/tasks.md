@@ -188,3 +188,6 @@ Supersedes required TruckStationSettings dependency, external FILTERS adapter, f
 - [ ] Use native public station resource-form and vehicle docking-resource APIs; verify liquid/gas forms against real SDK/game; retain actual native docking result receipt bridge, test full/partial solid and fluid ingress/docking and fail closed on mismatch. Replace temporary solid-only enrollment and dispatch guards only after applicable adapters and docking checks exist.
 - [ ] Reconcile native depot authoring failure using native SML root module discovery (one root per type); explicitly cook/validate assets in clean editor process. Verify shared depot compatibility or provide medium-specific depot if required by actual docking behavior.
 - [ ] Verify standalone build/Win64 package and isolated solid + fluid deliveries with TruckStationSettings, Lua dispatcher and UE4SS absent. Migrate only external copies of legacy saves; do not install or touch original City/running game.
+
+- [x] Reconcile top-level, workspace, native README, release and traceability instructions with standalone solid/fluid scope; package verifier rejects required/optional/disabled third-party dependencies.
+- [ ] Resolve source inconsistencies enumerated in consistency-audit.md; no runtime/build readiness claim. Reconcile local Codex branch first.
