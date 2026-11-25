@@ -99,8 +99,8 @@ void ALogisticsSubsystem::Transfer(AFGWheeledVehicleIdentifier* V,TSubclassOf<UF
  const bool TargetDock=!Added && !R.AbortReturn && IsValid(Requester) && !Requester->GetIsInLoadMode() &&
   Requester->GetDockedActor()==V->GetOwnerVehicle() && (!Other || Other==Requester->GetInventory()) &&
   (State==S::ToRequester || State==S::Unloading || State==S::Loading || State==S::ToProvider);
- // Delegates alone cannot prove delivery. In particular TSS omits destination
- // inventory, and native factory delegates may be off-thread. Only the actual
+ // Delegates alone cannot prove delivery: destination inventory may be absent
+ // and native factory delegates may be off-thread. Only the actual
  // station call's returned transfer amount can credit a matching job.
  if(Item==R.Resource && (SourceDock || TargetDock) && EndpointConfigurationValid(R)) return;
  R.CargoOriginKnown=false; R.CargoOriginStorage=false;

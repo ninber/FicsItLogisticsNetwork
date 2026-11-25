@@ -15,34 +15,45 @@ class NativePrerequisiteTests(unittest.TestCase):
         self.root=Path(self.temp.name)
         self.project=self.root/"FactoryGame.uproject"
         self.project.write_text("{}")
-        self.up=self.root/"Mods/TruckStationSettings"
-        self.depot=self.root/"Mods/FicsItLogisticsNetwork/Content/Depot"
+        self.plugin=self.root/"Mods/FicsItLogisticsNetwork"
+        self.depot=self.plugin/"Content/Depot"
     def put(self,path,data):
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_bytes(data)
-    def install_dependency(self):
-        self.put(self.up/"TruckStationSettings.uplugin",json.dumps({"SemVersion":"1.1.0"}).encode())
-        self.put(self.up/"Source/TruckStationSettings/TruckStationSettings.Build.cs",b"// test fixture")
-        for name in ("Build_ProgrammableTruckStation.uasset","Widget_FiltersTab.uasset"):
-            self.put(self.up/"Content"/name,bytes.fromhex("c1832a9e")+b"x"*150)
-    def test_absent_dependency_blocks_before_compiler(self):
-        with self.assertRaisesRegex(ValueError,"Required development dependency missing"):
+    def install_descriptor(self, extra=()):
+        deps=[{"Name":"SML","Enabled":True,"SemVersion":">=3.12.1 <3.13.0"},*extra]
+        self.put(self.plugin/"FicsItLogisticsNetwork.uplugin",json.dumps({"Plugins":deps}).encode())
+    def test_missing_filn_descriptor_blocks(self):
+        with self.assertRaisesRegex(ValueError,"FILN source descriptor missing"):
             mod.check(self.project)
-    def test_dependency_header_only_does_not_prove_assets(self):
-        self.install_dependency()
-        self.put(self.up/"Content/Widget_FiltersTab.uasset",b"version https://git-lfs.github.com/spec/v1")
-        with self.assertRaisesRegex(ValueError,"not an Unreal asset"):
-            mod.check(self.project)
+    def test_standalone_without_other_mod_installed(self):
+        self.install_descriptor()
+        self.assertTrue(mod.check(self.project))
+        self.assertFalse((self.root/"Mods/TruckStationSettings").exists())
+    def test_old_dependency_rejected_even_optional_or_disabled(self):
+        for enabled,optional in ((True,False),(True,True),(False,False)):
+            with self.subTest(enabled=enabled,optional=optional):
+                self.install_descriptor([{"Name":"TruckStationSettings","Enabled":enabled,"Optional":optional,"SemVersion":"1.1.0"}])
+                with self.assertRaisesRegex(ValueError,"SML-only"):
+                    mod.check(self.project)
     def test_build_allows_authoring_but_package_requires_depot(self):
-        self.install_dependency()
+        self.install_descriptor()
         self.assertTrue(mod.check(self.project))
         with self.assertRaisesRegex(ValueError,"authored depot asset"):
             mod.check(self.project,True)
         for name in mod.DEPOT_FILES:
             self.put(self.depot/name,bytes.fromhex("c1832a9e")+b"x"*150)
         self.assertTrue(mod.check(self.project,True))
-    def test_incompatible_dependency_version(self):
-        self.install_dependency()
-        self.put(self.up/"TruckStationSettings.uplugin",b'{"SemVersion":"2.0.0"}')
-        with self.assertRaisesRegex(ValueError,"Unsupported"):
-            mod.check(self.project)
+        self.put(self.depot/mod.DEPOT_FILES[0],b"version https://git-lfs.github.com/spec/v1")
+        with self.assertRaisesRegex(ValueError,"authored depot asset"):
+            mod.check(self.project,True)
+    def test_canonical_native_source_has_no_external_runtime_imports(self):
+        root=SCRIPTS.parent/"workspace/mods/FicsItLogisticsNetwork"
+        descriptor=json.loads((root/"FicsItLogisticsNetwork.uplugin").read_text())
+        self.assertEqual([p["Name"] for p in descriptor["Plugins"]],["SML"])
+        for folder in ("Source","Config"):
+            for path in (root/folder).rglob("*"):
+                if path.is_file() and path.suffix in (".h",".cpp",".cs",".ini"):
+                    content=path.read_text(encoding="utf-8-sig")
+                    for token in ("TruckStationSettings","Build_ProgrammableTruckStation","KDataForge","UE4SS"):
+                        self.assertNotIn(token,content,str(path))

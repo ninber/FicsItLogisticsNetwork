@@ -45,8 +45,8 @@ void RemoveJobLocked(const ALogisticsSubsystem* Subsystem,const FGuid& Job) {
 }
 void ALogisticsSubsystem::InstallDockReceiptObserver() {
  if(WITH_EDITOR) return;
- // SML v3.12.1 after handlers receive the result even when TSS overrides the
- // original function. FG header documents result = number of items transferred.
+ // SML v3.12.1 after handlers receive the final native operation result.
+ // FG header documents result = number of items transferred.
  SUBSCRIBE_METHOD_AFTER(AFGBuildableDockingStation::Factory_LoadUnloadDockedInventory,
   [](int32 Result,const AFGBuildableDockingStation* Station,UFGInventoryComponent* Cargo) {
    if(Result<=0 || !Station || !Cargo) return;

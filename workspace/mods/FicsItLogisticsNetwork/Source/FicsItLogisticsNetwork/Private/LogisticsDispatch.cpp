@@ -136,7 +136,7 @@ bool ALogisticsSubsystem::EndpointConfigurationValid(const FFILNRegistration& R)
 void ALogisticsSubsystem::Schedule() {
  check(IsInGameThread());
  ConsumeDockReceipts();
- ReconcilePlayerConfiguration();
+ DiscoverDepots();
  SampleTelemetry();
  if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || bChangingFilters || bPreparingUninstall || StationConfigs.IsEmpty() || Registrations.IsEmpty()) return;
  const double Now=GetWorld()->GetTimeSeconds();
@@ -144,7 +144,7 @@ void ALogisticsSubsystem::Schedule() {
   if(Now<NextDispatch) return;
   RequestCursor%=StationConfigs.Num();
   const auto& Q=StationConfigs[RequestCursor]; auto* QB=IsValid(Q.Station)?Q.Station->GetStation():nullptr;
-  if(!IsValid(QB) || !SupportsSolidCargo(QB) || QB->GetIsInLoadMode() || IsDepot(Q.Station) || !Q.Resource || UFGItemDescriptor::GetForm(Q.Resource)!=EResourceForm::RF_SOLID || !QB->GetInventory() || !QB->GetInventory()->IsEmpty()) {
+  if(Q.ExternalFilter || !IsValid(QB) || !SupportsSolidCargo(QB) || QB->GetIsInLoadMode() || IsDepot(Q.Station) || !Q.Resource || UFGItemDescriptor::GetForm(Q.Resource)!=EResourceForm::RF_SOLID || !QB->GetInventory() || !QB->GetInventory()->IsEmpty()) {
    ++RequestCursor; if(RequestCursor>=StationConfigs.Num()) {RequestCursor=0; NextDispatch=Now+5.;} return;
   }
   auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
@@ -187,7 +187,7 @@ void ALogisticsSubsystem::Schedule() {
       // work. Stock is not a road cache key; every new scan resamples it.
       int Kinds=0,Quantity=0,Capacity=0; std::string Actual;
       const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
-      if((PC && PC->Resource!=Q.Resource) || !Inventory(B->GetInventory(),Q.Resource,Kinds,Quantity,Capacity,&Actual) ||
+      if((PC && (PC->ExternalFilter || PC->Resource!=Q.Resource)) || !Inventory(B->GetInventory(),Q.Resource,Kinds,Quantity,Capacity,&Actual) ||
          !filn::dispatch::ProviderResourceMatches(Descriptor(Q.Resource),Actual,Kinds,PC?Descriptor(PC->Resource):std::string()) ||
          !filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*ID->GetStationName().ToString()),TCHAR_TO_UTF8(*Q.Station->GetStationName().ToString()))) { ++Rank.Cursor; continue; }
       double Cost=-1;

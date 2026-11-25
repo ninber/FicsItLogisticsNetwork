@@ -35,6 +35,8 @@ struct FFILNStationConfig {
  UPROPERTY(SaveGame) TSubclassOf<UFGItemDescriptor> Resource;
  // Preserve pre-FILN slot restrictions for explicit uninstall preparation.
  UPROPERTY(SaveGame) TArray<TSubclassOf<UFGItemDescriptor>> OriginalFilters;
+ // Retained only to deserialize old own-state records without treating an
+ // unowned filter as an owned one. Never create new records with this flag.
  UPROPERTY(SaveGame) bool ExternalFilter=false;
 };
 USTRUCT()
@@ -115,7 +117,6 @@ private:
  void ClearDockReceipts();
  void ConsumeDockReceipts();
  bool HasPendingDockReceipts(const FGuid& Job) const;
- static bool IsProgrammableStation(const AFGBuildableDockingStation* Station);
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> HomeStations;
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> DepotIndex;
  void TrackDepot(AFGDockingStationIdentifier* Station);
@@ -173,7 +174,7 @@ private:
  TSet<FString> TelemetryTypeKeys;
  int32 TelemetryTypeCursor=0, TelemetryResourceCursor=0;
  TFuture<bool> TelemetryWrite;
- void ReconcilePlayerConfiguration();
+ void DiscoverDepots();
  void EnsureDepotRecipe();
  static bool IsAuthoredDepot(const AFGDockingStationIdentifier* Station);
  double NextDepotRecipeCheck=0;

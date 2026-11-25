@@ -145,6 +145,7 @@ void ALogisticsSubsystem::Rebuild() {
  for(const auto& C:StationConfigs) if(IsValid(C.Station)) {
   if(ConfigActors.Contains(C.Station) || IsDepot(C.Station) || !StationIds.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(C.Station.Get())) || !C.Resource) bDispatchBlocked=true;
   ConfigActors.Add(C.Station);
+  if(C.ExternalFilter) UE_LOG(LogFILN,Warning,TEXT("Retired unowned filter record is ineligible; explicit safe removal/reconfiguration required"));
  }
  if(bDispatchBlocked) {
   bAutoDispatchEnabled=false;
@@ -191,7 +192,7 @@ void ALogisticsSubsystem::Rebuild() {
    continue;
   }
   const bool Resume=Observed && R.Automatic && R.Resource && R.ExpectedCargo>0 && R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning) &&
-    IsValid(O) && !O->GetDriver() && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home);
+    IsValid(O) && !O->GetDriver() && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home) && (R.AbortReturn || EndpointConfigurationValid(R));
   if(Resume && (R.AbortReturn || ArmDockReceipts(R))) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
   else Recover(R,TEXT("Saved journey cannot safely resume; inspect and return home before reset"));
  }
@@ -212,7 +213,7 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
  TSet<UFGInventoryComponent*> Seen;
  for(const auto& C:Configs) {
   auto* B=Building(C.Station); auto* I=IsValid(B)?B->GetInventory():nullptr;
-  if(!IsValid(I) || !C.Resource || Seen.Contains(I) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096 ||
+  if(C.ExternalFilter || !IsValid(I) || !C.Resource || Seen.Contains(I) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096 ||
      I->GetSizeLinear()!=C.OriginalFilters.Num() || (Restore && B->GetDockedActor())) return false;
   Seen.Add(I);
   if(!Restore) {

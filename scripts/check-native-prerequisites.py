@@ -1,35 +1,29 @@
 #!/usr/bin/env python3
-"""Fail before UBT/cook when required FILN development inputs are absent."""
+"""Validate standalone FILN development inputs; never require another gameplay mod."""
 import argparse
 import json
 from pathlib import Path
-import re
 import sys
 
 DEPOT_FILES = ("Desc_FILNDepot.uasset", "Recipe_FILNDepot.uasset", "RootGameWorldModule_FILNDepot.uasset")
-PIN = "f481adc3d607b0213b80e53be893b8362eed0448"
 
 def check(project, require_depot=False):
-    mods = project.parent / "Mods"
-    upstream = mods / "TruckStationSettings"
-    descriptor = upstream / "TruckStationSettings.uplugin"
+    plugin = project.parent / "Mods" / "FicsItLogisticsNetwork"
+    descriptor = plugin / "FicsItLogisticsNetwork.uplugin"
     if not descriptor.is_file():
-        raise ValueError(f"Required development dependency missing: {descriptor}. Obtain Smarter Truck Stations source separately (audited upstream {PIN}); do not copy cooked game DLLs into the Editor project.")
+        raise ValueError(f"Required FILN source descriptor missing: {descriptor}. Run scripts/install-filn.sh.")
     metadata = json.loads(descriptor.read_text(encoding="utf-8-sig"))
-    if not re.fullmatch(r"1\.1\.\d+", str(metadata.get("SemVersion", ""))):
-        raise ValueError(f"Unsupported Smarter Truck Stations version: {metadata.get('SemVersion')!r}; expected 1.1.x")
-    for name in ("Source/TruckStationSettings/TruckStationSettings.Build.cs", "Content/Build_ProgrammableTruckStation.uasset", "Content/Widget_FiltersTab.uasset"):
-        path = upstream / name
-        if not path.is_file():
-            raise ValueError(f"Required dependency source/asset missing: {path}")
-        if path.suffix == ".uasset" and not valid_package(path):
-            raise ValueError(f"Dependency package is not an Unreal asset (possibly Git LFS pointer): {path}")
+    deps = metadata.get("Plugins", [])
+    if (not isinstance(deps, list) or len(deps) != 1 or not isinstance(deps[0], dict)
+            or deps[0].get("Name") != "SML" or deps[0].get("Enabled") is not True
+            or deps[0].get("Optional", False) or not deps[0].get("SemVersion")):
+        raise ValueError("Expected required versioned SML-only dependency in installed FILN descriptor; sync canonical source")
     if require_depot:
-        depot = mods / "FicsItLogisticsNetwork" / "Content" / "Depot"
+        depot = plugin / "Content" / "Depot"
         for name in DEPOT_FILES:
             path = depot / name
             if not valid_package(path):
-                raise ValueError(f"Required authored depot asset absent or invalid: {path}. Run headless.sh author-depot after a successful editor build; do not package source-only.")
+                raise ValueError(f"Required authored depot asset absent or invalid: {path}. Resolve authoring/reload before packaging.")
     return True
 
 def valid_package(path):
@@ -48,7 +42,7 @@ def main():
         check(args.project.resolve(), args.require_depot)
     except (OSError, ValueError, TypeError) as exc:
         sys.exit("BLOCKED: " + str(exc))
-    print("PASS native input existence and package headers; cook and gameplay still require verification")
+    print("PASS standalone FILN descriptor and required package headers; cook and gameplay still require verification")
 
 if __name__ == "__main__":
     main()

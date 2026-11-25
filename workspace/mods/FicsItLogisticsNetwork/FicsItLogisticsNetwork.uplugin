@@ -4,7 +4,7 @@
   "VersionName": "0.1.0",
   "SemVersion": "0.1.0",
   "FriendlyName": "FicsIt Logistics Network",
-  "Description": "M0/M1 native parking and GUID routing prototype",
+  "Description": "Native automatic truck logistics (development)",
   "CreatedBy": "FILN contributors",
   "GameVersion": ">=520140",
   "CanContainContent": true,
@@ -20,11 +20,6 @@
       "Name": "SML",
       "Enabled": true,
       "SemVersion": ">=3.12.1 <3.13.0"
-    },
-    {
-      "Name": "TruckStationSettings",
-      "Enabled": true,
-      "SemVersion": ">=1.1.0 <1.2.0"
     }
   ]
 }
