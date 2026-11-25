@@ -57,6 +57,7 @@ void ALogisticsSubsystem::EndPlay(const EEndPlayReason::Type Reason) {
  GetWorldTimerManager().ClearTimer(Watchdog);
  GetWorldTimerManager().ClearTimer(DispatchTimer);
  GetWorldTimerManager().ClearTimer(DeferredRebuild); bRegistryValidated=false; DestroyedVehicles.Empty();
+ StopNativeDashboardHeartbeat();
  ResetTelemetry();
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
  TransferObservers.Empty(); TransferByTruck.Empty();

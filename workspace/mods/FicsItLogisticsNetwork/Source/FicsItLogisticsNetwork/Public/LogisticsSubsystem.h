@@ -155,6 +155,10 @@ private:
  void Schedule();
  void SampleTelemetry();
  void ResetTelemetry();
+ void RefreshNativeDashboardHeartbeat();
+ void StopNativeDashboardHeartbeat();
+ double NextNativeDashboardHeartbeat=0;
+ bool bNativeDashboardHeartbeatError=false;
  double NextTelemetryDemandCheck=0, NextTelemetryStart=0;
  bool bTelemetryDemand=false, bTelemetryCollecting=false;
  int32 TelemetryStationCursor=0, TelemetryVehicleCursor=0;

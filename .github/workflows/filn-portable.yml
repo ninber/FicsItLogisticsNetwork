@@ -10,6 +10,10 @@ on:
       - 'scripts/author-native-depot.py'
       - 'scripts/tests/test_native_depot_authoring.py'
       - 'scripts/filn-dashboard.py'
+      - 'scripts/filn_dashboard_lifecycle.py'
+      - 'scripts/tests/test_filn_dashboard_lifecycle.py'
+      - 'scripts/install-filn-dashboard-service.sh'
+      - 'scripts/start-filn-dashboard.sh'
       - 'scripts/filn_dashboard_model.py'
       - 'scripts/tests/test_filn_dashboard.py'
       - 'scripts/verify-native-package.py'
@@ -25,6 +29,10 @@ on:
       - 'scripts/author-native-depot.py'
       - 'scripts/tests/test_native_depot_authoring.py'
       - 'scripts/filn-dashboard.py'
+      - 'scripts/filn_dashboard_lifecycle.py'
+      - 'scripts/tests/test_filn_dashboard_lifecycle.py'
+      - 'scripts/install-filn-dashboard-service.sh'
+      - 'scripts/start-filn-dashboard.sh'
       - 'scripts/filn_dashboard_model.py'
       - 'scripts/tests/test_filn_dashboard.py'
       - 'scripts/verify-native-package.py'
@@ -48,6 +56,7 @@ jobs:
       - run: bash scripts/test-filn.sh
 
       - run: python3 -m unittest discover -s scripts/tests -p 'test_filn_dashboard.py'
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_filn_dashboard_lifecycle.py'
       - run: python3 -m unittest discover -s scripts/tests -p 'test_native_package_verifier.py'
       - run: python3 -m py_compile scripts/author-native-depot.py
       - run: python3 -m unittest discover -s scripts/tests -p 'test_native_depot_authoring.py'

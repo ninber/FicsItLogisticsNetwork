@@ -3,7 +3,7 @@ import sys
 import tempfile
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from filn_dashboard_lifecycle import ModLifetime, fresh_heartbeat, game_processes
+from filn_dashboard_lifecycle import ModLifetime, fresh_heartbeat, game_processes, NativeModLifetime, native_world, native_service_units
 
 class LifetimeTests(unittest.TestCase):
     def setUp(self):
@@ -37,5 +37,32 @@ class LifetimeTests(unittest.TestCase):
         for pid,comm,command in [('42','FactoryGameStea','C:\\game\\FactoryGameSteam-Win64-Shipping.exe'),('43','steam','steam'),('44','FactoryGameOther','other.exe')]:
             p=root/pid;p.mkdir();(p/'comm').write_text(comm);(p/'cmdline').write_bytes(command.encode()+b'\0');(p/'stat').write_text(pid+' (game) '+' '.join(['S']+['0']*18+['123']))
         self.assertEqual(game_processes(root),{'42':'123'})
+
+class NativeLifetimeTests(unittest.TestCase):
+    def test_native_never_uses_lua_or_process_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'dashboard-native-mod.txt'
+            self.assertFalse(NativeModLifetime(path,lambda:100).alive())
+            path.write_text('100')
+            self.assertFalse(NativeModLifetime(path,lambda:100).alive())
+            path.write_text('100\nabc123\n')
+            life=NativeModLifetime(path,lambda:100)
+            self.assertTrue(life.alive())
+            path.write_text('100\ndef456\n')
+            self.assertFalse(life.alive())
+    def test_native_expiry_and_removal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'dashboard-native-mod.txt'
+            path.write_text('100\nabc123\n')
+            self.assertEqual(native_world(path,129), 'abc123')
+            self.assertIsNone(native_world(path,130))
+            path.unlink()
+            self.assertIsNone(native_world(path,100))
+    def test_native_service_is_not_enabled_at_login(self):
+        unit, watch=native_service_units(Path('/home/test/root'),Path('/home/test/Saved/FILN'))
+        self.assertIn('--native-dir "/home/test/Saved/FILN" --with-game-mod',unit)
+        self.assertNotIn('[Install]',unit)
+        self.assertIn('PathChanged=/home/test/Saved/FILN/dashboard-native-mod.txt',watch)
+        self.assertNotIn('FILNLua',unit+watch)
 
 if __name__=='__main__':unittest.main()

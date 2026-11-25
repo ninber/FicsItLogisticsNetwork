@@ -95,12 +95,43 @@ void ALogisticsSubsystem::ResetTelemetry() {
  TelemetryStationQueue.Reset(); TelemetryVehicleQueue.Reset();
  TelemetryStations.Reset(); TelemetryVehicles.Reset(); TelemetryErrors.Reset(); TelemetryCapacityRows.Reset();
  TelemetryResources.Reset(); TelemetryResourceSet.Reset(); TelemetryTypes.Reset(); TelemetryTypeKeys.Reset();
- TelemetryTypeCursor=TelemetryResourceCursor=0; TelemetryWorld.Reset();
+ TelemetryTypeCursor=TelemetryResourceCursor=0;
+}
+void ALogisticsSubsystem::RefreshNativeDashboardHeartbeat() {
+ // One small atomic file every five real seconds, independent of browser demand.
+ // Never launch processes or the browser from the game.
+ const double Now=FPlatformTime::Seconds();
+ if(Now<NextNativeDashboardHeartbeat) return;
+ NextNativeDashboardHeartbeat=Now+5.;
+ if(TelemetryWorld.IsEmpty()) TelemetryWorld=FGuid::NewGuid().ToString();
+ const FString Directory=TelemetryDirectory();
+ const FString Target=FPaths::Combine(Directory,TEXT("dashboard-native-mod.txt"));
+ const FString Temp=Target+TEXT(".")+TelemetryWorld+TEXT(".tmp");
+ const FString Body=FString::Printf(TEXT("%lld\n%s\n"),static_cast<long long>(Stamp()),*TelemetryWorld);
+ IFileManager::Get().MakeDirectory(*Directory,true);
+ const bool Written=FFileHelper::SaveStringToFile(Body,*Temp,FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM) &&
+  IFileManager::Get().Move(*Target,*Temp,true,true);
+ if(!Written) {
+  IFileManager::Get().Delete(*Temp,false,true);
+  if(!bNativeDashboardHeartbeatError) UE_LOG(LogFILN,Error,TEXT("Native dashboard heartbeat write failed: %s"),*Target);
+ }
+ bNativeDashboardHeartbeatError=!Written;
+}
+void ALogisticsSubsystem::StopNativeDashboardHeartbeat() {
+ if(!HasAuthority() || TelemetryWorld.IsEmpty()) return;
+ const FString Target=FPaths::Combine(TelemetryDirectory(),TEXT("dashboard-native-mod.txt"));
+ FString Body;
+ TArray<FString> Lines;
+ if(FFileHelper::LoadFileToString(Body,*Target)) {
+  Body.ParseIntoArrayLines(Lines);
+  if(Lines.Num()==2 && Lines[1]==TelemetryWorld) IFileManager::Get().Delete(*Target,false,true);
+ }
 }
 void ALogisticsSubsystem::SampleTelemetry() {
  // Demand-driven, no actor changes, no engine browser calls, no shell/process
  // launch. Only authoritative game-thread samples; writer sees plain JSON.
  if(!HasAuthority() || !GetWorld() || GetWorld()->bIsTearingDown) return;
+ RefreshNativeDashboardHeartbeat();
  const double Now=GetWorld()->GetTimeSeconds();
  if(Now>=NextTelemetryDemandCheck) {
   NextTelemetryDemandCheck=Now+5.;
@@ -123,7 +154,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
   for(auto* S:VS->GetDockingStations()) if(IsValid(S)) TelemetryStationQueue.Add(S);
   for(auto* V:VS->GetAllVehicles()) if(IsValid(V)) TelemetryVehicleQueue.Add(V);
   TelemetryStationCursor=TelemetryVehicleCursor=0; TelemetryStarted=Stamp();
-  if(TelemetryWorld.IsEmpty()) TelemetryWorld=GetWorld()->GetPathName()+TEXT(":")+FGuid::NewGuid().ToString();
+  check(!TelemetryWorld.IsEmpty());
   bTelemetryCollecting=true;
  }
  const auto Error=[this](const FString& Id,const FString& Why) { auto E=Obj(); E->SetStringField(TEXT("id"),Id); E->SetStringField(TEXT("error"),Why); TelemetryErrors.Add(Val(E)); };

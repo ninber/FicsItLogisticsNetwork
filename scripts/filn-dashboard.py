@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 from filn_dashboard_model import analyze
-from filn_dashboard_lifecycle import ModLifetime
+from filn_dashboard_lifecycle import ModLifetime, NativeModLifetime, native_world
 from filn_depot_registration import plan as registration_plan, queue as queue_registration
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,9 +18,10 @@ ASSETS = ROOT/'workspace/experiments/FILNLua/dashboard'
 DEFAULT_SCRIPTS = Path.home()/'.local/share/Steam/steamapps/common/Satisfactory/Engine/Binaries/Win64/ue4ss/Mods/FILNLua/Scripts'
 
 class State:
-    def __init__(self, scripts, native=False):
+    def __init__(self, scripts, native=False, native_lifetime=None):
         self.scripts, self.history, self.snapshot = scripts, {}, None
         self.native = native
+        self.native_lifetime = native_lifetime
         self.lock = threading.Lock()
         self.token = secrets.token_hex(24)
 
@@ -41,6 +42,8 @@ class State:
                     stamp = data.get('exported_at')
                     if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) or not math.isfinite(stamp) or not -5 <= now-stamp <= 45:
                         raise ValueError('Native telemetry stale or invalid timestamp; no current snapshot')
+                    if self.native_lifetime and (not self.native_lifetime.alive() or data.get('world') != self.native_lifetime.world):
+                        raise ValueError('Native telemetry belongs to a different or inactive world')
                     if not isinstance(data.get('dispatcher'), dict) or not isinstance(data.get('errors'), list):
                         raise ValueError('Native telemetry missing dispatcher or sampling-error evidence')
                 self.snapshot = data
@@ -70,8 +73,8 @@ class State:
                         data=analyze(self.snapshot,now,self.history) if self.snapshot else None)
 
 
-def make_server(scripts, port=8765, native=False):
-    state = State(scripts,native)
+def make_server(scripts, port=8765, native=False, native_lifetime=None):
+    state = State(scripts,native,native_lifetime)
     manifest = json.loads((ASSETS/'icons/manifest.json').read_text())
     icons = set(manifest['assets']) | {'unknown.svg'}
     class Handler(BaseHTTPRequestHandler):
@@ -109,7 +112,7 @@ def make_server(scripts, port=8765, native=False):
                 body = (ASSETS/'icons'/path[7:]).read_bytes()
                 content_type = 'image/svg+xml' if path.endswith('.svg') else 'image/png'
             elif path == '/health':
-                body, content_type = b'{"service":"filn-dashboard","version":1}', 'application/json'
+                body, content_type = json.dumps({'service':'filn-dashboard','version':1,'runtime':'native' if state.native else 'lua'}).encode(), 'application/json'
             elif path in ('/', '/app.js', '/style.css'):
                 name = 'index.html' if path == '/' else path[1:]
                 body = (ASSETS/name).read_bytes()
@@ -139,16 +142,15 @@ def main():
     args = parser.parse_args()
     native = args.native_dir is not None
     if native:
-        if args.with_game_mod: parser.error('Lua lifetime watcher is not supported in native mode')
         args.scripts_dir=args.native_dir.resolve()
         args.scripts_dir.mkdir(parents=True,exist_ok=True)
     elif not (args.scripts_dir/'main.lua').is_file():
         parser.error('Installed FILNLua Scripts directory not found')
-    lifetime = ModLifetime(args.scripts_dir/'dashboard-mod.txt') if args.with_game_mod else None
+    lifetime = (NativeModLifetime(args.scripts_dir/'dashboard-native-mod.txt') if native else ModLifetime(args.scripts_dir/'dashboard-mod.txt')) if args.with_game_mod else None
     if lifetime and not lifetime.alive():
         print('FILN mod is not running; dashboard remains stopped.',flush=True)
         return
-    server = make_server(args.scripts_dir,native=native)
+    server = make_server(args.scripts_dir,native=native,native_lifetime=lifetime if native else None)
     def watch_mod():
         while lifetime.alive():
             time.sleep(3)
