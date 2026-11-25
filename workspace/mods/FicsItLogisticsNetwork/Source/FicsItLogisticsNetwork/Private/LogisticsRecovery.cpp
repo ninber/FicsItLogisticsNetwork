@@ -162,13 +162,26 @@ void ALogisticsSubsystem::AuditIdleFleet() {
   if(R.Relocating) {
    // Relocation is not a cargo job. Hold only on verified physical arrival;
    // never release the new exclusive bay merely because AP was disabled.
-   if(!V->IsAutopilotEnabled() || O->GetDriver() || V->GetVehicleRoute()!=R.IdleRoute || !ValidHome(R.Home)) { R.Held=false; continue; }
-   if(H->GetDockedActor()!=O || FMath::Abs(O->GetForwardSpeed())>1.f) continue;
+   if(!V->IsAutopilotEnabled() || O->GetDriver() || R.IdleRoute.Num()!=2 || R.IdleRoute[0]!=Home || R.IdleRoute[1]==Home || V->GetVehicleRoute()!=R.IdleRoute || !ValidHome(R.Home)) { R.Held=false; continue; }
+   if(H->GetDockedActor()!=O || FMath::Abs(O->GetForwardSpeed())>1.f) {
+    if(V->IsCurrentlyDocking() || !O->HasFuel() || (V->GetAutopilotErrorStatus()==EVehicleAutopilotErrorStatus::None && V->GetCurrentTargetWaypointIndex()==0) || !R.NavigationRetry.Due(Now)) continue;
+    auto* VS=AFGVehicleSubsystem::Get(GetWorld()); auto* Preset=O->GetVehiclePathPreset();
+    const auto From=V->GetCurrentToPathNodeGUID(); double Cost=-1;
+    if(!From.IsValid() || !Preset || !VS) { R.NavigationRetry.Attempt(Now); continue; }
+    if(!RoadCache.Distance(VS,From,Home,Preset,Cost)) continue;
+    R.NavigationRetry.Attempt(Now);
+    if(Cost<0 || O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.IdleRoute || V->IsCurrentlyDocking()) continue;
+    V->SetVehicleRoute(R.IdleRoute);
+    if(V->GetVehicleRoute()!=R.IdleRoute || !V->IsAutopilotEnabled() || O->GetDriver()) { bDispatchBlocked=true; continue; }
+    V->SetCurrentTargetWaypoint(0);
+    if(V->GetCurrentTargetWaypointIndex()!=0 || V->GetVehicleRoute()!=R.IdleRoute || !V->IsAutopilotEnabled() || O->GetDriver()) bDispatchBlocked=true;
+    continue;
+   }
    V->SetVehicleRoute(Route);
    if(V->GetVehicleRoute()!=Route || !V->IsAutopilotEnabled() || O->GetDriver()) {
     bDispatchBlocked=true; R.Held=false; R.Diagnostic=TEXT("Depot relocation completion readback failed"); continue;
    }
-   R.IdleRoute=Route; R.Relocating=false; R.Held=true; R.Diagnostic=TEXT("Relocated to free depot"); ResetScan(); continue;
+   R.IdleRoute=Route; R.Relocating=false; R.Held=true; R.NavigationRetry.Reset(); R.Diagnostic=TEXT("Relocated to free depot"); ResetScan(); continue;
   }
   const bool Owned=Home.IsValid() && R.IdleRoute==Route && V->GetVehicleRoute()==Route && !R.JobId.IsValid();
   const bool Docked=H->GetDockedActor()==O;

@@ -160,7 +160,7 @@ void ALogisticsSubsystem::Rebuild() {
  bRegistryValidated=true;
  bAutoDispatchEnabled=!bPreparingUninstall;
  PlayerStationScan.Empty(); PlayerVehicleScan.Empty(); PlayerStationCursor=PlayerVehicleCursor=0;
- NextPlayerStationScan=NextPlayerVehicleScan=0;
+ NextPlayerStationScan=NextPlayerVehicleScan=0; OverflowCursor.Empty(); PendingHomeReason.Empty();
  for(const auto& Depot:DepotStations) if(IsValid(Depot)) {
   if(auto* B=Building(Depot); IsValid(B) && !B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
  }

@@ -148,6 +148,8 @@ private:
  TArray<TWeakObjectPtr<AFGWheeledVehicleIdentifier>> PlayerVehicleScan;
  int32 PlayerStationCursor=0, PlayerVehicleCursor=0;
  double NextPlayerStationScan=0, NextPlayerVehicleScan=0;
+ TMap<TWeakObjectPtr<AFGWheeledVehicleIdentifier>,int32> OverflowCursor;
+ TMap<TWeakObjectPtr<AFGWheeledVehicleIdentifier>,FString> PendingHomeReason;
  bool BuildOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex,filn::dispatch::Offer& Offer,bool QueryRoads,bool& Pending);
  bool CommitOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex);
  void ResetScan();

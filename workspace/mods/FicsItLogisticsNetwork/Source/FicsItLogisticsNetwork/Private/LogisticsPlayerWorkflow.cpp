@@ -76,6 +76,8 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
  if(PlayerVehicleCursor>=PlayerVehicleScan.Num()) {
   if(Now<NextPlayerVehicleScan) return;
   PlayerVehicleScan.Reset(); for(auto* V:VS->GetAllVehicles()) if(IsValid(V)) PlayerVehicleScan.Add(V);
+  for(auto It=OverflowCursor.CreateIterator();It;++It) if(!It.Key().IsValid()) It.RemoveCurrent();
+  for(auto It=PendingHomeReason.CreateIterator();It;++It) if(!It.Key().IsValid()) It.RemoveCurrent();
   PlayerVehicleCursor=0; NextPlayerVehicleScan=Now+5.;
  }
  for(int32 Work=0;Work<4 && PlayerVehicleCursor<PlayerVehicleScan.Num();++Work) {
@@ -88,6 +90,7 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
    if(Requested) Ambiguous=true; Requested=D.Get();
   }
   if(Requested && !Ambiguous) AdoptPlayerHome(V,Requested);
+  else { OverflowCursor.Remove(V); PendingHomeReason.Remove(V); }
  }
 }
 bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDockingStationIdentifier* Requested) {
@@ -99,6 +102,11 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  const FGuid Wanted=Requested->GetPathNodeGUID();
  if(!filn::player::OptedIn(O->HasAuthority(),V->IsAutopilotEnabled(),O->GetDriver()!=nullptr,Before.Num()==1 && Before[0]==Wanted,ByVehicle.Contains(V))) return false;
  if(!Wanted.IsValid() || V->IsCurrentlyDocking()) return false;
+ const TWeakObjectPtr<AFGWheeledVehicleIdentifier> VehicleKey(V);
+ const auto Pending=[&](const FString& Why) {
+  auto& Previous=PendingHomeReason.FindOrAdd(VehicleKey);
+  if(Previous!=Why) { Previous=Why; UE_LOG(LogFILN,Log,TEXT("AUTO_HOME_PENDING vehicle=%s reason=%s"),*V->GetPathName(),*Why); }
+ };
  auto Free=[&](AFGDockingStationIdentifier* D) {
   if(!IsValid(D) || !IsValid(D->GetStation())) return false;
   auto* B=D->GetStation(); const auto Node=D->GetPathNodeGUID(); bool Unique=Node.IsValid(),Foreign=false;
@@ -114,17 +122,24 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  else if(RequestedClaimed) {
   // Do not displace the existing owner. A two-node native route is necessary
   // for movement; a home-only route is only the final parked intent.
-  if(!O->HasFuel() || !O->GetStorageInventory()->IsEmpty()) return false;
+  if(!O->HasFuel() || !O->GetStorageInventory()->IsEmpty()) { Pending(TEXT("Occupied depot: overflow needs fuel and empty cargo")); return false; }
   const auto From=V->GetCurrentToPathNodeGUID(); auto* Preset=O->GetVehiclePathPreset();
-  if(!From.IsValid() || !Preset) return false;
-  int32 Checked=0;
-  for(const auto& D:DepotStations) {
-   auto* Candidate=D.Get(); if(Candidate==Requested || !Free(Candidate)) continue;
-   if(++Checked>4) break;
+  if(!From.IsValid() || !Preset) { Pending(TEXT("Occupied depot: no native road segment or vehicle preset")); return false; }
+  int32& Cursor=OverflowCursor.FindOrAdd(VehicleKey);
+  int32 Queried=0;
+  // Retain cursor across bounded passes: an unreachable early depot must
+  // not starve a later free one. Pending cache work resumes on that candidate.
+  for(int32 Visited=0;Visited<DepotStations.Num() && Queried<4;++Visited) {
+   Cursor%=DepotStations.Num();
+   auto* Candidate=DepotStations[Cursor].Get();
+   if(Candidate==Requested || !Free(Candidate)) { ++Cursor; continue; }
+   ++Queried;
    const auto Node=Candidate->GetPathNodeGUID(); double A=-1,B=-1,C=-1;
-   if(!RoadCache.Distance(VS,From,Node,Preset,A) || !RoadCache.Distance(VS,Node,Wanted,Preset,B) || !RoadCache.Distance(VS,Wanted,Node,Preset,C)) return false;
+   if(!RoadCache.Distance(VS,From,Node,Preset,A) || !RoadCache.Distance(VS,Node,Wanted,Preset,B) || !RoadCache.Distance(VS,Wanted,Node,Preset,C)) { Pending(TEXT("Occupied depot: directed road calculation pending")); return false; }
+   ++Cursor;
    if(A>=0 && B>=0 && C>=0) { Destination=Candidate; break; }
   }
+  if(!Destination) Pending(TEXT("Occupied depot: no available reachable alternative in this pass; retrying"));
  }
  if(!Destination || !Free(Destination) || O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=Before) return false;
  const auto Node=Destination->GetPathNodeGUID();
@@ -134,7 +149,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  const bool AtHome=filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,O->GetForwardSpeed(),H->GetDockedActor() && H->GetDockedActor()!=O);
  // For an unclaimed depot, adopt the same parked home-only route as Lua;
  // do not assert that a single-node route can drive from an arbitrary road.
- if(!Move && !AtHome) return false;
+ if(!Move && !AtHome) { Pending(TEXT("Park at the selected free depot to establish home-only route")); return false; }
  FFILNRegistration R; R.Vehicle=V; R.Home=Destination; R.TruckId=FGuid::NewGuid(); R.BayId=StationId(Destination);
  R.IdleRoute=Move?TArray<FGuid>{Node,Wanted}:Before; R.Relocating=Move; R.Held=!Move;
  if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) return false;
@@ -149,6 +164,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  }
  R.Diagnostic=Move?TEXT("Relocating to unclaimed depot; arrival pending"):TEXT("Automatically adopted player home-only route");
  HomeStations.Add(Destination); TrackDepot(Destination); ByVehicle.Add(V,Registrations.Add(R)); WatchTransfers(Registrations.Last()); ResetScan();
+ OverflowCursor.Remove(VehicleKey); PendingHomeReason.Remove(VehicleKey);
  UE_LOG(LogFILN,Log,TEXT("AUTO_HOME_ADOPT moving=%d truck=%s bay=%s"),Move,*R.TruckId.ToString(),*R.BayId.ToString());
  return true;
 }
