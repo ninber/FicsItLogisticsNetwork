@@ -5,7 +5,7 @@
     {
       "id": "solid-dispatch",
       "status": "failed",
-      "reason": "Second user gameplay test: trucks repeat old routes, no dynamic dispatch. Failed.",
+      "reason": "Actual user log reports registrations=0 on world load; existing trucks follow old routes. Shared native capacity API also crashed during telemetry. No dynamic route or transfer evidence.",
       "history": [
         {
           "date": "2026-11-24",
@@ -18,11 +18,15 @@
         {
           "date": "2026-11-25",
           "previous_reason": "User isolated depot/provider/requester/vehicle remained idle; actual automatic workflow failed, exact cause not yet localized."
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Second user gameplay test: trucks repeat old routes, no dynamic dispatch. Failed."
         }
       ],
       "implementation": "LogisticsDispatch.cpp: BuildOffer/Schedule/CommitOffer",
       "verification_method": "Isolated solid provider/requester run; observe actual route, docking, transfer and home",
-      "actual_result": "Second user gameplay test: trucks repeat old routes, no dynamic dispatch. Failed."
+      "actual_result": "Actual user log reports registrations=0 on world load; existing trucks follow old routes. Shared native capacity API also crashed during telemetry. No dynamic route or transfer evidence."
     },
     {
       "id": "fluid-dispatch",
@@ -72,17 +76,21 @@
     },
     {
       "id": "full-vehicle-capacity",
-      "status": "not-verified",
-      "reason": "Native calculation compiled; true game quantities not verified",
+      "status": "failed",
+      "reason": "Shipping game crashed in the shared native slot-capacity API. Four call sites omitted optional FInventoryItem pointer; shared checked explicit-item adapter implemented but not tested in shipping game.",
       "history": [
         {
           "date": "2026-11-24",
           "previous_reason": "Native slot sum compiled; actual solid/fluid capacities not run"
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Native calculation compiled; true game quantities not verified"
         }
       ],
       "implementation": "LogisticsDispatch.cpp: Inventory",
       "verification_method": "Native per-slot capacity readback with different trucks and resources",
-      "actual_result": "Native calculation compiled; true game quantities not verified"
+      "actual_result": "Shipping game crashed in the shared native slot-capacity API. Four call sites omitted optional FInventoryItem pointer; shared checked explicit-item adapter implemented but not tested in shipping game."
     },
     {
       "id": "empty-requester",
@@ -343,9 +351,9 @@
     {
       "id": "simple-player-workflow",
       "status": "failed",
-      "reason": "Second user gameplay test: specialized station nonfunctional; no dynamic route assignments. Failed.",
+      "reason": "Actual user log confirms native subsystem and recipes registered; registrations=0. Telemetry request crashes the game; specialized station workflow not working.",
       "verification_method": "Build depot, place LOAD and UNLOAD stations, select requester item, assign vehicle home route and enable AP; verify actual delivery without FILN menus.",
-      "actual_result": "Second user gameplay test: specialized station nonfunctional; no dynamic route assignments. Failed.",
+      "actual_result": "Actual user log confirms native subsystem and recipes registered; registrations=0. Telemetry request crashes the game; specialized station workflow not working.",
       "history": [
         {
           "date": "2026-11-25",
@@ -354,6 +362,10 @@
         {
           "date": "2026-11-25",
           "previous_reason": "User isolated vehicle did not dispatch; resource selector-to-registry integration missing in source."
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Second user gameplay test: specialized station nonfunctional; no dynamic route assignments. Failed."
         }
       ]
     },
@@ -367,9 +379,9 @@
     {
       "id": "native-web-statistics",
       "status": "failed",
-      "reason": "Second user gameplay test: telemetry.json absent; dashboard fails. No successful native sample verified.",
+      "reason": "Actual shipping game fatal EXCEPTION_ACCESS_VIOLATION reading null in UFGInventoryComponent::GetSlotSizeForItem via InspectStock/SampleTelemetry. Heartbeat and demand exist, no snapshot. FAIL.",
       "verification_method": "Existing web dashboard receives native statistics while Lua dispatcher is disabled.",
-      "actual_result": "Second user gameplay test: telemetry.json absent; dashboard fails. No successful native sample verified.",
+      "actual_result": "Actual shipping game fatal EXCEPTION_ACCESS_VIOLATION reading null in UFGInventoryComponent::GetSlotSizeForItem via InspectStock/SampleTelemetry. Heartbeat and demand exist, no snapshot. FAIL.",
       "history": [
         {
           "date": "2026-11-25",
@@ -378,6 +390,10 @@
         {
           "date": "2026-11-25",
           "previous_reason": "Native dashboard not running in user test; Lua-only automatic service integration remains incomplete."
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Second user gameplay test: telemetry.json absent; dashboard fails. No successful native sample verified."
         }
       ]
     },

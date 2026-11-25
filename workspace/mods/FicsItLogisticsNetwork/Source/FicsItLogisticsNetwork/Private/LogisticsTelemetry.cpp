@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
+#include "FILNInventoryCapacity.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
@@ -52,13 +53,7 @@ Stock InspectStock(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor> Reque
    auto O=Obj(); O->SetStringField(TEXT("item"),Entry.Key->GetPathName()); O->SetNumberField(TEXT("amount"),static_cast<double>(Entry.Value)); S.Contents.Add(Val(O));
   }
   S.Amount=S.Item?Counts.FindRef(S.Item.Get()):S.Total;
-  if(S.Item) for(int32 Slot=0;Slot<Slots;++Slot) {
-   const auto Filter=I->GetAllowedItemOnIndex(Slot);
-   if(!Filter || Filter==S.Item) {
-    const auto Capacity=I->GetSlotSizeForItem(Slot,S.Item);
-    if(Capacity<0) S.Valid=false; else S.Capacity+=Capacity;
-   }
-  }
+  if(S.Item && !filn::inventory::TryCapacity(I,S.Item,S.Capacity)) S.Valid=false;
  }
  S.Json->SetArrayField(TEXT("items"),S.Contents);
  S.Json->SetNumberField(TEXT("amount"),static_cast<double>(S.Total));
@@ -258,10 +253,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
     TSubclassOf<UFGItemDescriptor> Resource(Class); int64 Capacity=0; bool Valid=true;
     const auto Form=UFGItemDescriptor::GetForm(Resource);
     const bool Compatible=Type.Fluid?(Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS):Form==EResourceForm::RF_SOLID;
-    for(int32 Slot=0;Compatible && Slot<Type.Slots;++Slot) {
-     const auto Filter=I->GetAllowedItemOnIndex(Slot);
-     if(!Filter || Filter==Resource) { const auto N=I->GetSlotSizeForItem(Slot,Resource); if(N<0) Valid=false; else Capacity+=N; }
-    }
+    if(Compatible) Valid=filn::inventory::TryCapacity(I,Resource,Capacity);
     if(Compatible) {
      if(Valid && Capacity<=MAX_int32) Type.ByItem->SetNumberField(Class->GetPathName(),static_cast<double>(Capacity));
      else Error(Class->GetPathName(),TEXT("Vehicle capacity readback invalid"));

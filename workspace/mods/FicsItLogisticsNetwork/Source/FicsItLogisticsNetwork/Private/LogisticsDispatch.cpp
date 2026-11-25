@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
+#include "FILNInventoryCapacity.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
@@ -23,10 +24,7 @@ bool Inventory(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor> Resource,
   if(S.NumItems<0 || (S.NumItems>0 && !S.Item.GetItemClass())) return false;
   if(S.NumItems>0) { Types.Add(S.Item.GetItemClass()); Amount+=S.NumItems; if(Cargo) *Cargo=Descriptor(S.Item.GetItemClass()); }
  }
- for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) {
-  auto Filter=I->GetAllowedItemOnIndex(Slot);
-  if(!Filter || Filter==Resource) { const auto SlotCapacity=I->GetSlotSizeForItem(Slot,Resource); if(SlotCapacity<0) return false; Size+=SlotCapacity; }
- }
+ if(!filn::inventory::TryCapacity(I,Resource,Size)) return false;
  if(Amount>MAX_int32 || Size>MAX_int32 || Size<0) return false;
  Kinds=Types.Num(); Quantity=static_cast<int>(Amount); Capacity=static_cast<int>(Size); return true;
 }

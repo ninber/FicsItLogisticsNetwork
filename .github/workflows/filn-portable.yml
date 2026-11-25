@@ -70,6 +70,7 @@ jobs:
       - run: python3 -m unittest discover -s scripts/tests -p 'test_native_prerequisites.py'
       - run: python3 -m unittest discover -s scripts/tests -p 'test_headless_local.py'
       - run: python3 -m unittest discover -s scripts/tests -p 'test_install_filn.py'
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_native_capacity_calls.py'
       - run: bash -n scripts/build.sh scripts/headless.sh scripts/install-filn.sh
 
   native-acceptance:

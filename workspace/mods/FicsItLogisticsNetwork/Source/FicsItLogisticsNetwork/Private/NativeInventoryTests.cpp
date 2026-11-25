@@ -4,6 +4,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "FGInventoryComponent.h"
+#include "FILNInventoryCapacity.h"
 #include "Resources/FGItemDescriptor.h"
 
 // Real native inventory operations, not a mocked FG implementation. The development
@@ -14,6 +15,7 @@ static bool InventoryAcceptance(FAutomationTestBase& Test,bool Fluid) {
  AActor* Owner=World->SpawnActor<AActor>();
  if(!Owner) { World->DestroyWorld(false); Test.AddError(TEXT("Could not create isolated inventory owner")); return false; }
  auto* Inventory=NewObject<UFGInventoryComponent>(Owner);
+ Inventory->RegisterComponent();
  Inventory->Resize(2);
  bool Passed=Test.TestEqual(TEXT("Native Resize must allocate two slots; generated StarterProject stubs do not implement inventory behavior"),Inventory->GetSizeLinear(),2);
  if(Passed) {
@@ -24,6 +26,15 @@ static bool InventoryAcceptance(FAutomationTestBase& Test,bool Fluid) {
   if(Passed) {
    for(int32 Slot=0;Slot<2;++Slot) Inventory->SetAllowedItemOnIndex(Slot,Resource);
    Passed&=Test.TestTrue(TEXT("Selected resource allowed"),Inventory->IsItemAllowed(Resource,0));
+   int64 EmptyCapacity=0;
+   const bool EmptyRead=filn::inventory::TryCapacity(Inventory,Resource,EmptyCapacity);
+   Passed&=Test.TestTrue(TEXT("Real native capacity on empty selected slots"),EmptyRead && EmptyCapacity>0);
+   if(EmptyRead && EmptyCapacity>0) {
+    Passed&=Test.TestEqual(TEXT("Add one selected item"),Inventory->AddStack(FInventoryStack(1,Resource),true),1);
+    int64 OccupiedCapacity=0;
+    Passed&=Test.TestTrue(TEXT("Occupied and empty slots retain full native capacity"),filn::inventory::TryCapacity(Inventory,Resource,OccupiedCapacity) && OccupiedCapacity==EmptyCapacity);
+    Inventory->Remove(Resource,1);
+   }
    Passed&=Test.TestFalse(TEXT("Wrong resource rejected"),Inventory->IsItemAllowed(Other,0));
    Passed&=Test.TestEqual(TEXT("Wrong cargo cannot enter"),Inventory->AddStack(FInventoryStack(1,Other),true),0);
    Passed&=Test.TestTrue(TEXT("No cargo deletion/contamination"),Inventory->IsEmpty());

@@ -12,6 +12,16 @@
 #include "ModLoading/PluginModuleLoader.h"
 #include "Engine/World.h"
 
+bool ULogisticsBootstrap::ShouldCreateSubsystem(UObject* Outer) const {
+ auto* World=Cast<UWorld>(Outer);
+ return World && World->IsGameWorld() && World->GetNetMode()!=NM_Client &&
+  FPluginModuleLoader::ShouldLoadModulesForWorld(World) && !FPluginModuleLoader::IsMainMenuWorld(World);
+}
+void ULogisticsBootstrap::OnWorldBeginPlay(UWorld& World) {
+ Super::OnWorldBeginPlay(World);
+ if(auto* Manager=World.GetSubsystem<USubsystemActorManager>()) Manager->RegisterSubsystemActor(ALogisticsSubsystem::StaticClass());
+ else UE_LOG(LogFILN,Error,TEXT("FILN_NATIVE_SUBSYSTEM_MANAGER_MISSING"));
+}
 class FFicsItLogisticsNetworkModule : public IModuleInterface {
  TArray<IConsoleObject*> Commands;
 public:

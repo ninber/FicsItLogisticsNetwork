@@ -4,6 +4,7 @@
 #include "Async/Future.h"
 #include "Subsystem/ModSubsystem.h"
 #include "FGSaveInterface.h"
+#include "Subsystems/WorldSubsystem.h"
 #include "FILNCore.h"
 #include "FILNRoadCache.h"
 #include "FILNDispatchPolicy.h"
@@ -240,3 +241,12 @@ private:
  FGuid StationId(AFGDockingStationIdentifier* Station);
 };
 
+
+// Existing bootstrap confirmed running by the user's shipping game log.
+UCLASS()
+class FICSITLOGISTICSNETWORK_API ULogisticsBootstrap : public UWorldSubsystem {
+ GENERATED_BODY()
+public:
+ virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+ virtual void OnWorldBeginPlay(UWorld& World) override;
+};

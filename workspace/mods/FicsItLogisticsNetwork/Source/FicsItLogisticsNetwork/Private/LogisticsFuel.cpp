@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
+#include "FILNInventoryCapacity.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
 #include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
@@ -46,11 +47,7 @@ FFuelSnapshot Inspect(const FFILNRegistration& R,double Now) {
  F.supplied=static_cast<bool>(Supplied); F.pending=R.FuelPending; F.cooldown=Now<R.FuelRetryAt;
  F.quantity=Target->GetNumItems(Result.Item);
  int64 Capacity=0;
- if(Target->GetSizeLinear()>4096) return Result;
- for(int32 Slot=0;Slot<Target->GetSizeLinear();++Slot) {
-  auto Filter=Target->GetAllowedItemOnIndex(Slot);
-  if(!Filter || Filter==Result.Item) Capacity+=Target->GetSlotSizeForItem(Slot,Result.Item);
- }
+ if(!filn::inventory::TryCapacity(Target,Result.Item,Capacity)) return Result;
  if(Capacity<=0 || Capacity>MAX_int32) return Result;
  F.capacity=static_cast<int>(Capacity); F.valid=true;
  return Result;
