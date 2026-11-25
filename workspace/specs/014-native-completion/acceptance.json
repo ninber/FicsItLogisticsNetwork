@@ -387,9 +387,9 @@
     {
       "id": "native-web-statistics",
       "status": "failed",
-      "reason": "Previously failed with shipping crash and absent telemetry.json; latest game loads without crash but user has not yet inspected telemetry file without browser. No successful snapshot established; prior failure not closed.",
+      "reason": "User-supplied native sequence 1 snapshot successfully exported 233 stations and 26 vehicles in 12 seconds, errors empty, all registry counts zero. Initial export PASS; manual touch of dashboard-demand.txt did not refresh snapshot (FAIL). Accepted scans must survive lease expiry; repeat export and browser service still unverified.",
       "verification_method": "Existing web dashboard receives native statistics while Lua dispatcher is disabled.",
-      "actual_result": "Previously failed with shipping crash and absent telemetry.json; latest game loads without crash but user has not yet inspected telemetry file without browser. No successful snapshot established; prior failure not closed.",
+      "actual_result": "User-supplied native sequence 1 snapshot successfully exported 233 stations and 26 vehicles in 12 seconds, errors empty, all registry counts zero. Initial export PASS; manual touch of dashboard-demand.txt did not refresh snapshot (FAIL). Accepted scans must survive lease expiry; repeat export and browser service still unverified.",
       "history": [
         {
           "date": "2026-11-25",
@@ -406,6 +406,10 @@
         {
           "date": "2026-11-25",
           "previous_reason": "Actual shipping game fatal EXCEPTION_ACCESS_VIOLATION reading null in UFGInventoryComponent::GetSlotSizeForItem via InspectStock/SampleTelemetry. Heartbeat and demand exist, no snapshot. FAIL."
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Previously failed with shipping crash and absent telemetry.json; latest game loads without crash but user has not yet inspected telemetry file without browser. No successful snapshot established; prior failure not closed."
         }
       ]
     },

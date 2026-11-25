@@ -11,6 +11,7 @@
 #include "FILNRecovery.h"
 #include "FILNFuelPolicy.h"
 #include "FILNIdlePolicy.h"
+#include "FILNTelemetryDemand.h"
 #include "LogisticsSubsystem.generated.h"
 class AFGWheeledVehicleIdentifier;
 class AFGWheeledVehicle;
@@ -164,7 +165,8 @@ private:
  bool bNativeDashboardHeartbeatError=false;
  bool bTelemetryPublished=false, bTelemetryRosterMissing=false;
  double NextTelemetryDemandCheck=0, NextTelemetryStart=0;
- bool bTelemetryDemand=false, bTelemetryCollecting=false;
+ filn::telemetry::Demand TelemetryDemand;
+ bool bTelemetryCollecting=false;
  int32 TelemetryStationCursor=0, TelemetryVehicleCursor=0;
  int64 TelemetryStarted=0, TelemetrySequence=0;
  FString TelemetryWorld;

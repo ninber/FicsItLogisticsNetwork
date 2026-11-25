@@ -85,7 +85,8 @@ const TCHAR* Phase(const FFILNRegistration& R) {
 FString TelemetryDirectory() { return FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("FILN"))); }
 }
 void ALogisticsSubsystem::ResetTelemetry() {
- bTelemetryCollecting=false; bTelemetryDemand=false;
+ TelemetryDemand.Interrupted(bTelemetryCollecting);
+ bTelemetryCollecting=false;
  NextTelemetryDemandCheck=0; NextTelemetryStart=0;
  TelemetryStationQueue.Reset(); TelemetryVehicleQueue.Reset();
  TelemetryStations.Reset(); TelemetryVehicles.Reset(); TelemetryErrors.Reset(); TelemetryCapacityRows.Reset();
@@ -130,26 +131,30 @@ void ALogisticsSubsystem::SampleTelemetry() {
  // launch. Only authoritative game-thread samples; writer sees plain JSON.
  if(!HasAuthority() || !GetWorld() || GetWorld()->bIsTearingDown) return;
  RefreshNativeDashboardHeartbeat();
- const double Now=GetWorld()->GetTimeSeconds();
+ const double Now=FPlatformTime::Seconds();
  if(Now>=NextTelemetryDemandCheck) {
-  NextTelemetryDemandCheck=Now+5.;
-  const auto Modified=IFileManager::Get().GetTimeStamp(*FPaths::Combine(TelemetryDirectory(),TEXT("dashboard-demand.txt")));
+  NextTelemetryDemandCheck=Now+1.;
+  const FString RequestPath=FPaths::Combine(TelemetryDirectory(),TEXT("dashboard-demand.txt"));
+  const auto Modified=IFileManager::Get().GetTimeStamp(*RequestPath);
   const double Age=(FDateTime::UtcNow()-Modified).GetTotalSeconds();
-  bTelemetryDemand=Age>=-5. && Age<=30.;
+  TelemetryDemand.Observe(Modified.GetTicks(),Age>=-5. && Age<=30.);
  }
  // Publish one real initial snapshot even without a browser; subsequent scans are demand-driven.
  if(TelemetryWrite.IsValid() && TelemetryWrite.IsReady()) {
   const bool Written=TelemetryWrite.Get();
   TelemetryWrite=TFuture<bool>();
   if(Written && !bTelemetryPublished) UE_LOG(LogFILN,Log,TEXT("FILN_TELEMETRY_FIRST_SNAPSHOT %s"),*FPaths::Combine(TelemetryDirectory(),TEXT("telemetry.json")));
-  if(!Written) UE_LOG(LogFILN,Error,TEXT("FILN_TELEMETRY_WRITE_FAILED %s"),*TelemetryDirectory());
+  if(Written) UE_LOG(LogFILN,Log,TEXT("FILN_TELEMETRY_PUBLISHED sequence=%lld"),static_cast<long long>(TelemetrySequence));
+  else {
+   UE_LOG(LogFILN,Error,TEXT("FILN_TELEMETRY_WRITE_FAILED %s"),*TelemetryDirectory());
+   TelemetryDemand.Failed();
+  }
   bTelemetryPublished=bTelemetryPublished || Written;
  }
- if(!bTelemetryDemand && bTelemetryPublished) {
-  if(bTelemetryCollecting) { ResetTelemetry(); NextTelemetryDemandCheck=Now+5.; }
-  return;
- }
+ // Only gate the start of a scan. Never discard accepted work when the
+ // demand file ages out, including during a long scan or a paused world.
  if(!bTelemetryCollecting) {
+  if(!TelemetryDemand.ShouldStart(bTelemetryPublished)) return;
   if(Now<NextTelemetryStart || (TelemetryWrite.IsValid() && !TelemetryWrite.IsReady())) return;
   auto* VS=AFGVehicleSubsystem::Get(GetWorld());
   if(!VS) {
@@ -165,7 +170,9 @@ void ALogisticsSubsystem::SampleTelemetry() {
   for(auto* V:VS->GetAllVehicles()) if(IsValid(V)) TelemetryVehicleQueue.Add(V);
   TelemetryStationCursor=TelemetryVehicleCursor=0; TelemetryStarted=Stamp();
   check(!TelemetryWorld.IsEmpty());
+  TelemetryDemand.Started();
   bTelemetryCollecting=true;
+  UE_LOG(LogFILN,Log,TEXT("FILN_TELEMETRY_SCAN_STARTED next=%lld stations=%d vehicles=%d"),static_cast<long long>(TelemetrySequence+1),TelemetryStationQueue.Num(),TelemetryVehicleQueue.Num());
  }
  const auto Error=[this](const FString& Id,const FString& Why) { auto E=Obj(); E->SetStringField(TEXT("id"),Id); E->SetStringField(TEXT("error"),Why); TelemetryErrors.Add(Val(E)); };
  // At most two objects, subject to a 1 ms work budget; no per-tick fleet scan.
