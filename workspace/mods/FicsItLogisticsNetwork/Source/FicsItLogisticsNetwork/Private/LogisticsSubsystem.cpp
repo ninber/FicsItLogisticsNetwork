@@ -56,7 +56,7 @@ void ALogisticsSubsystem::BeginPlay() {
  UE_LOG(LogFILN,Log,TEXT("M1 subsystem ready; schema=%d registrations=%d. Runtime acceptance unverified."),SchemaVersion,Registrations.Num());
 }
 void ALogisticsSubsystem::EndPlay(const EEndPlayReason::Type Reason) {
- ClearDockReceipts();
+ ClearDockReceipts(); ClearDockFilters();
  GetWorldTimerManager().ClearTimer(Watchdog);
  GetWorldTimerManager().ClearTimer(DispatchTimer);
  GetWorldTimerManager().ClearTimer(TelemetryTimer);
@@ -107,7 +107,7 @@ bool ALogisticsSubsystem::RestoreJobReservation(FFILNRegistration& R) {
 void ALogisticsSubsystem::Rebuild() {
  if(!HasAuthority() || !GetWorld() || GetWorld()->bIsTearingDown) return;
  bRegistryValidated=false; DestroyedVehicles.Empty();
- ClearDockReceipts(); ResetTelemetry();
+ ClearDockReceipts(); ClearDockFilters(); ResetTelemetry();
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
  TransferObservers.Empty(); TransferByTruck.Empty();
  Ownership=filn::Ownership(); Reservations=filn::Reservations();
@@ -167,6 +167,7 @@ void ALogisticsSubsystem::Rebuild() {
   return;
  }
  bRegistryValidated=true;
+ UE_LOG(LogFILN,Log,TEXT("FILN_REGISTRY_REBUILT identities=%d configs=%d depots=%d vehicles=%d"),Stations.Num(),StationConfigs.Num(),DepotStations.Num(),Registrations.Num());
  bAutoDispatchEnabled=!bPreparingUninstall && !bUninstallPrepared;
  bDepotRecipeReady=false; NextDepotRecipeCheck=0; DepotRecipeFailures.Reset();
  PlayerStationScan.Empty(); PlayerVehicleScan.Empty(); PlayerStationCursor=PlayerVehicleCursor=0;
@@ -209,12 +210,6 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
  check(IsInGameThread());
  if(!HasAuthority() || bChangingFilters) return false;
  TGuardValue<bool> Guard(bChangingFilters,true);
- struct FSlot { TWeakObjectPtr<UFGInventoryComponent> Inventory; int32 Slot,Size; };
- TArray<FSlot> Slots;
- using Resource=TSubclassOf<UFGItemDescriptor>;
- // A disengaged optional means unreadable; a valid null resource means unrestricted.
- using Value=std::optional<Resource>;
- std::vector<Value> Before,After;
  TSet<UFGInventoryComponent*> Seen;
  for(const auto& C:Configs) {
   auto* B=Building(C.Station); auto* I=IsValid(B)?B->GetInventory():nullptr;
@@ -226,42 +221,27 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
    TArray<FInventoryStack> Contents; I->GetInventoryStacks(Contents);
    for(const auto& Stack:Contents) if(Stack.NumItems<0 || (Stack.NumItems>0 && Stack.Item.GetItemClass()!=C.Resource)) return false;
   }
+  // Legacy per-slot writes are not silently undone: the saved cargo may
+  // already have been rearranged by the engine. Start from the original save.
   for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) {
-   auto Current=I->GetAllowedItemOnIndex(Slot);
-   if(Restore ? Current!=C.Resource : (Current!=C.Resource && Current!=C.OriginalFilters[Slot] && (!PriorResource || Current!=PriorResource))) return false;
-   Slots.Add({I,Slot,I->GetSizeLinear()}); Before.emplace_back(Current); After.emplace_back(Restore?C.OriginalFilters[Slot]:C.Resource);
+   if(I->GetAllowedItemOnIndex(Slot)!=C.OriginalFilters[Slot]) {
+    UE_LOG(LogFILN,Error,TEXT("FILN_SLOT_LAYOUT_CONFLICT station=%s slot=%d; no inventory mutation"),*B->GetPathName(),Slot);
+    return false;
+   }
   }
  }
- bool Invalid=false;
- auto Read=[&](std::size_t N)->Value {
-  const auto& Slot=Slots[static_cast<int32>(N)]; auto* I=Slot.Inventory.Get();
-  if(!I || I->GetSizeLinear()!=Slot.Size) { Invalid=true; return std::nullopt; }
-  return Value(I->GetAllowedItemOnIndex(Slot.Slot));
- };
- auto Write=[&](std::size_t N,Value V) {
-  const auto& Slot=Slots[static_cast<int32>(N)]; auto* I=Slot.Inventory.Get();
-  if(!I || !V || I->GetSizeLinear()!=Slot.Size) { Invalid=true; return; }
-  I->SetAllowedItemOnIndex(Slot.Slot,*V);
- };
- const auto Result=filn::restore::Transaction(Before,After,Read,Write);
- if(Invalid || Result==filn::restore::Result::Conflict) {
-  bDispatchBlocked=true; bAutoDispatchEnabled=false;
-  UE_LOG(LogFILN,Error,TEXT("Native filter transaction conflict; saved configuration retained and dispatch locked"));
-  return false;
- }
- return Result==filn::restore::Result::Success;
+ return PublishDockFilters(Configs,Restore);
 }
 bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  auto* B=Building(Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
  if(bDispatchBlocked || !bRegistryValidated || bChangingFilters || bPreparingUninstall || !HasAuthority() || !IsValid(Station) || Station->GetWorld()!=GetWorld() || !IsValid(Inventory) || !Resource || Inventory->GetSizeLinear()<=0 || Inventory->GetSizeLinear()>4096 || B->GetDockedActor()) return false;
  if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station))) || !StationAcceptsResource(B,Resource)) return false;
- // Explicit selection, never inference from stock. ChangeStationFilters
- // preflights every cargo stack before any write, including nonempty inventories.
- // Docked actors and conflicting cargo still fail without mutation.
+ // Explicit selection, never inference from stock. Native cargo and slot
+ // descriptors remain untouched; only the docking filter is published.
  FFILNStationConfig* Existing=StationConfigs.FindByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
  if(Existing) {
   if(Existing->ExternalFilter) return false;
-  // Only FILN-owned restrictions may be changed; one transaction, no preliminary writes.
+  // Preserve native slot restrictions and publish only the new docking selection.
   for(const auto& Original:Existing->OriginalFilters) if(Original && Original!=Resource) return false;
   ResetScan();
   FFILNStationConfig Updated=*Existing; Updated.Resource=Resource;

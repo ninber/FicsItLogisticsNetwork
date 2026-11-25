@@ -211,6 +211,10 @@ private:
  bool RestoreStationFilters(const TArray<int32>& Indices);
  bool ApplyStationFilter(const FFILNStationConfig& Config,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);
  bool ChangeStationFilters(const TArray<FFILNStationConfig>& Configs,bool Restore,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);
+ // The registry owns docking selection, not inventory slot descriptors.
+ bool PublishDockFilters(const TArray<FFILNStationConfig>& Configs,bool Remove);
+ bool HasDockFilter(const FFILNStationConfig& Config) const;
+ void ClearDockFilters();
  bool bChangingFilters=false;
  bool bPreparingUninstall=false;
  UPROPERTY(SaveGame) bool bUninstallPrepared=false;

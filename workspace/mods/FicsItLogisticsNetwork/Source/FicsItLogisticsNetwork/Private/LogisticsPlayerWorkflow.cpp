@@ -39,8 +39,8 @@ bool ALogisticsSubsystem::StationResourceMatches(const FFILNStationConfig& C) co
  // Retired external records are not owned filters. Never infer or restore their
  // configuration from another actor's fields or from current stock.
  if(C.ExternalFilter || C.OriginalFilters.Num()!=I->GetSizeLinear()) return false;
- for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) if(I->GetAllowedItemOnIndex(Slot)!=C.Resource) return false;
- return true;
+ for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) if(I->GetAllowedItemOnIndex(Slot)!=C.OriginalFilters[Slot]) return false;
+ return HasDockFilter(C);
 }
 void ALogisticsSubsystem::DiscoverDepots() {
  if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bUninstallPrepared || bChangingFilters) return;

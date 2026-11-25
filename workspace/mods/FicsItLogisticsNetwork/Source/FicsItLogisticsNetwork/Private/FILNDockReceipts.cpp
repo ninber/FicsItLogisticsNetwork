@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
 #include "FILNTransferLedger.h"
+#include "FILNDockFilterPolicy.h"
+#include "Resources/FGItemDescriptor.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
@@ -31,6 +33,47 @@ struct FReceipt {
  FWatch Watch;
  filn::transfer::DockBatch Batch;
 };
+// Published by the authoritative game thread. Factory workers copy one
+// immutable entry under lock, then operate on the native docking arguments.
+// Never hold the registry lock while executing inventory callbacks.
+struct FDockFilterEntry {
+ const ALogisticsSubsystem* Owner=nullptr;
+ TWeakObjectPtr<AFGBuildableDockingStation> Station;
+ TWeakObjectPtr<UFGInventoryComponent> Inventory;
+ TWeakObjectPtr<UClass> Resource;
+};
+FCriticalSection DockFilterLock;
+TMap<const AFGBuildableDockingStation*,FDockFilterEntry> DockFilters;
+
+int32 SelectiveSolidUnload(const AFGBuildableDockingStation* Station,UFGInventoryComponent* Source,UFGInventoryComponent* Target,TSubclassOf<UFGItemDescriptor> Resource) {
+ int32 Total=0;
+ const int32 Slots=Source->GetSizeLinear();
+ // Match the legacy station's selection semantics, but preserve the actual
+ // stack state and use the native inventory APIs; no slot descriptor writes.
+ for(int32 Slot=0;Slot<Slots;++Slot) {
+  FInventoryStack Stack;
+  if(!Source->GetStackFromIndex(Slot,Stack) || Stack.NumItems<0) {
+   UE_LOG(LogFILN,Error,TEXT("FILN_DOCK_FILTER_SOURCE_INVALID")); break;
+  }
+  if(Stack.NumItems==0 || Stack.Item.GetItemClass()!=Resource) continue;
+  const int64 BeforeSource=Source->GetNumItems(Resource),BeforeTarget=Target->GetNumItems(Resource);
+  if(BeforeSource<Stack.NumItems || BeforeTarget<0 || Stack.NumItems>MAX_int32-Total) {
+   UE_LOG(LogFILN,Error,TEXT("FILN_DOCK_FILTER_COUNT_INVALID")); break;
+  }
+  const int32 Added=Target->AddStack(Stack,true);
+  if(Added==0) break;
+  if(Added<0 || Added>Stack.NumItems) {
+   UE_LOG(LogFILN,Error,TEXT("FILN_DOCK_FILTER_ADD_INVALID")); break;
+  }
+  Source->RemoveFromIndex(Slot,Added,Target);
+  if(!filn::dockfilter::Conserved(BeforeSource,Source->GetNumItems(Resource),BeforeTarget,Target->GetNumItems(Resource),Added)) {
+   UE_LOG(LogFILN,Error,TEXT("FILN_DOCK_FILTER_TRANSFER_MISMATCH; no unverified receipt credited")); break;
+  }
+  Total+=Added;
+  if(Added<Stack.NumItems) break;
+ }
+ return Total;
+}
 FCriticalSection ReceiptLock;
 TMap<const UFGInventoryComponent*,FWatch> Watches;
 TMap<const ALogisticsSubsystem*,TMap<FGuid,FReceipt>> Receipts;
@@ -43,8 +86,74 @@ void RemoveJobLocked(const ALogisticsSubsystem* Subsystem,const FGuid& Job) {
  }
 }
 }
+bool ALogisticsSubsystem::PublishDockFilters(const TArray<FFILNStationConfig>& Configs,bool Remove) {
+ check(IsInGameThread());
+ TMap<const AFGBuildableDockingStation*,FDockFilterEntry> Pending;
+ for(const auto& C:Configs) {
+  auto* B=IsValid(C.Station)?C.Station->GetStation():nullptr;
+  auto* I=IsValid(B)?B->GetInventory():nullptr;
+  if(!IsValid(B) || !IsValid(I) || !C.Resource || Pending.Contains(B)) return false;
+  FDockFilterEntry E; E.Owner=this; E.Station=B; E.Inventory=I; E.Resource=C.Resource.Get();
+  Pending.Add(B,E);
+ }
+ FScopeLock Lock(&DockFilterLock);
+ for(const auto& E:Pending) if(const auto* Existing=DockFilters.Find(E.Key))
+  if(Existing->Owner!=this && Existing->Station.IsValid()) return false;
+ for(const auto& E:Pending) {
+  if(Remove) DockFilters.Remove(E.Key);
+  else DockFilters.Add(E.Key,E.Value);
+ }
+ return true;
+}
+bool ALogisticsSubsystem::HasDockFilter(const FFILNStationConfig& C) const {
+ check(IsInGameThread());
+ auto* B=IsValid(C.Station)?C.Station->GetStation():nullptr;
+ if(!IsValid(B) || !C.Resource) return false;
+ FScopeLock Lock(&DockFilterLock);
+ const auto* E=DockFilters.Find(B);
+ return E && E->Owner==this && E->Station.Get()==B && E->Inventory.Get()==B->GetInventory() && E->Resource.Get()==C.Resource.Get();
+}
+void ALogisticsSubsystem::ClearDockFilters() {
+ FScopeLock Lock(&DockFilterLock);
+ for(auto It=DockFilters.CreateIterator();It;++It) if(It.Value().Owner==this) It.RemoveCurrent();
+}
 void ALogisticsSubsystem::InstallDockReceiptObserver() {
  if(WITH_EDITOR) return;
+ SUBSCRIBE_METHOD(AFGBuildableDockingStation::Factory_LoadUnloadDockedInventory,
+  [](auto& Scope,const AFGBuildableDockingStation* Station,UFGInventoryComponent* Cargo) {
+   if(!Station || Station->GetIsInLoadMode()) return;
+   FDockFilterEntry Entry;
+   {
+    FScopeLock Lock(&DockFilterLock);
+    const auto* E=DockFilters.Find(Station);
+    if(!E || !E->Station.IsValid(false,true)) return;
+    Entry=*E;
+   }
+   auto* Target=Station->GetInventory();
+   // Thread-safe weak identity test only; descriptor is held by the saved config.
+   auto* Resource=Entry.Resource.Get(true);
+   if(!Cargo || !Target || Cargo==Target || !Entry.Inventory.IsValid(false,true) ||
+      Entry.Inventory.Get(true)!=Target || !Resource || !Entry.Resource.IsValid(false,true)) {
+    Scope.Override(0); return;
+   }
+   bool Matching=false,Other=false,Valid=true;
+   const int32 Slots=Cargo->GetSizeLinear();
+   if(Slots<=0 || Slots>4096) { Scope.Override(0); return; }
+   for(int32 Slot=0;Slot<Slots;++Slot) {
+    FInventoryStack Stack;
+    if(!Cargo->GetStackFromIndex(Slot,Stack) || Stack.NumItems<0 ||
+       (Stack.NumItems>0 && !Stack.Item.IsValid())) { Valid=false; break; }
+    if(Stack.NumItems>0) {
+     if(Stack.Item.GetItemClass().Get()==Resource) Matching=true; else Other=true;
+    }
+   }
+   using A=filn::dockfilter::Action;
+   switch(filn::dockfilter::Decide(true,false,Valid,Matching,Other,Station->GetDockingStationResourceForm()==EResourceForm::RF_SOLID)) {
+    case A::Native: return; // preserve native transfer rate and fluid handling
+    case A::Block: Scope.Override(0); return;
+    case A::SelectiveSolid: Scope.Override(SelectiveSolidUnload(Station,Cargo,Target,Resource)); return;
+   }
+  });
  // SML v3.12.1 after handlers receive the final native operation result.
  // FG header documents result = number of items transferred.
  SUBSCRIBE_METHOD_AFTER(AFGBuildableDockingStation::Factory_LoadUnloadDockedInventory,
