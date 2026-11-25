@@ -4,6 +4,8 @@ on:
     paths:
       - 'workspace/mods/FicsItLogisticsNetwork/**'
       - 'scripts/test-filn.sh'
+      - 'scripts/install-filn.sh'
+      - 'scripts/tests/test_install_filn.py'
       - 'scripts/report-native-acceptance.py'
       - 'workspace/specs/014-native-completion/acceptance.json'
       - 'workspace/experiments/FILNLua/dashboard/app.js'
@@ -23,6 +25,8 @@ on:
     paths:
       - 'workspace/mods/FicsItLogisticsNetwork/**'
       - 'scripts/test-filn.sh'
+      - 'scripts/install-filn.sh'
+      - 'scripts/tests/test_install_filn.py'
       - 'scripts/report-native-acceptance.py'
       - 'workspace/specs/014-native-completion/acceptance.json'
       - 'workspace/experiments/FILNLua/dashboard/app.js'
@@ -63,6 +67,7 @@ jobs:
 
       - run: python3 -m unittest discover -s scripts/tests -p 'test_native_prerequisites.py'
       - run: python3 -m unittest discover -s scripts/tests -p 'test_headless_local.py'
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_install_filn.py'
       - run: bash -n scripts/build.sh scripts/headless.sh scripts/install-filn.sh
 
   native-acceptance:
