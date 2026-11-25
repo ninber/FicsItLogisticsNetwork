@@ -148,9 +148,12 @@
 ## Player workflow correction (2026-11-25; supersedes UI tasks T015/T024/T038/T039/T043/T046 and manual enrollment T051/T052)
 
 - [x] Remove the injected station management window, RCO controls, and LOAD/UNLOAD relabeling from source.
-- [ ] Verify original programmable FILTERS selection through native dispatch; source-only optional live adapter reads the installed Smarter Truck Stations filter without Lua. Standalone selector, fluid selector and game verification are still missing.
+- [ ] Verify original programmable FILTERS selection through native dispatch with required Smarter Truck Stations dependency and no Lua. Solid gameplay verification remains missing; standalone selector and fluid support deferred by user.
 - [ ] Create and cook a distinct native depot recipe/building; automatic discovery of newly built depots is blocked on this asset. Existing recorded native depots are not a substitute.
 - [ ] Verify automatic adoption of AP-on depot-only routes, including empty and retained cargo, no manual registration, save/reload and ordinary vehicle exclusion.
 - [ ] Verify automatic overflow relocation of the new truck, never the old owner, through native directed routes, exclusive ownership, physical arrival, route collapse, no-free-depot and failed-route cases. Source prototype only; no runtime acceptance.
 - [ ] Port existing dashboard telemetry to native C++; no in-game management UI.
 - [ ] Run build/UHT/cook and all real-game acceptance, with no external test harness, no Lua dispatcher, no automated game UI.
+
+- [x] Declare versioned TruckStationSettings dependency and guard new solid-only enrollment/configuration/dispatch; retain fluid-aware portable policies for future support.
+- [ ] Verify installed dependency, solid requester FILTERS and actual delivery; verify fluid trucks/stations are not enrolled or dispatched. No standalone selector required for current scope.

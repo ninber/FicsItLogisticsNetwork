@@ -20,6 +20,11 @@
       "Name": "SML",
       "Enabled": true,
       "SemVersion": ">=3.12.1 <3.13.0"
+    },
+    {
+      "Name": "TruckStationSettings",
+      "Enabled": true,
+      "SemVersion": ">=1.1.0 <1.2.0"
     }
   ]
 }

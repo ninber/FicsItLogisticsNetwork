@@ -26,8 +26,8 @@ try:
             raise ValueError('Expected exactly one FILN descriptor')
         meta = json.loads(archive.read(descriptors[0]))
         deps = {dep['Name']: dep for dep in meta.get('Plugins', []) if dep.get('Enabled', False)}
-        if set(deps) != {'SML'} or not deps['SML'].get('SemVersion'):
-            raise ValueError('Expected versioned SML-only dependency')
+        if set(deps) != {'SML', 'TruckStationSettings'} or any(not dep.get('SemVersion') for dep in deps.values()):
+            raise ValueError('Expected versioned SML and TruckStationSettings dependencies')
         if not meta.get('GameVersion') or not meta.get('SemVersion'):
             raise ValueError('Missing game/mod version metadata')
         binaries = [name for name in names if '/Binaries/Win64/' in '/' + name and 'FicsItLogisticsNetwork' in name and name.endswith('.dll')]

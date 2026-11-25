@@ -18,8 +18,8 @@
     },
     {
       "id": "fluid-dispatch",
-      "status": "not-verified",
-      "reason": "Player workflow corrected; previous custom menu not acceptable. New native build/game acceptance pending.",
+      "status": "deferred",
+      "reason": "User explicitly deferred fluid trucks and stations while retaining Smarter Truck Stations.",
       "history": [
         {
           "date": "2026-11-24",
@@ -28,7 +28,7 @@
       ],
       "implementation": "LogisticsDispatch.cpp + FILNRoadCache.h",
       "verification_method": "Native Fluid Trucks/stations; actual pipe ingress and inventory units/capacity",
-      "actual_result": "Not verified on this revision."
+      "actual_result": "Out of current release scope; not verified."
     },
     {
       "id": "vehicle-resource-compatibility",
@@ -47,7 +47,7 @@
     {
       "id": "single-resource-ingress",
       "status": "not-verified",
-      "reason": "Current-head headless tests executed: both fail because generated FGInventoryComponent Resize(2) yields 0 slots. Assertions retained; real game ingress unverified.",
+      "reason": "Solid conveyor/docking ingress through required Smarter Truck Stations not yet verified; fluid ingress deferred.",
       "history": [
         {
           "date": "2026-11-24",
@@ -55,7 +55,7 @@
         }
       ],
       "implementation": "ConfigureStation + NativeInventoryTests.cpp",
-      "verification_method": "FILN.NativeInventory.Solid/Fluid; then conveyor/pipe/docking ingress in game",
+      "verification_method": "Real solid programmable requester FILTERS, conveyor and docking ingress; measured cargo transfer.",
       "actual_result": "0 succeeded, 2 failed; actual exit 1.",
       "evidence": [
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/native-inventory-index.json",
@@ -274,8 +274,8 @@
     },
     {
       "id": "management-ui",
-      "status": "not-verified",
-      "reason": "Player workflow corrected; previous custom menu not acceptable. New native build/game acceptance pending.",
+      "status": "out-of-scope",
+      "reason": "User explicitly rejected custom in-game management UI; replaced by original FILTERS and native web telemetry gates.",
       "history": [
         {
           "date": "2026-11-24",
@@ -284,7 +284,7 @@
       ],
       "implementation": "FILNStationControls.h/.cpp",
       "verification_method": "Original switch style/labels, selector, registration, admin controls, multiplayer",
-      "actual_result": "Not verified on this revision."
+      "actual_result": "Not a current release requirement."
     },
     {
       "id": "multiplayer-authority",
@@ -302,8 +302,8 @@
     },
     {
       "id": "native-package",
-      "status": "verified",
-      "reason": "Current GitHub implementation compiled/linked for Linux and both Win64 targets; Alpakit cook/stage/archive and static layout/PE checks passed. Gameplay/SMM loading remain unverified.",
+      "status": "not-verified",
+      "reason": "Earlier package predates required TruckStationSettings dependency and latest native source; recook/repackage required.",
       "history": [
         {
           "date": "2026-11-24",
@@ -316,7 +316,7 @@
       ],
       "implementation": "dev-exec.sh + headless.sh package + verifier",
       "verification_method": "Real Win64 Alpakit archive and SMM artifact validation",
-      "actual_result": "PASS actual package exit 0; preserved receipt hashes match canonical, installed and verification source.",
+      "actual_result": "Not verified on current branch.",
       "evidence": [
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/receipt.json",
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/FicsItLogisticsNetwork-Windows.zip",
@@ -327,9 +327,9 @@
     {
       "id": "simple-player-workflow",
       "status": "not-verified",
-      "reason": "Native depot asset and standalone FILTERS missing; optional live selector adapter unverified.",
+      "reason": "Dedicated depot missing; required Smarter Truck Stations FILTERS integration source exists but runtime unverified.",
       "verification_method": "Build depot, place LOAD and UNLOAD stations, select requester item, assign vehicle home route and enable AP; verify actual delivery without FILN menus.",
-      "actual_result": "Not verified; no runtime claim."
+      "actual_result": "Not verified."
     },
     {
       "id": "occupied-depot-relocation",
@@ -344,6 +344,13 @@
       "reason": "Native dashboard telemetry not implemented.",
       "verification_method": "Existing web dashboard receives native statistics while Lua dispatcher is disabled.",
       "actual_result": "Not verified; no runtime claim."
+    },
+    {
+      "id": "fluid-exclusion",
+      "status": "not-verified",
+      "reason": "New fluid enrollment, resource configuration and dispatch guarded; game test pending.",
+      "verification_method": "Assign fluid truck/station to FILN; ensure no new ownership or cargo job, vanilla behavior unchanged.",
+      "actual_result": "Source only; not verified."
     }
   ]
 }

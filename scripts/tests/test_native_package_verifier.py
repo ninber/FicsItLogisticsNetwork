@@ -19,19 +19,24 @@ class NativePackageVerifierTests(unittest.TestCase):
         result = self.probe({'Source/module.cpp': '// source'})
         self.assertNotEqual(result.returncode, 0)
     def test_descriptor_without_native_binary_is_not_release(self):
-        meta = {'SemVersion':'0.1.0', 'GameVersion':'>=520140', 'Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1 <3.13.0'}]}
+        meta = {'SemVersion':'0.1.0', 'GameVersion':'>=520140', 'Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1 <3.13.0'},{'Name':'TruckStationSettings','Enabled':True,'SemVersion':'>=1.1.0 <1.2.0'}]}
         result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(meta)})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Missing FILN Win64 DLL', result.stderr)
+    def test_missing_smarter_truck_stations_dependency(self):
+        meta = {'SemVersion':'0.1.0','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'}]}
+        result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(meta)})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Expected versioned SML and TruckStationSettings dependencies', result.stderr)
     def test_path_traversal_is_rejected(self):
         self.assertNotEqual(self.probe({'../outside':'bad'}).returncode, 0)
     def test_fake_dll_is_rejected(self):
-        meta = {'SemVersion':'0.1.0','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'}]}
+        meta = {'SemVersion':'0.1.0','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'},{'Name':'TruckStationSettings','Enabled':True,'SemVersion':'>=1.1.0 <1.2.0'}]}
         result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(meta),'Binaries/Win64/FactoryGame-FicsItLogisticsNetwork-Win64-Shipping.dll':b'not a PE'})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Invalid PE', result.stderr)
     def test_signature_only_dll_is_rejected(self):
-        meta = {'SemVersion':'0.1.0','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'}]}
+        meta = {'SemVersion':'0.1.0','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'},{'Name':'TruckStationSettings','Enabled':True,'SemVersion':'>=1.1.0 <1.2.0'}]}
         data = bytearray(128)
         data[:2] = b'MZ'
         data[60:64] = (64).to_bytes(4, 'little')

@@ -243,7 +243,7 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
 bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  auto* B=Building(Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
  if(bDispatchBlocked || !bRegistryValidated || bChangingFilters || bPreparingUninstall || !HasAuthority() || !IsValid(Station) || Station->GetWorld()!=GetWorld() || !Inventory || !Resource || !Inventory->IsEmpty() || B->GetDockedActor()) return false;
- if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station)))) return false;
+ if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station))) || !SupportsSolidCargo(B) || UFGItemDescriptor::GetForm(Resource)!=EResourceForm::RF_SOLID) return false;
  const auto* FluidProperty=FindFProperty<FBoolProperty>(B->GetClass(),TEXT("mIsFluidStorageInventory"));
  if(!FluidProperty) return false;
  const auto Form=UFGItemDescriptor::GetForm(Resource);
@@ -403,7 +403,7 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  for(const auto& C:StationConfigs) if(C.Station==H) return false;
  auto* VehicleActor=V->GetOwnerVehicle(); auto* Home=Building(H);
  auto* VS=AFGVehicleSubsystem::Get(GetWorld());
- if(!IsValid(VehicleActor) || !VehicleActor->HasAuthority() || !VS || !VehicleActor->GetStorageInventory() || !Home->GetDockingPathNode()) return false;
+ if(!IsValid(VehicleActor) || !VehicleActor->HasAuthority() || !VS || !VehicleActor->GetStorageInventory() || !Home->GetDockingPathNode() || !SupportsSolidCargo(VehicleActor)) return false;
  const FGuid Node=H->GetPathNodeGUID();
  const FVector HomeLocation=Home->GetDockingPathNode()->GetActorLocation();
  FVector Position; FRotator Rotation; VehicleActor->GetVehicleLocationAndRotation(Position,Rotation);

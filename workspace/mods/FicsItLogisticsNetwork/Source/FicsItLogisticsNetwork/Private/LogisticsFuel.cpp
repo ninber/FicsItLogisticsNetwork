@@ -65,6 +65,7 @@ void ALogisticsSubsystem::ServiceFuel() {
   FuelCursor%=Registrations.Num(); auto& R=Registrations[FuelCursor++];
   auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
   auto* H=IsValid(R.Home)?R.Home->GetStation():nullptr;
+  if(!SupportsSolidCargo(O) && !R.FuelPending) continue;
   const auto Snapshot=Inspect(R,Now);
   if(R.FuelPending) {
    const bool Valid=Snapshot.Facts.valid && ValidHome(R.Home) && R.ObservedFuel && IsValid(O) && O->GetFuelInventory();

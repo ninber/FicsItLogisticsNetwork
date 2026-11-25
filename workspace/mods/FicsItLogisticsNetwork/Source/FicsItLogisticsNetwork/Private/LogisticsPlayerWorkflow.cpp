@@ -14,7 +14,7 @@
 
 namespace {
 std::string Key(const FGuid& G) { return TCHAR_TO_UTF8(*G.ToString()); }
-// Optional live integration with the same programmable station that the Lua
+// Required live integration with the same programmable station that the Lua
 // dispatcher reads. No legacy-save import and no copying third-party UI/code.
 TSubclassOf<UFGItemDescriptor> PlayerFilter(AFGBuildableDockingStation* B) {
  if(!IsValid(B) || B->GetClass()->GetPathName()!=TEXT("/TruckStationSettings/Build_ProgrammableTruckStation.Build_ProgrammableTruckStation_C")) return nullptr;
@@ -29,8 +29,12 @@ TSubclassOf<UFGItemDescriptor> PlayerFilter(AFGBuildableDockingStation* B) {
   if(!C->IsChildOf(UFGItemDescriptor::StaticClass()) || (Selected && Selected.Get()!=C)) return nullptr;
   Selected=C;
  }
- return Selected;
+ return Selected && UFGItemDescriptor::GetForm(Selected)==EResourceForm::RF_SOLID ? Selected : TSubclassOf<UFGItemDescriptor>();
 }
+}
+bool ALogisticsSubsystem::SupportsSolidCargo(const UObject* Object) {
+ const auto* Property=IsValid(Object)?FindFProperty<FBoolProperty>(Object->GetClass(),TEXT("mIsFluidStorageInventory")):nullptr;
+ return Property && !Property->GetPropertyValue_InContainer(Object);
 }
 bool ALogisticsSubsystem::StationResourceMatches(const FFILNStationConfig& C) const {
  auto* B=IsValid(C.Station)?C.Station->GetStation():nullptr;
@@ -53,7 +57,7 @@ void ALogisticsSubsystem::ReconcilePlayerConfiguration() {
   auto* ID=PlayerStationScan[PlayerStationCursor++].Get();
   if(!IsValid(ID) || IsDepot(ID)) continue;
   auto* B=ID->GetStation();
-  auto Resource=PlayerFilter(B);
+  auto Resource=SupportsSolidCargo(B)?PlayerFilter(B):TSubclassOf<UFGItemDescriptor>();
   const int32 Index=StationConfigs.IndexOfByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
   if(Index!=INDEX_NONE && !StationConfigs[Index].ExternalFilter) continue;
   if(!Resource) {
@@ -97,7 +101,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  check(IsInGameThread());
  if(!IsValid(V) || !IsValid(Requested) || !IsDepot(Requested) || !ValidHome(Requested)) return false;
  auto* O=V->GetOwnerVehicle(); auto* VS=AFGVehicleSubsystem::Get(GetWorld());
- if(!IsValid(O) || !VS || !O->GetStorageInventory()) return false;
+ if(!IsValid(O) || !VS || !O->GetStorageInventory() || !SupportsSolidCargo(O)) return false;
  const auto Before=V->GetVehicleRoute();
  const FGuid Wanted=Requested->GetPathNodeGUID();
  if(!filn::player::OptedIn(O->HasAuthority(),V->IsAutopilotEnabled(),O->GetDriver()!=nullptr,Before.Num()==1 && Before[0]==Wanted,ByVehicle.Contains(V))) return false;

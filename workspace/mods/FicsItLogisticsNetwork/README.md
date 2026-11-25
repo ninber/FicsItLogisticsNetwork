@@ -1,16 +1,15 @@
 # FicsIt Logistics Network — native C++ mod
 
-**Development branch, not a verified release.** Standalone SML 3.12.1 / CSS 5.6.1-87 / game CL520140. No dependency on Lua, UE4SS, or legacy station mods. All migration of older saves is external.
+**Development branch, not a verified release.** SML 3.12.1 / CSS 5.6.1-87 / game CL520140 with required Smarter Truck Stations (TruckStationSettings 1.1.x). No dependency on Lua or UE4SS. All migration of older saves is external.
 
-## In-game setup
+## Intended in-game setup (not yet runtime accepted)
 
-1. Open a vanilla truck station. The FILN logistics entry opens management without changing the ordinary LOAD/UNLOAD labels. Select a compatible resource and register; use LOAD for providers and UNLOAD for requesters. Ordinary LOAD stations with only matching cargo can supply requests without registration.
-2. Designate an empty LOAD station with no cargo belts/pipes as a rest stop. Fuel inputs may be supplied normally. Register a stopped, empty, undriven vehicle nearby. An explicit new registration may assign its home-only route and enable autopilot; unrelated routes are not taken over.
-3. Enable automatic dispatch. Requesters must be empty; fresh pickups require a full vehicle-specific load. Matching retained cargo has priority; [S] warehouse restrictions apply. Roads are directed and vehicle-compatible.
-4. Review the network overview for state, cargo, job endpoints, road-cache counters and recovery diagnostics. Do not treat a committed route as a completed delivery.
-5. To remove an idle vehicle, park it at its assigned depot, finish refueling, disable autopilot and use the administrator unregister action. Its route and cargo remain unchanged.
+1. Build a dedicated FILN depot (native cooked asset still missing).
+2. Build an ordinary LOAD truck station for solid supply.
+3. Build a Smarter Truck Stations programmable UNLOAD station; select exactly one solid item in its existing FILTERS tab.
+4. Use the normal vehicle route/autopilot controls to opt a truck into any depot. FILN adopts it automatically and redirects a second truck to a free reachable depot if necessary.
 
-A distinct authored rest-stop construction recipe and assets are not yet implemented. Existing vanilla stations are the functional rest-stop alternative. Localization keys are present, but translated catalogs and visual multiplayer behavior are unverified.
+No FILN menus, register button or dispatcher switch. Fluid trucks/stations are unavailable to FILN for this release; vanilla fluid logistics remain unchanged. Existing web dashboard native telemetry is pending. The recorded vanilla depot fallback is development-only, not a substitute for the missing dedicated asset.
 
 ## Build and verification
 
@@ -40,11 +39,10 @@ filn.enable 0|1
 filn.status
 filn.reset <vehicle-object-path>
 filn.rehome <vehicle-object-path> <replacement-depot-object-path>
-filn.manage <station-object-path>
 filn.prepareUninstall
 ```
 
-Use exact object paths from list. Explicit dispatch uses the same eligibility and reservation path as automatic dispatch; if path calculation is pending, retry when eligible. Recovery retains leases and cargo until a verified return or explicit parked recovery. Do not rewrite player-changed routes. The local management command opens the same panel; it is not required for normal station enrollment.
+Use exact object paths from list. Explicit dispatch uses the same eligibility and reservation path as automatic dispatch; if path calculation is pending, retry when eligible. Recovery retains leases and cargo until a verified return or explicit parked recovery. Do not rewrite player-changed routes. Console commands are developer diagnostics and uninstall preparation, not normal player workflow.
 
 ## Uninstall preparation
 

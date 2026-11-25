@@ -49,6 +49,8 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  auto* QB=IsValid(C.Station)?C.Station->GetStation():nullptr;
  auto* HB=IsValid(R.Home)?R.Home->GetStation():nullptr;
  if(!IsValid(VehicleActor) || !IsValid(QB) || !IsValid(HB) || !C.Resource || !ValidHome(R.Home)) return false;
+ // Current release supports solids only; retain medium-aware policy for later work.
+ if(!SupportsSolidCargo(VehicleActor) || !SupportsSolidCargo(QB) || UFGItemDescriptor::GetForm(C.Resource)!=EResourceForm::RF_SOLID) return false;
  if(VehicleActor->GetDriver()) { R.Diagnostic=TEXT("Player-controlled vehicle excluded"); return false; }
  if(!R.Vehicle->IsAutopilotEnabled()) { R.Diagnostic=TEXT("Autopilot disabled; explicit player opt-in required"); return false; }
  if(!VehicleActor->HasFuel() || !FuelReady(R)) { R.Diagnostic=TEXT("Awaiting full compatible native fuel inventory at assigned home"); return false; }
@@ -83,7 +85,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  if(!Inventory(QB->GetInventory(),C.Resource,Request.kinds,Request.quantity,Request.capacity)) return false;
  if(P!=INDEX_NONE) {
   auto* ID=ProviderCandidates[P].Get(); auto* PB=IsValid(ID)?ID->GetStation():nullptr;
-  if(!IsValid(PB) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode()) return false;
+  if(!IsValid(PB) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode() || !SupportsSolidCargo(PB)) return false;
   const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& Entry){return Entry.Station==ID;});
   if(PC && (PC->Resource!=C.Resource || !StationResourceMatches(*PC))) return false;
   if(Fluid && PB->GetCurrentFluidDescriptor() && PB->GetCurrentFluidDescriptor()!=C.Resource) return false;
@@ -140,7 +142,7 @@ void ALogisticsSubsystem::Schedule() {
   if(Now<NextDispatch) return;
   RequestCursor%=StationConfigs.Num();
   const auto& Q=StationConfigs[RequestCursor]; auto* QB=IsValid(Q.Station)?Q.Station->GetStation():nullptr;
-  if(!IsValid(QB) || QB->GetIsInLoadMode() || IsDepot(Q.Station) || !Q.Resource || !QB->GetInventory() || !QB->GetInventory()->IsEmpty()) {
+  if(!IsValid(QB) || !SupportsSolidCargo(QB) || QB->GetIsInLoadMode() || IsDepot(Q.Station) || !Q.Resource || UFGItemDescriptor::GetForm(Q.Resource)!=EResourceForm::RF_SOLID || !QB->GetInventory() || !QB->GetInventory()->IsEmpty()) {
    ++RequestCursor; if(RequestCursor>=StationConfigs.Num()) {RequestCursor=0; NextDispatch=Now+5.;} return;
   }
   auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
