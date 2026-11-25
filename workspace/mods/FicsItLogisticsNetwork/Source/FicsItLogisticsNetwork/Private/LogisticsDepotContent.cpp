@@ -34,6 +34,10 @@ void ALogisticsSubsystem::EnsureDepotRecipe() {
  // A depot unlocks only when the original truck station is available.
  if(!IsValid(Manager) || !Manager->IsRecipeAvailable(Truck)) return;
  if(!Manager->IsRecipeAvailable(Depot)) Manager->AddAvailableRecipe(Depot);
- bDepotRecipeReady=Manager->IsRecipeAvailable(Depot);
- if(bDepotRecipeReady) UE_LOG(LogFILN,Log,TEXT("FILN_DEPOT_RECIPE_READY (build-menu placement remains runtime acceptance)"));
+ auto* BuildGun=FindObject<UClass>(nullptr,TEXT("/Game/FactoryGame/Equipment/BuildGun/BP_BuildGun.BP_BuildGun_C"));
+ if(!BuildGun || !Manager->IsRecipeAvailable(Depot)) return;
+ TArray<TSubclassOf<UFGRecipe>> Recipes;
+ Manager->GetAvailableRecipesForProducer(BuildGun,Recipes);
+ bDepotRecipeReady=Recipes.Contains(TSubclassOf<UFGRecipe>(Depot));
+ if(bDepotRecipeReady) UE_LOG(LogFILN,Log,TEXT("FILN_DEPOT_RECIPE_READY buildgun_listed=true; actual placement remains runtime acceptance"));
 }

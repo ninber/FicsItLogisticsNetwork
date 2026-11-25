@@ -274,3 +274,9 @@ class NativeDashboardTests(unittest.TestCase):
         self.assertEqual(analyze(s,100)['counts']['available'],0)
         v['job']={'state':'Relocating'}
         self.assertEqual(analyze(s,100)['fleet'][0]['status'],'Relocating to free depot')
+
+    def test_native_fluid_vehicle_not_active(self):
+        s=fixture();s['runtime']='native';v=s['vehicles'][0];v.update(held=True,solid_supported=False)
+        result=analyze(s,100)
+        self.assertEqual(result['counts']['active'],0)
+        self.assertEqual(result['fleet'][0]['status'],'Outside FILN / fluid support deferred')

@@ -116,14 +116,36 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
   auto& Previous=PendingHomeReason.FindOrAdd(VehicleKey);
   if(Previous!=Why) { Previous=Why; UE_LOG(LogFILN,Log,TEXT("AUTO_HOME_PENDING vehicle=%s reason=%s"),*V->GetPathName(),*Why); }
  };
+ // Cheap rejection before any roster work. For an enrollment attempt, build
+ // route/node indexes once, not once per candidate depot. Game-thread only.
+ TMap<FGuid,int32> NodeCounts;
+ TSet<FGuid> AllForeignRoutes, BlockingRequestedRoutes;
+ bool Indexed=false;
+ const auto IndexRoster=[&]() {
+  if(Indexed) return;
+  Indexed=true;
+  for(auto* Other:VS->GetDockingStations()) if(IsValid(Other)) ++NodeCounts.FindOrAdd(Other->GetPathNodeGUID());
+  for(auto* Other:VS->GetAllVehicles()) {
+   if(!IsValid(Other) || Other==V) continue;
+   const auto& Route=Other->GetVehicleRoute();
+   for(const auto& N:Route) AllForeignRoutes.Add(N);
+   if(!Route.Contains(Wanted)) continue;
+   const auto* OtherOwner=Other->GetOwnerVehicle();
+   if(filn::player::ForeignRoute(true,Route.Num()==1 && Route[0]==Wanted,Other->IsAutopilotEnabled(),
+       !IsValid(OtherOwner) || OtherOwner->GetDriver()!=nullptr,ByVehicle.Contains(Other))) BlockingRequestedRoutes.Add(Wanted);
+  }
+ };
  auto Free=[&](AFGDockingStationIdentifier* D) {
-  if(!IsValid(D) || !IsValid(D->GetStation())) return false;
-  auto* B=D->GetStation(); const auto Node=D->GetPathNodeGUID(); bool Unique=Node.IsValid(),Foreign=false;
-  for(auto* Other:VS->GetDockingStations()) if(IsValid(Other) && Other!=D && Other->GetPathNodeGUID()==Node) Unique=false;
-  for(auto* Other:VS->GetAllVehicles()) if(IsValid(Other) && Other!=V && Other->GetVehicleRoute().Contains(Node)) Foreign=true;
-  return filn::player::Free({IsDepot(D),ValidHome(D),B->HasPower() && !B->IsProductionPaused(),
-   HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(D)),B->GetDockedActor() && B->GetDockedActor()!=O,
-   Reservations.StationBusy(Key(StationId(D))),Unique,Foreign});
+  if(!IsValid(D) || !IsValid(D->GetStation()) || !IsDepot(D) ||
+     HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(D))) return false;
+  auto* B=D->GetStation(); const auto Node=D->GetPathNodeGUID();
+  if(!Node.IsValid() || (B->GetDockedActor() && B->GetDockedActor()!=O) ||
+     !B->HasPower() || B->IsProductionPaused() || !ValidHome(D)) return false;
+  const auto* SavedId=StationIds.Find(TWeakObjectPtr<AFGDockingStationIdentifier>(D));
+  if(SavedId && Reservations.StationBusy(Key(*SavedId))) return false;
+  IndexRoster();
+  const bool Foreign=D==Requested?BlockingRequestedRoutes.Contains(Node):AllForeignRoutes.Contains(Node);
+  return filn::player::Free({true,true,true,false,false,false,NodeCounts.FindRef(Node)==1,Foreign});
  };
  AFGDockingStationIdentifier* Destination=nullptr;
  const bool RequestedClaimed=HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Requested));
@@ -150,7 +172,11 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
   }
   if(!Destination) Pending(TEXT("Occupied depot: no available reachable alternative in this pass; retrying"));
  }
- if(!Destination || !Free(Destination) || O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=Before) return false;
+ if(!Destination) return false;
+ // Rebuild the small index once immediately before mutation; a native road
+ // change or second claimant must not sneak through the earlier search.
+ Indexed=false; NodeCounts.Reset(); AllForeignRoutes.Reset(); BlockingRequestedRoutes.Reset();
+ if(!Free(Destination) || O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=Before) return false;
  const auto Node=Destination->GetPathNodeGUID();
  const bool Move=Destination!=Requested;
  auto* H=Destination->GetStation();

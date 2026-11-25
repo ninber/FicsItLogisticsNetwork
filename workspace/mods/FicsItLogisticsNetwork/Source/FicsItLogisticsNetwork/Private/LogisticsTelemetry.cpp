@@ -87,8 +87,9 @@ void ALogisticsSubsystem::ResetTelemetry() {
  bTelemetryCollecting=false; bTelemetryDemand=false;
  NextTelemetryDemandCheck=0; NextTelemetryStart=0;
  TelemetryStationQueue.Reset(); TelemetryVehicleQueue.Reset();
- TelemetryStations.Reset(); TelemetryVehicles.Reset(); TelemetryErrors.Reset();
- TelemetryWorld.Reset();
+ TelemetryStations.Reset(); TelemetryVehicles.Reset(); TelemetryErrors.Reset(); TelemetryCapacityRows.Reset();
+ TelemetryResources.Reset(); TelemetryResourceSet.Reset(); TelemetryTypes.Reset(); TelemetryTypeKeys.Reset();
+ TelemetryTypeCursor=TelemetryResourceCursor=0; TelemetryWorld.Reset();
 }
 void ALogisticsSubsystem::SampleTelemetry() {
  // Demand-driven, no actor changes, no engine browser calls, no shell/process
@@ -110,7 +111,9 @@ void ALogisticsSubsystem::SampleTelemetry() {
   if(TelemetryWrite.IsValid() && !TelemetryWrite.Get()) UE_LOG(LogFILN,Warning,TEXT("FILN telemetry write failed"));
   auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
   TelemetryStationQueue.Reset(); TelemetryVehicleQueue.Reset();
-  TelemetryStations.Reset(); TelemetryVehicles.Reset(); TelemetryErrors.Reset();
+  TelemetryStations.Reset(); TelemetryVehicles.Reset(); TelemetryErrors.Reset(); TelemetryCapacityRows.Reset();
+  TelemetryResources.Reset(); TelemetryResourceSet.Reset(); TelemetryTypes.Reset(); TelemetryTypeKeys.Reset();
+  TelemetryTypeCursor=TelemetryResourceCursor=0;
   for(auto* S:VS->GetDockingStations()) if(IsValid(S)) TelemetryStationQueue.Add(S);
   for(auto* V:VS->GetAllVehicles()) if(IsValid(V)) TelemetryVehicleQueue.Add(V);
   TelemetryStationCursor=TelemetryVehicleCursor=0; TelemetryStarted=Stamp();
@@ -133,6 +136,10 @@ void ALogisticsSubsystem::SampleTelemetry() {
    const bool Solid=SupportsSolidCargo(B), Explicit=Selected && Solid;
    const bool Supply=Load && Stock.Valid && Stock.Kinds==1 && Stock.Total>0 && Stock.Item && UFGItemDescriptor::GetForm(Stock.Item)==EResourceForm::RF_SOLID;
    const bool Configured=!Depot && Solid && Stock.Valid && (Explicit || Supply) && Stock.Kinds<=1 && (!Selected || Stock.Total==Stock.Amount);
+   if(Configured && Stock.Item) {
+    const TWeakObjectPtr<UClass> Resource(Stock.Item.Get());
+    if(!TelemetryResourceSet.Contains(Resource)) { TelemetryResourceSet.Add(Resource); TelemetryResources.Add(Resource); }
+   }
    if(!Stock.Valid) Error(Guid(S),TEXT("Station inventory not readable"));
    if(Explicit && Stock.Total!=Stock.Amount) Error(Guid(S),TEXT("Station cargo conflicts with selected resource"));
    auto O=Obj(); O->SetStringField(TEXT("id"),Guid(S)); O->SetStringField(TEXT("guid"),Guid(S)); O->SetStringField(TEXT("name"),S->GetStationName().ToString());
@@ -155,7 +162,8 @@ void ALogisticsSubsystem::SampleTelemetry() {
    if(!Cargo.Valid || !Fuel.Valid) Error(V->GetPathName(),TEXT("Vehicle cargo or fuel inventory not readable"));
    auto O=Obj(); const FString Id=R?R->TruckId.ToString():V->GetPathName();
    O->SetStringField(TEXT("id"),Id); O->SetStringField(TEXT("key"),V->GetPathName()); O->SetStringField(TEXT("name"),V->GetVehicleName().ToString());
-   O->SetStringField(TEXT("class"),V->GetVehicleClass()?V->GetVehicleClass()->GetPathName():FString());
+   const FString VehicleClass=V->GetVehicleClass()?V->GetVehicleClass()->GetPathName():FString();
+   O->SetStringField(TEXT("class"),VehicleClass);
    O->SetBoolField(TEXT("managed"),R!=nullptr); O->SetBoolField(TEXT("home_powered"),IsValid(H) && H->HasPower() && !H->IsProductionPaused());
    O->SetBoolField(TEXT("autopilot"),V->IsAutopilotEnabled()); O->SetBoolField(TEXT("driver"),Owner->GetDriver()!=nullptr);
    O->SetBoolField(TEXT("has_fuel"),Owner->HasFuel()); O->SetBoolField(TEXT("docking"),V->IsCurrentlyDocking());
@@ -173,7 +181,31 @@ void ALogisticsSubsystem::SampleTelemetry() {
     J->SetNumberField(TEXT("loaded"),R->LoadedCargo); J->SetNumberField(TEXT("unloaded"),R->DeliveredCargo); J->SetNumberField(TEXT("truckload"),R->ExpectedCargo); J->SetStringField(TEXT("error"),R->Diagnostic);
     O->SetObjectField(TEXT("job"),J);
    } else if(const auto* Why=PendingHomeReason.Find(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V))) O->SetStringField(TEXT("native_pending_reason"),*Why);
+   if(R && Cargo.Valid && IsValid(H) && H->HasPower() && !H->IsProductionPaused() && V->IsAutopilotEnabled() && !Owner->GetDriver() && SupportsSolidCargo(Owner) && !VehicleClass.IsEmpty()) {
+    auto* Inventory=Owner->GetStorageInventory(); const int32 Slots=Inventory->GetSizeLinear();
+    const FString TypeKey=VehicleClass+TEXT("|")+FString::FromInt(Slots);
+    if(!TelemetryTypeKeys.Contains(TypeKey)) {
+     TelemetryTypeKeys.Add(TypeKey); auto Row=Obj(), ByItem=Obj();
+     Row->SetStringField(TEXT("class"),VehicleClass); Row->SetNumberField(TEXT("slots"),Slots); Row->SetStringField(TEXT("sampled_vehicle"),Id); Row->SetObjectField(TEXT("by_item"),ByItem);
+     TelemetryCapacityRows.Add(Val(Row)); TelemetryTypes.Add({Inventory,Slots,ByItem});
+    }
+   }
    TelemetryVehicles.Add(Val(O)); continue;
+  }
+  if(TelemetryTypeCursor<TelemetryTypes.Num() && !TelemetryResources.IsEmpty()) {
+   auto& Type=TelemetryTypes[TelemetryTypeCursor]; auto* I=Type.Inventory.Get(); auto* Class=TelemetryResources[TelemetryResourceCursor++].Get();
+   if(IsValid(I) && IsValid(Class) && I->GetSizeLinear()==Type.Slots && Type.Slots>0 && Type.Slots<=4096 && Class->IsChildOf(UFGItemDescriptor::StaticClass())) {
+    TSubclassOf<UFGItemDescriptor> Resource(Class); int64 Capacity=0; bool Valid=true;
+    for(int32 Slot=0;Slot<Type.Slots;++Slot) {
+     const auto Filter=I->GetAllowedItemOnIndex(Slot);
+     if(!Filter || Filter==Resource) { const auto N=I->GetSlotSizeForItem(Slot,Resource); if(N<0) Valid=false; else Capacity+=N; }
+    }
+    if(Valid && Capacity<=MAX_int32) Type.ByItem->SetNumberField(Class->GetPathName(),static_cast<double>(Capacity));
+    else Error(Class->GetPathName(),TEXT("Vehicle capacity readback invalid"));
+   } else Error(TEXT("capacity"),TEXT("Representative inventory or resource changed during scan"));
+   if(TelemetryResourceCursor>=TelemetryResources.Num()) { ++TelemetryTypeCursor; TelemetryResourceCursor=0; }
+   // One exact capacity calculation per scheduler callback; no matrix spike.
+   break;
   }
   // Keep previous complete snapshot until the next one has been written.
   auto Snapshot=Obj(); auto Dispatcher=Obj(); auto Leases=Obj(); auto Stats=Obj();
@@ -191,9 +223,9 @@ void ALogisticsSubsystem::SampleTelemetry() {
   Snapshot->SetNumberField(TEXT("sequence"),static_cast<double>(++TelemetrySequence)); Snapshot->SetNumberField(TEXT("exported_at"),static_cast<double>(Stamp()));
   Snapshot->SetNumberField(TEXT("collection_seconds"),static_cast<double>(Stamp()-TelemetryStarted)); Snapshot->SetNumberField(TEXT("collection_started_at"),static_cast<double>(TelemetryStarted));
   Snapshot->SetArrayField(TEXT("stations"),TelemetryStations); Snapshot->SetArrayField(TEXT("vehicles"),TelemetryVehicles); Snapshot->SetArrayField(TEXT("errors"),TelemetryErrors);
-  // No fabricated truckload estimates. Per-resource vehicle capacity sampling
-  // remains a separate acceptance task; dashboard shows unknown where absent.
-  Snapshot->SetArrayField(TEXT("capacity_samples"),TArray<Value>());
+  // Representative real inventory capacity by vehicle class and slot count,
+  // as in Lua telemetry. Unknown values stay absent rather than estimated.
+  Snapshot->SetArrayField(TEXT("capacity_samples"),TelemetryCapacityRows);
   Snapshot->SetObjectField(TEXT("dispatcher"),Dispatcher);
   const FString Directory=TelemetryDirectory();
   const FString Temp=FPaths::Combine(Directory,FGuid::NewGuid().ToString()+TEXT(".tmp"));
@@ -207,7 +239,8 @@ void ALogisticsSubsystem::SampleTelemetry() {
    if(!Moved) IFileManager::Get().Delete(*Temp,false,true);
    return Moved;
   });
-  TelemetryStations.Reset(); TelemetryVehicles.Reset(); TelemetryErrors.Reset();
+  TelemetryStations.Reset(); TelemetryVehicles.Reset(); TelemetryErrors.Reset(); TelemetryCapacityRows.Reset();
+  TelemetryResources.Reset(); TelemetryResourceSet.Reset(); TelemetryTypes.Reset(); TelemetryTypeKeys.Reset();
   bTelemetryCollecting=false; NextTelemetryStart=Now+5.; break;
  }
 }

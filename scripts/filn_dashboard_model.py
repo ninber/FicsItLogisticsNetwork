@@ -43,7 +43,9 @@ def analyze(snapshot, now, history=None):
         free = max(0,requester.get('capacity',0)-requester.get('amount',0)) if requester.get('item') and requester.get('item')==cargo.get('item') else None
         fuel = v.get('fuel', {})
         idle = not job or job.get('state') == 'Idle'
-        if not v.get('managed'):
+        if snapshot.get('runtime') == 'native' and v.get('solid_supported') is False:
+            status = 'Outside FILN / fluid support deferred'
+        elif not v.get('managed'):
             if observed_home and not v.get('autopilot'):
                 status = 'Outside dispatcher / autopilot off'
             elif observed_home and v.get('driver'):
@@ -95,7 +97,7 @@ def analyze(snapshot, now, history=None):
                    reconciliation=reconciliation,
                    dispatcher_reason=(job.get('recovery_details') or {}).get('last_error') or job.get('error') or reconciliation.get('reason') or v.get('native_pending_reason') or dispatch.get('reasons', {}).get(v.get('home'), ''))
         fleet.append(row)
-    active = [v for v in fleet if v.get('managed') and v.get('home_powered') and v.get('autopilot') and not v.get('driver') and (v.get('job')or{}).get('state')!='Detached']
+    active = [v for v in fleet if v.get('managed') and not (snapshot.get('runtime') == 'native' and v.get('solid_supported') is False) and v.get('home_powered') and v.get('autopilot') and not v.get('driver') and (v.get('job')or{}).get('state')!='Detached']
     available = [v for v in active if v['status'] == 'Available / waiting for dispatch']
     working = [v for v in active if v.get('job') and v['job'].get('state') not in ('Idle', 'Detached')]
     inventory = []

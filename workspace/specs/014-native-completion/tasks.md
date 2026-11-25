@@ -173,3 +173,7 @@
 
 - [x] Guard dependency/source, native depot assets and cooked content presence before compilation/package; author-depot commandlet requires success receipt; test missing/LFS/incompatible dependency and source-only package cases.
 - [ ] Execute actual author-depot + native compile + package and inspect actual Unreal pak entries. Asset headers/container presence are not proof of content correctness.
+
+- [x] Fix simultaneous home-only claim starvation and avoid full roster scans per alternative depot candidate; revalidate route/node index immediately before mutation. Confirm Build Gun recipe listing through native manager readback.
+- [x] Implement bounded actual per-resource capacity sampling for representative vehicle class/slot types; preserve explicit unknown quantities and exclude fluid vehicles from native dashboard eligibility.
+- [ ] Verify multiple simultaneous AP-on home assignments, foreign multi-stop routes, large fleet timing and capacity parity in isolated game.

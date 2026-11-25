@@ -161,7 +161,17 @@ private:
  FString TelemetryWorld;
  TArray<TWeakObjectPtr<AFGDockingStationIdentifier>> TelemetryStationQueue;
  TArray<TWeakObjectPtr<AFGWheeledVehicleIdentifier>> TelemetryVehicleQueue;
- TArray<TSharedPtr<FJsonValue>> TelemetryStations, TelemetryVehicles, TelemetryErrors;
+ TArray<TSharedPtr<FJsonValue>> TelemetryStations, TelemetryVehicles, TelemetryErrors, TelemetryCapacityRows;
+ TArray<TWeakObjectPtr<UClass>> TelemetryResources;
+ TSet<TWeakObjectPtr<UClass>> TelemetryResourceSet;
+ struct FTelemetryCapacity {
+  TWeakObjectPtr<class UFGInventoryComponent> Inventory;
+  int32 Slots=0;
+  TSharedPtr<FJsonObject> ByItem;
+ };
+ TArray<FTelemetryCapacity> TelemetryTypes;
+ TSet<FString> TelemetryTypeKeys;
+ int32 TelemetryTypeCursor=0, TelemetryResourceCursor=0;
  TFuture<bool> TelemetryWrite;
  void ReconcilePlayerConfiguration();
  void EnsureDepotRecipe();

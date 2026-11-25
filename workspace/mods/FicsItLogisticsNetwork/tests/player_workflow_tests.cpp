@@ -13,6 +13,12 @@ int main() {
  d=free; d.powered=false; assert(!Free(d));
  d=free; d.designated=false; assert(!Free(d));
  d=free; d.valid=false; assert(!Free(d));
+ assert(!ForeignRoute(true,true,true,false,false));
+ assert(ForeignRoute(false,true,true,false,false));
+ assert(ForeignRoute(true,false,true,false,false));
+ assert(ForeignRoute(true,true,false,false,false));
+ assert(ForeignRoute(true,true,true,true,false));
+ assert(ForeignRoute(true,true,true,false,true));
  assert(OptedIn(true,true,false,true,false));
  assert(!OptedIn(true,false,false,true,false));
  assert(!OptedIn(true,true,true,true,false));
