@@ -37,3 +37,19 @@ Native dependency removal implemented at d49e4b4: manifest/build prerequisite, r
 ## Fluid building source follow-up
 
 Native root and editor authoring now cover distinct fluid depot and fluid logistics recipe; configuration, docking-medium checks, dispatch, fuel, parking, overflow and recovery accept actual compatible native forms in source. Unknown and cross-medium pairings reject. Fluid descriptor mismatch rejects; own native slot-filter readback remains mandatory. This does not establish native pipe enforcement, gas compatibility or exact transfer units. Normal independent in-game resource selector is still missing; developer console backend is not player UX. See depot-content-implementation.md, fluid-station-buildables and fluid-dispatch acceptance gates. No deployed build or actual generated assets.
+
+
+## User gameplay acceptance — 2026-11-25
+
+Development package SHA-256: `d9f1590aa7183f940ae59b67ac5e3f2535693393165431933c8f938fbcfe33b1`.
+User tested only `FILN_Native_Test_20261124T222333Z.sav`; keep original City untouched.
+Linux/Win64 builds, author/reload, cook, archive structural verification and installation succeeded. Actual game launch/load and performance passed in user observation. Do not interpret this as release acceptance.
+
+- Build menu: three fluid station entries with the same vanilla name and asset. Failed distinct presentation/identification. No fluid transportation demonstrated.
+- Resource selection visually works per user; source inspection finds only a marker component, not a standalone native selector wired to ConfigureStation. Backend acceptance, readback and persistence remain unverified.
+- Migration appears plausible to user, but moving vehicles may simply follow their old vanilla routes. Require explicit native registration/configuration/job evidence; no migrated-station count asserted.
+- Separate road network (depot, requester, provider, assigned vehicle): vehicle does nothing. Failed observed end-to-end automatic workflow; enrollment versus eligibility versus route failure not yet localized.
+- Solid delivery unverified, occupied depot not tested, remaining persistence/recovery/fuel gates open.
+- Dashboard not visible/no web service. Existing service watches legacy Lua heartbeat and starts Lua mode; native server requires explicit --native-dir and dashboard demand. Native telemetry is read-only and can diagnose the running session without restarting it.
+
+Priorities: (1) obtain current native telemetry and LogFILN evidence (registry, configured requester, depot identity, vehicle enrollment, native AUTO job); (2) implement/verify actual selector-to-authority configuration and rejection/readback; (3) correct effective runtime recipe/descriptor/build-menu names, not only editor CDO text; (4) expose native dashboard lifecycle independent of Lua; (5) re-run isolated solid workflow then fluid ingress/docking/quantity/transfer and migration validation. Preserve native-only performance, safety checks, and user-controlled gameplay. Do not use developer console mutation as the player workflow or re-enable Lua/harness. Do not regenerate or deploy until fixes and required tests are ready. This report is not a fix.
