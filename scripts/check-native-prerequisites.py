@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-DEPOT_FILES = tuple(f"{kind}_{name}.uasset" for name in ("FILNDepot", "FILNFluidDepot", "FILNFluidStation") for kind in ("Desc", "Recipe"))
+DEPOT_FILES = tuple(f"{kind}_{name}.uasset" for name in ("FILNDepot", "FILNFluidDepot", "FILNFluidStation") for kind in ("Build", "Desc", "Recipe"))
 RETIRED_ROOT = "RootGameWorldModule_FILNDepot.uasset"
 
 def check(project, require_depot=False):

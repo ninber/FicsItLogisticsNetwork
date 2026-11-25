@@ -36,6 +36,13 @@ case "$action" in
     flock -n 9 || { echo 'Native build already running' >&2; exit 75; }
     python3 "$SATISFACTORY_MODDING_ROOT/scripts/check-native-prerequisites.py" "$SATISFACTORY_PROJECT"
     report=$(mktemp -d "$SATISFACTORY_MODDING_ROOT/logs/depot-author.XXXXXX")
+    if [[ "${FILN_DEPOT_UPGRADE_NAMES:-0}" == 1 ]]; then
+      depot_dir="$(dirname "$SATISFACTORY_PROJECT")/Mods/FicsItLogisticsNetwork/Content/Depot"
+      if [[ -d "$depot_dir" ]]; then
+        cp -a -- "$depot_dir" "$report/previous-depot-content"
+        printf 'Preserved previous FILN depot content: %s\n' "$report/previous-depot-content"
+      fi
+    fi
     export FILN_DEPOT_AUTHOR_RECEIPT="$report/receipt.json"
     "$UE_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$SATISFACTORY_PROJECT" -run=pythonscript "-script=$SATISFACTORY_MODDING_ROOT/scripts/author-native-depot.py" -unattended -NullRHI -NoSound -nop4 -nosplash "-abslog=$report/editor.log" -stdout
     [[ -s "$FILN_DEPOT_AUTHOR_RECEIPT" ]] || { echo "BLOCKED: no successful asset-authoring receipt; inspect $report/editor.log" >&2; exit 1; }

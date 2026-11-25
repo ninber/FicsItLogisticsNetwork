@@ -1,8 +1,9 @@
 """Run ONLY in the matching Unreal Editor Python commandlet, never in the game.
 
-Create original FILN-owned solid/fluid descriptor/recipe Blueprints using game
-parents. The SML root module is native C++. No runtime-generated actor class, no upstream mod asset copying.
-Existing assets are validated and never overwritten.
+Create FILN-owned buildable, descriptor and recipe Blueprint descendants using
+vanilla parents. Their own actor display names avoid vanilla descriptor-derived
+names. Existing assets are validated; only an explicitly requested, backed-up
+upgrade may repoint an old FILN descriptor to its new named actor.
 """
 import json
 import os
@@ -11,6 +12,7 @@ import unreal
 
 DEST = "/FicsItLogisticsNetwork/Depot"
 VALIDATE_ONLY = os.environ.get("FILN_DEPOT_VALIDATE_ONLY") == "1"
+UPGRADE_NAMES = os.environ.get("FILN_DEPOT_UPGRADE_NAMES") == "1" and not VALIDATE_ONLY
 
 def require(value, message):
     if not value:
@@ -30,7 +32,7 @@ def assign(obj, value, *names):
     _, name = prop(obj, *names)
     obj.set_editor_property(name, value)
 
-def package(name, parent, configure, validate):
+def package(name, parent, configure, validate, upgrade=None):
     path = DEST + "/" + name
     assets = unreal.EditorAssetLibrary
     if assets.does_asset_exist(path):
@@ -52,10 +54,13 @@ def package(name, parent, configure, validate):
         parent_path = str(tag).split("\'")[-2] if tag and "\'" in str(tag) else str(tag)
         require(parent_path == parent.get_path_name(), f"Unexpected parent: {path}: {tag}")
     cdo = unreal.get_default_object(generated)
+    changed = not existing
     if not existing:
         configure(cdo)
+    elif UPGRADE_NAMES and upgrade is not None:
+        changed = upgrade(cdo)
     validate(cdo)
-    if not existing:
+    if changed:
         require(assets.save_loaded_asset(bp, only_if_is_dirty=False), f"Save failed: {path}")
     return generated
 
@@ -81,14 +86,29 @@ def vanilla_recipe(short_name, expected_descriptor, fluid):
     return recipe, desc, actor
 
 def author(suffix, label, parents):
-    recipe_parent, desc_parent, actor = parents
+    recipe_parent, desc_parent, vanilla_actor = parents
+    fluid = bool(prop(unreal.get_default_object(vanilla_actor), "m_is_fluid_storage_inventory", "is_fluid_storage_inventory", "mIsFluidStorageInventory")[0])
+    def actor_config(cdo):
+        assign(cdo, unreal.Text(label), "m_display_name", "mDisplayName")
+    def actor_validate(cdo):
+        require(str(prop(cdo, "m_display_name", "mDisplayName")[0]) == label, "FILN buildable name mismatch")
+        require(bool(prop(cdo, "m_is_fluid_storage_inventory", "is_fluid_storage_inventory", "mIsFluidStorageInventory")[0]) == fluid, "FILN buildable cargo medium mismatch")
+    actor = package("Build_" + suffix, vanilla_actor, actor_config, actor_validate)
     def desc_config(cdo):
         assign(cdo, actor, "m_buildable_class", "mBuildableClass")
         assign(cdo, unreal.Text(label), "m_display_name", "mDisplayName")
     def desc_validate(cdo):
-        require(prop(cdo, "m_buildable_class", "mBuildableClass")[0] == actor, "Depot must reuse the cooked vanilla actor")
+        require(prop(cdo, "m_buildable_class", "mBuildableClass")[0] == actor, "FILN descriptor must reference its named FILN buildable; use backed-up name upgrade for old assets")
         require(str(prop(cdo, "m_display_name", "mDisplayName")[0]) == label, "Depot descriptor name mismatch")
-    desc = package("Desc_" + suffix, desc_parent, desc_config, desc_validate)
+    def desc_upgrade(cdo):
+        current = prop(cdo, "m_buildable_class", "mBuildableClass")[0]
+        if current == actor:
+            return False
+        require(current == vanilla_actor and str(prop(cdo, "m_display_name", "mDisplayName")[0]) == label,
+                "Refusing to overwrite a descriptor outside the known FILN vanilla-actor schema")
+        desc_config(cdo)
+        return True
+    desc = package("Desc_" + suffix, desc_parent, desc_config, desc_validate, upgrade=desc_upgrade)
     def recipe_config(cdo):
         amount = unreal.ItemAmount()
         assign(amount, desc, "item_class", "ItemClass")
@@ -96,9 +116,8 @@ def author(suffix, label, parents):
         assign(cdo, [amount], "m_product", "mProduct")
         # SML 3.12.1 FGRecipe.h declares mDisplayNameOverride without an
         # editor-editable flag. Python cannot access it. Preserve the inherited
-        # flag and set both descriptor and recipe names: either naming path
-        # should resolve to the FILN label in the real game. The generated
-        # editor SDK GetRecipeName reads mDisplayName directly.
+        # flag; the named buildable and descriptor cover the inherited name path.
+        # The shipping game still must validate effective names independently.
         assign(cdo, unreal.Text(label), "m_display_name", "mDisplayName")
     def recipe_validate(cdo):
         products = prop(cdo, "m_product", "mProduct")[0]
@@ -107,7 +126,7 @@ def author(suffix, label, parents):
         require(prop(cdo, "m_ingredients", "mIngredients")[0], "Inherited build cost missing")
         require(prop(cdo, "m_produced_in", "mProducedIn")[0], "Inherited build gun producer missing")
     recipe = package("Recipe_" + suffix, recipe_parent, recipe_config, recipe_validate)
-    return {"descriptor": desc.get_path_name(), "recipe": recipe.get_path_name(), "actor": actor.get_path_name(), "vanilla_recipe": recipe_parent.get_path_name(), "display_name": label}
+    return {"descriptor": desc.get_path_name(), "recipe": recipe.get_path_name(), "actor": actor.get_path_name(), "vanilla_actor": vanilla_actor.get_path_name(), "vanilla_recipe": recipe_parent.get_path_name(), "display_name": label}
 
 def main():
     assets = unreal.EditorAssetLibrary
@@ -117,7 +136,7 @@ def main():
         require(assets.make_directory(DEST) or assets.does_directory_exist(DEST), "Cannot create depot content directory")
     solid = vanilla_recipe("Recipe_TruckStation", "Desc_TruckStation_C", False)
     fluid = vanilla_recipe("Recipe_FluidTruckStation", "Desc_FluidTruckStation_C", True)
-    result = {"schema": 3, "buildings": [
+    result = {"schema": 4, "buildings": [
         author("FILNDepot", "FILN Depot", solid),
         author("FILNFluidDepot", "FILN Fluid Depot", fluid),
         author("FILNFluidStation", "FILN Fluid Logistics Station", fluid)

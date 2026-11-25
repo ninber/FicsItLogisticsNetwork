@@ -35,18 +35,23 @@ class NativeDepotAuthoringTests(unittest.TestCase):
         fake_unreal = SimpleNamespace(
             Text=str,
             ItemAmount=lambda: EditorObject(item_class=None, amount=0),
+            get_default_object=lambda obj: obj,
         )
         self.namespace = {}
         with patch.dict(sys.modules, {"unreal": fake_unreal}):
             exec(compile(tree, str(script), "exec"), self.namespace)
-        self.actor = EditorObject("/Game/Actor")
+        self.actor = EditorObject("/Game/Actor", m_is_fluid_storage_inventory=False, m_display_name="Vanilla")
         self.recipe_parent = EditorObject("/Game/Recipe")
         self.desc_parent = EditorObject("/Game/Descriptor")
         self.created = {}
 
-    def run_author(self, suffix, label, corrupt=None):
-        def package(name, parent, configure, validate):
-            if name.startswith("Desc_"):
+    def run_author(self, suffix, label, corrupt=None, upgrade=False, unexpected=False):
+        self.namespace["UPGRADE_NAMES"] = upgrade
+        def package(name, parent, configure, validate, upgrade=None):
+            if name.startswith("Build_"):
+                self.assertIs(parent, self.actor)
+                cdo = EditorObject(name, m_display_name="Vanilla", m_is_fluid_storage_inventory=self.actor.props["m_is_fluid_storage_inventory"])
+            elif name.startswith("Desc_"):
                 self.assertIs(parent, self.desc_parent)
                 cdo = EditorObject(name, m_buildable_class=self.actor, m_display_name="Vanilla")
             else:
@@ -54,7 +59,13 @@ class NativeDepotAuthoringTests(unittest.TestCase):
                 # Deliberately no accessible override property, as in the SDK.
                 cdo = EditorObject(name, m_product=[], m_display_name="Vanilla",
                                    m_ingredients=["Cost"], m_produced_in=["BuildGun"])
-            configure(cdo)
+            if name.startswith("Desc_") and self.namespace["UPGRADE_NAMES"]:
+                cdo.props["m_display_name"] = label
+                if unexpected:
+                    cdo.props["m_buildable_class"] = EditorObject("/Game/Unexpected")
+                self.assertTrue(upgrade(cdo))
+            else:
+                configure(cdo)
             if corrupt:
                 corrupt(name, cdo)
             validate(cdo)
@@ -72,11 +83,30 @@ class NativeDepotAuthoringTests(unittest.TestCase):
                 receipt = self.run_author(suffix, label)
                 desc = self.created["Desc_" + suffix]
                 recipe = self.created["Recipe_" + suffix]
+                self.assertEqual(self.created["Build_" + suffix].props["m_display_name"], label)
+                self.assertIs(desc.props["m_buildable_class"], self.created["Build_" + suffix])
+                self.assertEqual(self.actor.props["m_display_name"], "Vanilla")
                 self.assertEqual(desc.props["m_display_name"], label)
                 self.assertEqual(recipe.props["m_display_name"], label)
                 self.assertIs(recipe.props["m_product"][0].props["item_class"], desc)
                 self.assertEqual(recipe.props["m_product"][0].props["amount"], 1)
                 self.assertEqual(receipt["display_name"], label)
+
+    def test_known_descriptor_upgrade_repoints_only_filn_descriptor(self):
+        self.run_author("FILNFluidDepot", "FILN Fluid Depot", upgrade=True)
+        self.assertIs(self.created["Desc_FILNFluidDepot"].props["m_buildable_class"], self.created["Build_FILNFluidDepot"])
+        self.assertEqual(self.actor.props["m_display_name"], "Vanilla")
+        with self.assertRaisesRegex(RuntimeError, "Refusing to overwrite"):
+            self.run_author("FILNFluidDepot", "FILN Fluid Depot", upgrade=True, unexpected=True)
+
+    def test_wrong_actor_name_or_medium_fails(self):
+        for key, value, error in (("m_display_name", "Vanilla", "buildable name mismatch"),
+                                  ("m_is_fluid_storage_inventory", True, "cargo medium mismatch")):
+            def corrupt(name, cdo):
+                if name.startswith("Build_"):
+                    cdo.props[key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, error):
+                self.run_author("FILNDepot", "FILN Depot", corrupt)
 
     def test_wrong_recipe_name_still_fails(self):
         def corrupt(name, cdo):
