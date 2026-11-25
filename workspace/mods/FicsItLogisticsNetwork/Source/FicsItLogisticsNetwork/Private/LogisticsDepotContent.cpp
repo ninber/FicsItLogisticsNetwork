@@ -3,6 +3,7 @@
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
 #include "FGRecipe.h"
+#include "Resources/FGItemDescriptor.h"
 #include "FGRecipeManager.h"
 #include "Registry/ModContentRegistry.h"
 #include "Engine/World.h"
@@ -28,20 +29,41 @@ void ALogisticsSubsystem::EnsureDepotRecipe() {
  auto* BuildGun=FindObject<UClass>(nullptr,TEXT("/Game/FactoryGame/Equipment/BuildGun/BP_BuildGun.BP_BuildGun_C"));
  if(!Registry || !IsValid(Manager) || !BuildGun) return;
  bool AllReady=true;
+ const auto Reject=[&](const TCHAR* Path,const FString& Reason) {
+  AllReady=false;
+  const FString Key=FString(Path)+TEXT(": ")+Reason;
+  if(!DepotRecipeFailures.Contains(Key)) {
+   DepotRecipeFailures.Add(Key);
+   UE_LOG(LogFILN,Error,TEXT("FILN_STATION_RECIPE_REJECTED %s"),*Key);
+  }
+ };
  for(const TCHAR* Path : {FILNSolidDepotPath,FILNFluidDepotPath,FILNFluidStationPath}) {
   auto* Recipe=FindObject<UClass>(nullptr,Path);
   auto* Parent=Recipe?Recipe->GetSuperClass():nullptr;
   FGameObjectRegistration Entry;
   if(!Recipe || !Recipe->IsChildOf(UFGRecipe::StaticClass()) || !Parent ||
-     !Parent->IsChildOf(UFGRecipe::StaticClass()) || !Registry->GetRecipeInfo(Recipe,Entry) ||
-     !Manager->IsRecipeAvailable(Parent)) { AllReady=false; continue; }
+     !Parent->IsChildOf(UFGRecipe::StaticClass()) || !Registry->GetRecipeInfo(Recipe,Entry)) {
+   Reject(Path,TEXT("Required recipe or registration missing")); continue;
+  }
+  if(!Manager->IsRecipeAvailable(Parent)) { AllReady=false; continue; }
+  const FString Expected=Path==FILNSolidDepotPath?TEXT("FILN Depot"):
+    Path==FILNFluidDepotPath?TEXT("FILN Fluid Depot"):TEXT("FILN Fluid Logistics Station");
+  const auto Products=UFGRecipe::GetProducts(Recipe);
+  if(Products.Num()!=1 || !Products[0].ItemClass || Products[0].Amount!=1) {
+   Reject(Path,TEXT("Invalid native recipe product")); continue;
+  }
+  const FString RecipeName=UFGRecipe::GetRecipeName(Recipe).ToString();
+  const FString ItemName=UFGItemDescriptor::GetItemName(Products[0].ItemClass).ToString();
+  if(RecipeName!=Expected || ItemName!=Expected) {
+   Reject(Path,FString::Printf(TEXT("Expected '%s'; effective recipe='%s', descriptor='%s'"),*Expected,*RecipeName,*ItemName)); continue;
+  }
   if(!Manager->IsRecipeAvailable(Recipe)) Manager->AddAvailableRecipe(Recipe);
   TArray<TSubclassOf<UFGRecipe>> Available;
   Manager->GetAvailableRecipesForProducer(BuildGun,Available);
-  if(!Manager->IsRecipeAvailable(Recipe) || !Available.Contains(TSubclassOf<UFGRecipe>(Recipe))) AllReady=false;
+  if(!Manager->IsRecipeAvailable(Recipe) || !Available.Contains(TSubclassOf<UFGRecipe>(Recipe))) Reject(Path,TEXT("Recipe not available to the build gun after registration"));
  }
  // Solid recipe may become available earlier than fluid; continue checking
  // until all vanilla prerequisites are unlocked. Never load classes on tick.
  bDepotRecipeReady=AllReady;
- if(AllReady) UE_LOG(LogFILN,Log,TEXT("FILN_STATION_RECIPES_READY buildgun_listed=true; placement remains runtime acceptance"));
+ if(AllReady) UE_LOG(LogFILN,Log,TEXT("FILN_STATION_RECIPES_READY effective_recipe_and_descriptor_names_verified=true; actual menu and placement remain runtime acceptance"));
 }

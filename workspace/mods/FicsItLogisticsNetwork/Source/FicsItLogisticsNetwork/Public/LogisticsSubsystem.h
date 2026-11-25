@@ -180,6 +180,7 @@ private:
  static bool IsAuthoredDepot(const AFGDockingStationIdentifier* Station);
  double NextDepotRecipeCheck=0;
  bool bDepotRecipeReady=false;
+ TSet<FString> DepotRecipeFailures;
  void DiscoverHomeVehicles();
  bool AdoptPlayerHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Requested);
  bool StationResourceMatches(const FFILNStationConfig& Config) const;

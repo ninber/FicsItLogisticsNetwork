@@ -163,7 +163,7 @@ void ALogisticsSubsystem::Rebuild() {
  }
  bRegistryValidated=true;
  bAutoDispatchEnabled=!bPreparingUninstall && !bUninstallPrepared;
- bDepotRecipeReady=false; NextDepotRecipeCheck=0;
+ bDepotRecipeReady=false; NextDepotRecipeCheck=0; DepotRecipeFailures.Reset();
  PlayerStationScan.Empty(); PlayerVehicleScan.Empty(); PlayerStationCursor=PlayerVehicleCursor=0;
  NextPlayerStationScan=NextPlayerVehicleScan=0; OverflowCursor.Empty(); PendingHomeReason.Empty();
  for(const auto& Depot:DepotStations) if(IsValid(Depot)) {
