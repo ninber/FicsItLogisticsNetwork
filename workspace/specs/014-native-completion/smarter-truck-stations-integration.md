@@ -22,3 +22,7 @@ References:
 - https://github.com/IKholopov/SM_TruckStationSettings/tree/f481adc3d607b0213b80e53be893b8362eed0448
 - https://github.com/satisfactorymodding/SatisfactoryModLoader/blob/v3.12.1/Source/FactoryGame/Public/FGInventoryComponent.h
 - https://github.com/satisfactorymodding/SatisfactoryModLoader/blob/v3.12.1/Mods/SML/Source/SML/Public/Patching/NativeHookManager.h
+
+## Blueprint UI research
+
+See [Smarter Truck Stations UI architecture](smarter-truck-stations-ui.md) for inspection of the real binary Blueprint packages, verified inheritance, native descriptor-list and tab references, and implications for the dedicated depot. No new UI is required in current release scope.
