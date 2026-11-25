@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
-// Pure C++ policy for native FILN automatic dispatch. This has no Unreal/UE4SS dependencies.
+// Pure C++ policy for native FILN automatic dispatch. This is engine- and loader-independent.
 // The server adapter MUST supply fresh, authoritative snapshots and verified directed road costs.
 #include <cmath>
 #include <optional>
