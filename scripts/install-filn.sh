@@ -17,4 +17,8 @@ done
 for entry in FicsItLogisticsNetwork.uplugin Source Config tests docs README.md LICENSE.txt .gitignore; do
   cp -a "$source_dir/$entry" "$target/"
 done
+if [[ -d "$source_dir/Content" ]]; then
+  # Merge committed authored assets only; do not delete local editor content.
+  cp -an "$source_dir/Content" "$target/"
+fi
 printf 'Installed canonical FILN source into %s\nRe-run after source edits; edit workspace/mods/FicsItLogisticsNetwork as the source of truth.\n' "$target"

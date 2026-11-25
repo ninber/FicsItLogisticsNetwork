@@ -55,7 +55,10 @@ try:
                 start = int.from_bytes(data[section+20:section+24], 'little')
                 if size and (start < table + sections * 40 or start + size > len(data)):
                     raise ValueError('Truncated/invalid PE section: ' + name)
-        print('PASS archive integrity, metadata, dependency list, Win64 PE and file exclusions')
+        cooked = [name for name in names if PurePosixPath(name).suffix.lower() in {'.pak', '.utoc'} and 'ficsitlogisticsnetwork' in name.casefold()]
+        if not cooked:
+            raise ValueError('Missing cooked FILN content container (dedicated depot assets required)')
+        print('PASS archive integrity, metadata, dependency list, Win64 PE, cooked container presence and file exclusions')
         print('Cooked asset completeness, SMM loading and runtime compatibility require independent acceptance.')
 except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
     sys.exit('FAIL: ' + str(exc))

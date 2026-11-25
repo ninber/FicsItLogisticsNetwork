@@ -37,7 +37,7 @@ ALogisticsSubsystem::ALogisticsSubsystem() {
 bool ALogisticsSubsystem::ShouldSave_Implementation() const {
  // A prepared, empty subsystem has no state to serialize into vanilla saves.
  // Keep invalid/conflicted metadata for diagnosis instead of dropping it.
- return SchemaVersion!=1 || bDispatchBlocked || bAutoDispatchEnabled || !Registrations.IsEmpty() ||
+ return SchemaVersion!=1 || bDispatchBlocked || (!bUninstallPrepared && bAutoDispatchEnabled) || !Registrations.IsEmpty() ||
   !StationConfigs.IsEmpty() || !DepotStations.IsEmpty() || !Stations.IsEmpty();
 }
 bool ALogisticsSubsystem::SetDispatchEnabled(bool Enabled) {
@@ -534,6 +534,9 @@ void ALogisticsSubsystem::Observe() {
   const S Before=StateOf(R); S Next=Before;
   if(AtP || AtQ || (!AtH && HB->GetDockingPathNode() && FVector::DistSquared(VehicleActor->GetVehicleLocation(),HB->GetDockingPathNode()->GetActorLocation())>FMath::Square(800.f))) R.DepartedHome=true;
   if(R.Automatic) {
+   // Do not advance or finalize a job while a positive native receipt is
+   // awaiting readback. In particular do not reset its bounded retry clock.
+   if(HasPendingDockReceipts(R.JobId)) { ++Cursor; continue; }
    auto* Cargo=VehicleActor->GetStorageInventory();
    if(!Cargo || !R.Resource) { Recover(R,TEXT("Cargo inventory/resource missing")); ++Cursor; continue; }
    TArray<FInventoryStack> Stacks; Cargo->GetInventoryStacks(Stacks); bool Mixed=false;

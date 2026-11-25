@@ -30,6 +30,17 @@ case "$action" in
     fi
     "$UE_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$SATISFACTORY_PROJECT" -unattended -NullRHI -NoSound -nop4 -nosplash -RenderOffscreen "${cache_args[@]}" '-ExecCmds=Automation RunTests FILN.NativeInventory' '-TestExit=Automation Test Queue Empty' "-ReportExportPath=$report" "-abslog=$report/editor.log" -stdout
     python3 "$SATISFACTORY_MODDING_ROOT/scripts/verify-automation-report.py" "$report/index.json" ;;
+  author-depot)
+    [[ $# == 0 ]] || { echo 'author-depot accepts no arguments' >&2; exit 2; }
+    exec 9>"$SATISFACTORY_MODDING_ROOT/logs/native-build.lock"
+    flock -n 9 || { echo 'Native build already running' >&2; exit 75; }
+    python3 "$SATISFACTORY_MODDING_ROOT/scripts/check-native-prerequisites.py" "$SATISFACTORY_PROJECT"
+    report=$(mktemp -d "$SATISFACTORY_MODDING_ROOT/logs/depot-author.XXXXXX")
+    export FILN_DEPOT_AUTHOR_RECEIPT="$report/receipt.json"
+    "$UE_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$SATISFACTORY_PROJECT" -run=pythonscript "-script=$SATISFACTORY_MODDING_ROOT/scripts/author-native-depot.py" -unattended -NullRHI -NoSound -nop4 -nosplash "-abslog=$report/editor.log" -stdout
+    [[ -s "$FILN_DEPOT_AUTHOR_RECEIPT" ]] || { echo "BLOCKED: no successful asset-authoring receipt; inspect $report/editor.log" >&2; exit 1; }
+    python3 "$SATISFACTORY_MODDING_ROOT/scripts/check-native-prerequisites.py" "$SATISFACTORY_PROJECT" --require-depot
+    printf 'Depot authoring receipt: %s\n' "$FILN_DEPOT_AUTHOR_RECEIPT" ;;
   prepare-uat)
     exec "$UE_ROOT/Engine/Binaries/ThirdParty/DotNet/8.0.300/linux-x64/dotnet" build "$(dirname "$SATISFACTORY_PROJECT")/Mods/Alpakit/Source/Alpakit.Automation/Alpakit.Automation.csproj" --no-restore -m:1 -nr:false /p:UseSharedCompilation=false "/p:EngineDir=$UE_ROOT/Engine" "/p:EnginePath=$UE_ROOT/Engine" /p:Configuration=Development ;;
   sdk) exec bash "$SATISFACTORY_MODDING_ROOT/scripts/verify-windows-sdk.sh" "$@" ;;
@@ -39,8 +50,9 @@ case "$action" in
     exec 9>"$SATISFACTORY_MODDING_ROOT/logs/native-build.lock"
     flock -n 9 || { echo "Native build already running" >&2; exit 75; }
     bash "$SATISFACTORY_MODDING_ROOT/scripts/verify-windows-sdk.sh"
+    python3 "$SATISFACTORY_MODDING_ROOT/scripts/check-native-prerequisites.py" "$SATISFACTORY_PROJECT" --require-depot
     source "$SATISFACTORY_MODDING_ROOT/scripts/win64-paths.sh"
     uat="$UE_ROOT/Engine/Build/BatchFiles/RunUAT.sh"
     exec "$uat" -NoCompile "-ScriptsForProject=$SATISFACTORY_PROJECT" PackagePlugin "-project=$SATISFACTORY_PROJECT" -clientconfig=Shipping -serverconfig=Shipping -utf8output -DLCName=FicsItLogisticsNetwork -platform=Win64 -build -nocompileeditor -installed ;;
-  *) echo 'Usage: bash scripts/headless.sh {test|build|native|uht|integration|prepare-uat|sdk|turnkey|package}' >&2; exit 2 ;;
+  *) echo 'Usage: bash scripts/headless.sh {test|build|native|uht|integration|author-depot|prepare-uat|sdk|turnkey|package}' >&2; exit 2 ;;
 esac

@@ -12,3 +12,5 @@ Example on the development machine (not the running game):
 5. On a disposable world, place depot from standard build menu, check GetBuiltWithRecipe identity, normal docking, power/fuel, automatic registration, exclusive overflow, save reload. Ordinary LOAD stations must not auto-become depots.
 
 No asset, cook, Build Gun listing or real gameplay proof exists from this source commit. Dedicated content still fails release acceptance. The new recipe is a mod save reference; independent uninstall requires a deliberate external conversion or dismantling before removing FILN. Do not call vanilla-actor reuse proof of uninstall compatibility.
+
+Build entry point is now `bash scripts/headless.sh author-depot` after the matching editor build. The development prerequisite validator checks the upstream plugin source and required binary Blueprint package headers; `headless.sh package` refuses missing depot assets. The ZIP verifier refuses archives with no FILN cooked content container. These are negative guards, not proof of successful cooking. The commandlet has not been executed remotely.

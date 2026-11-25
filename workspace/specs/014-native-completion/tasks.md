@@ -170,3 +170,6 @@
 
 - [x] Replace game-thread-only unloading receipt assumption with bounded job-scoped native station operation aggregation for LOAD and UNLOAD; collect worker results without dispatch mutations, verify exact cargo ledger on game thread.
 - [ ] Verify actual callback scheduling, concurrent native transfer and registry teardown, delegate/no delegate, partial/full transfers, owner replacement, user takeover, mismatch retry, completion and real save/reload. No source/portable-only success claim.
+
+- [x] Guard dependency/source, native depot assets and cooked content presence before compilation/package; author-depot commandlet requires success receipt; test missing/LFS/incompatible dependency and source-only package cases.
+- [ ] Execute actual author-depot + native compile + package and inspect actual Unreal pak entries. Asset headers/container presence are not proof of content correctness.

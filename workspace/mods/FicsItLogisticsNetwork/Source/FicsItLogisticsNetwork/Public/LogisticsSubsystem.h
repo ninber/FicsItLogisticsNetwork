@@ -114,6 +114,7 @@ private:
  void DisarmDockReceipts(const FGuid& Job);
  void ClearDockReceipts();
  void ConsumeDockReceipts();
+ bool HasPendingDockReceipts(const FGuid& Job) const;
  static bool IsProgrammableStation(const AFGBuildableDockingStation* Station);
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> HomeStations;
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> DepotIndex;

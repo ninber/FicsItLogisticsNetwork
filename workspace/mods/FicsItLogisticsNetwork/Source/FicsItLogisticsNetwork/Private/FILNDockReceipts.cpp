@@ -95,6 +95,10 @@ void ALogisticsSubsystem::ClearDockReceipts() {
  for(auto It=Watches.CreateIterator();It;++It) if(It.Value().Subsystem==this) It.RemoveCurrent();
  Receipts.Remove(this);
 }
+bool ALogisticsSubsystem::HasPendingDockReceipts(const FGuid& Job) const {
+ FScopeLock Lock(&ReceiptLock);
+ const auto* Pending=Receipts.Find(this); return Pending && Pending->Contains(Job);
+}
 void ALogisticsSubsystem::ConsumeDockReceipts() {
  check(IsInGameThread());
  if(!HasAuthority() || !bRegistryValidated || bPreparingUninstall || !GetWorld()) return;

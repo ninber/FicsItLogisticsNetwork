@@ -107,8 +107,8 @@ $('register-depots').addEventListener('click',async()=>{
 });
 function showRegistration(result){
  registrationToken=result.csrf_token;const reg=result.registration;if(!reg)return;
- if(result.runtime==='native') { const status=$('registration-status'); if(status) status.textContent='Vehicles are assigned automatically in game. Native dashboard is read-only.'; const results=$('registration-results'); if(results) results.textContent=''; }
- if(result.runtime==='native') { const button=$('register-depots'); if(button) button.disabled=true; return; }
+ if(result.runtime==='native') { $('registration').hidden=true; $('register-depots').disabled=true; return; }
+ $('registration').hidden=false;
  const pending=reg.result&&reg.result.status!=='complete';
  $('register-depots').disabled=!reg.supported||pending||!reg.candidates.length;
  $('register-depots').textContent=`Register parked trucks (${reg.candidates.length})`;

@@ -40,3 +40,7 @@ jobs:
       - run: python3 -m unittest discover -s scripts/tests -p 'test_filn_dashboard.py'
       - run: python3 -m unittest discover -s scripts/tests -p 'test_native_package_verifier.py'
       - run: python3 -m py_compile scripts/author-native-depot.py
+
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_native_prerequisites.py'
+      - run: python3 -m unittest discover -s scripts/tests -p 'test_headless_local.py'
+      - run: bash -n scripts/build.sh scripts/headless.sh scripts/install-filn.sh

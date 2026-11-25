@@ -44,6 +44,19 @@ class NativePackageVerifierTests(unittest.TestCase):
         result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(meta),'Binaries/Win64/FactoryGame-FicsItLogisticsNetwork-Win64-Shipping.dll':data})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Invalid x64 PE DLL structure', result.stderr)
+    def test_valid_pe_without_cooked_content_is_rejected(self):
+        meta = {'SemVersion':'0.1.0','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'},{'Name':'TruckStationSettings','Enabled':True,'SemVersion':'>=1.1.0'}]}
+        data = bytearray(512)
+        data[:2] = b'MZ'
+        data[60:64] = (64).to_bytes(4, 'little')
+        data[64:70] = b'PE\0\0d\x86'
+        data[70:72] = (1).to_bytes(2, 'little')
+        data[84:86] = (112).to_bytes(2, 'little')
+        data[86:88] = (0x2002).to_bytes(2, 'little')
+        data[88:90] = (0x20b).to_bytes(2, 'little')
+        result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(meta),'Binaries/Win64/FactoryGame-FicsItLogisticsNetwork-Win64-Shipping.dll':data})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Missing cooked FILN content container',result.stderr)
     def test_case_colliding_paths_are_rejected(self):
         result = self.probe({'Config/test.ini':'a','config/Test.ini':'b'})
         self.assertNotEqual(result.returncode, 0)
