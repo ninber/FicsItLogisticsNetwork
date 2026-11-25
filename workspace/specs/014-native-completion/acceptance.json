@@ -5,7 +5,7 @@
     {
       "id": "solid-dispatch",
       "status": "failed",
-      "reason": "Latest user shipping test after capacity correction: vehicle registration and dynamic assignment both FAILED. Game loads without crash, but no functioning dispatch.",
+      "reason": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated.",
       "history": [
         {
           "date": "2026-11-24",
@@ -26,11 +26,15 @@
         {
           "date": "2026-11-25",
           "previous_reason": "Actual user log reports registrations=0 on world load; existing trucks follow old routes. Shared native capacity API also crashed during telemetry. No dynamic route or transfer evidence."
+        },
+        {
+          "date": "2026-11-26",
+          "previous_reason": "Latest user shipping test after capacity correction: vehicle registration and dynamic assignment both FAILED. Game loads without crash, but no functioning dispatch."
         }
       ],
       "implementation": "LogisticsDispatch.cpp: BuildOffer/Schedule/CommitOffer",
       "verification_method": "Isolated solid provider/requester run; observe actual route, docking, transfer and home",
-      "actual_result": "Latest user shipping test after capacity correction: vehicle registration and dynamic assignment both FAILED. Game loads without crash, but no functioning dispatch."
+      "actual_result": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated."
     },
     {
       "id": "fluid-dispatch",
@@ -81,7 +85,7 @@
     {
       "id": "full-vehicle-capacity",
       "status": "failed",
-      "reason": "Shipping game crashed in the shared native slot-capacity API. Four call sites omitted optional FInventoryItem pointer; shared checked explicit-item adapter implemented but not tested in shipping game.",
+      "reason": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated.",
       "history": [
         {
           "date": "2026-11-24",
@@ -90,11 +94,15 @@
         {
           "date": "2026-11-25",
           "previous_reason": "Native calculation compiled; true game quantities not verified"
+        },
+        {
+          "date": "2026-11-26",
+          "previous_reason": "Shipping game crashed in the shared native slot-capacity API. Four call sites omitted optional FInventoryItem pointer; shared checked explicit-item adapter implemented but not tested in shipping game."
         }
       ],
       "implementation": "LogisticsDispatch.cpp: Inventory",
       "verification_method": "Native per-slot capacity readback with different trucks and resources",
-      "actual_result": "Shipping game crashed in the shared native slot-capacity API. Four call sites omitted optional FInventoryItem pointer; shared checked explicit-item adapter implemented but not tested in shipping game."
+      "actual_result": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated."
     },
     {
       "id": "empty-requester",
@@ -253,7 +261,7 @@
     {
       "id": "lua-to-native-migration",
       "status": "failed",
-      "reason": "External migration is required but failed: legacy depot identity lost; explicit resource configurations were exported but not restored. Native importer remains outside scope; external migration itself is failed.",
+      "reason": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated.",
       "history": [
         {
           "date": "2026-11-24",
@@ -262,11 +270,15 @@
         {
           "date": "2026-11-25",
           "previous_reason": "User explicitly moved legacy migration to external Codex/Lua tooling; no native importer shipped."
+        },
+        {
+          "date": "2026-11-26",
+          "previous_reason": "External migration is required but failed: legacy depot identity lost; explicit resource configurations were exported but not restored. Native importer remains outside scope; external migration itself is failed."
         }
       ],
       "implementation": "External tools only",
       "verification_method": "Separate operator-owned migration workflow",
-      "actual_result": "External migration is required but failed: legacy depot identity lost; explicit resource configurations were exported but not restored. Native importer remains outside scope; external migration itself is failed."
+      "actual_result": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated."
     },
     {
       "id": "native-to-vanilla-migration",
@@ -355,9 +367,9 @@
     {
       "id": "simple-player-workflow",
       "status": "failed",
-      "reason": "Latest user shipping test: ordinary UNLOAD selection persists (PASS); specialized depot recognition, vehicle registration and new route assignment all FAIL. Overall workflow FAIL.",
+      "reason": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated.",
       "verification_method": "Build depot, place LOAD and UNLOAD stations, select requester item, assign vehicle home route and enable AP; verify actual delivery without FILN menus.",
-      "actual_result": "Latest user shipping test: ordinary UNLOAD selection persists (PASS); specialized depot recognition, vehicle registration and new route assignment all FAIL. Overall workflow FAIL.",
+      "actual_result": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated.",
       "history": [
         {
           "date": "2026-11-25",
@@ -374,6 +386,10 @@
         {
           "date": "2026-11-25",
           "previous_reason": "Actual user log confirms native subsystem and recipes registered; registrations=0. Telemetry request crashes the game; specialized station workflow not working."
+        },
+        {
+          "date": "2026-11-26",
+          "previous_reason": "Latest user shipping test: ordinary UNLOAD selection persists (PASS); specialized depot recognition, vehicle registration and new route assignment all FAIL. Overall workflow FAIL."
         }
       ]
     },
@@ -456,9 +472,9 @@
     {
       "id": "standalone-resource-selector",
       "status": "failed",
-      "reason": "Latest user shipping test confirms selected resource persists in ordinary UNLOAD station. This subtest passed; full selector acceptance (authoritative readback, reload/medium and ingress) not established, retain failed overall gate pending evidence.",
+      "reason": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated.",
       "verification_method": "Actual native-looking selector for solid/fluid, single compatible descriptor, multiplayer authority and visible rejection, reload and reserved/docked/nonempty change guards; no custom management menu.",
-      "actual_result": "Latest user shipping test confirms selected resource persists in ordinary UNLOAD station. This subtest passed; full selector acceptance (authoritative readback, reload/medium and ingress) not established, retain failed overall gate pending evidence.",
+      "actual_result": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated.",
       "history": [
         {
           "date": "2026-11-25",
@@ -471,6 +487,10 @@
         {
           "date": "2026-11-25",
           "previous_reason": "No successful authoritative resource configuration in second gameplay test; specialized station reported nonfunctional. UI-specific fault not isolated."
+        },
+        {
+          "date": "2026-11-26",
+          "previous_reason": "Latest user shipping test confirms selected resource persists in ordinary UNLOAD station. This subtest passed; full selector acceptance (authoritative readback, reload/medium and ingress) not established, retain failed overall gate pending evidence."
         }
       ]
     },
