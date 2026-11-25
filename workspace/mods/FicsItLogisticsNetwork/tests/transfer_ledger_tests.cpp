@@ -5,6 +5,7 @@
 using namespace filn::transfer;
 #define CHECK(x) do { ++n; if(!(x)) { std::cerr<<__LINE__<<": "<<#x<<'\n'; return EXIT_FAILURE; } } while(false)
 int main() {
+ int n=0;
  Ledger batchLedger{0,0,0}; DockBatch batch; batch.Add(60,true); batch.Add(40,true);
  CHECK(!ApplyDockBatch(batchLedger,batch,99,false)); CHECK(batchLedger.cargo==0);
  CHECK(ApplyDockBatch(batchLedger,batch,100,false)); CHECK(batchLedger.loaded==100);
@@ -14,7 +15,7 @@ int main() {
  DockBatch reversed; reversed.Add(1,false); reversed.Add(1,true); CHECK(reversed.invalid); CHECK(!ApplyDockBatch(batchLedger,reversed,25,false));
  DockBatch overflowBatch; overflowBatch.Add(std::numeric_limits<int>::max(),true); overflowBatch.Add(1,true); CHECK(overflowBatch.invalid);
  Ledger shortTrip{0,0,0}; DockBatch both; both.Add(20,true); both.Add(18,false); CHECK(ApplyDockBatch(shortTrip,both,2,false)); CHECK(shortTrip.loaded==20&&shortTrip.delivered==18);
- int n=0;
+
  Ledger l{0,0,0};
  CHECK(Record(l,60,true)); CHECK(Record(l,40,true));
  CHECK(l.cargo==100&&l.loaded==100&&l.delivered==0);
