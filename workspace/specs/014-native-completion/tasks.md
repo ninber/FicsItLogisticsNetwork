@@ -144,3 +144,13 @@
 
 - [x] T111 Address reported missing native interaction controls: resolve actual interaction object (station, identifier, component, hit wrapper); attach to existing live UMG panel rather than replace root; retry on Native_Init; clear pooled context on removal/destruct; defer descriptor/vehicle enumeration until panel opens. Add bounded interaction diagnostics.
 - [ ] T112 Reconcile with local verification commit b4bfb3e (not pushed), compile/package and manually inspect real station UI in a disposable native-only session. Missing UI is an observed failure; exact original cause remains unconfirmed. External migration stays outside plugin. No continuous polling or test harness redeployment.
+
+## Player workflow correction (2026-11-25; supersedes UI tasks T015/T024/T038/T039/T043/T046 and manual enrollment T051/T052)
+
+- [x] Remove the injected station management window, RCO controls, and LOAD/UNLOAD relabeling from source.
+- [ ] Verify original programmable FILTERS selection through native dispatch; source-only optional live adapter reads the installed Smarter Truck Stations filter without Lua. Standalone selector, fluid selector and game verification are still missing.
+- [ ] Create and cook a distinct native depot recipe/building; automatic discovery of newly built depots is blocked on this asset. Existing recorded native depots are not a substitute.
+- [ ] Verify automatic adoption of AP-on depot-only routes, including empty and retained cargo, no manual registration, save/reload and ordinary vehicle exclusion.
+- [ ] Verify automatic overflow relocation of the new truck, never the old owner, through native directed routes, exclusive ownership, physical arrival, route collapse, no-free-depot and failed-route cases. Source prototype only; no runtime acceptance.
+- [ ] Port existing dashboard telemetry to native C++; no in-game management UI.
+- [ ] Run build/UHT/cook and all real-game acceptance, with no external test harness, no Lua dispatcher, no automated game UI.

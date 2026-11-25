@@ -25,19 +25,11 @@ class FFicsItLogisticsNetworkModule : public IModuleInterface {
  TArray<IConsoleObject*> Commands;
 public:
  virtual void StartupModule() override {
-  UFILNStationControls::InstallHook();
   ALogisticsSubsystem::InstallParkingHook();
-  for(const FString& Verb:TArray<FString>{TEXT("list"),TEXT("pair"),TEXT("unpair"),TEXT("dispatch"),TEXT("reset"),TEXT("rehome"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("depot"),TEXT("removeStation"),TEXT("manage")}) {
+  for(const FString& Verb:TArray<FString>{TEXT("list"),TEXT("pair"),TEXT("unpair"),TEXT("dispatch"),TEXT("reset"),TEXT("rehome"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("depot"),TEXT("removeStation")}) {
    Commands.Add(IConsoleManager::Get().RegisterConsoleCommand(
     *(TEXT("filn.")+Verb),TEXT("FILN server prototype; see README for exact object-path arguments"),
     FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([Verb](const TArray<FString>& Args,UWorld* World) {
-     if(Verb==TEXT("manage")) {
-      if(!World || !World->IsGameWorld() || Args.Num()!=1) return;
-      auto* PC=World->GetFirstPlayerController(); auto* HUD=PC?Cast<AFGHUD>(PC->GetHUD()):nullptr;
-      auto* VS=AFGVehicleSubsystem::Get(World); if(!HUD || !PC->IsLocalController() || !VS) return;
-      for(auto* ID:VS->GetDockingStations()) if(IsValid(ID) && ID->GetPathName()==Args[0] && IsValid(ID->GetStation())) { HUD->OpenInteractUI(UFILNStationWindow::StaticClass(),ID->GetStation()); return; }
-      return;
-     }
      if(!World || World->GetNetMode()==NM_Client || !World->IsGameWorld() || FPluginModuleLoader::IsMainMenuWorld(World)) {
       UE_LOG(LogFILN,Warning,TEXT("Command requires authoritative game world")); return;
      }

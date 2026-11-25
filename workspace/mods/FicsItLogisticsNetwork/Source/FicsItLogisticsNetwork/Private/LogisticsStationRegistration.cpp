@@ -12,7 +12,7 @@ bool ALogisticsSubsystem::RemoveStation(AFGDockingStationIdentifier* Station) {
  if(Reservations.StationBusy(TCHAR_TO_UTF8(*StationId(Station).ToString()))) return false;
  auto* B=Station->GetStation(); auto* I=IsValid(B)?B->GetInventory():nullptr;
  const auto& C=StationConfigs[Index];
- if(!I || B->GetDockedActor() || I->GetSizeLinear()!=C.OriginalFilters.Num()) return false;
+ if(!I || B->GetDockedActor() || (!C.ExternalFilter && I->GetSizeLinear()!=C.OriginalFilters.Num())) return false;
  if(!RestoreStationFilters(TArray<int32>{Index})) return false;
  if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  StationConfigs.RemoveAt(Index); ResetScan(); return true;

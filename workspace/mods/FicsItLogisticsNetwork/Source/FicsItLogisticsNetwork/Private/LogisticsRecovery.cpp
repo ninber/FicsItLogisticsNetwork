@@ -159,6 +159,17 @@ void ALogisticsSubsystem::AuditIdleFleet() {
   const TArray<FGuid> Route={Home};
   const FVector Delta=O->GetVehicleLocation()-H->GetDockingPathNode()->GetActorLocation();
   const bool Near=FMath::Abs(Delta.Z)<=250.f && Delta.SizeSquared()<=FMath::Square(800.f);
+  if(R.Relocating) {
+   // Relocation is not a cargo job. Hold only on verified physical arrival;
+   // never release the new exclusive bay merely because AP was disabled.
+   if(!V->IsAutopilotEnabled() || O->GetDriver() || V->GetVehicleRoute()!=R.IdleRoute || !ValidHome(R.Home)) { R.Held=false; continue; }
+   if(H->GetDockedActor()!=O || FMath::Abs(O->GetForwardSpeed())>1.f) continue;
+   V->SetVehicleRoute(Route);
+   if(V->GetVehicleRoute()!=Route || !V->IsAutopilotEnabled() || O->GetDriver()) {
+    bDispatchBlocked=true; R.Held=false; R.Diagnostic=TEXT("Depot relocation completion readback failed"); continue;
+   }
+   R.IdleRoute=Route; R.Relocating=false; R.Held=true; R.Diagnostic=TEXT("Relocated to free depot"); ResetScan(); continue;
+  }
   const bool Owned=Home.IsValid() && R.IdleRoute==Route && V->GetVehicleRoute()==Route && !R.JobId.IsValid();
   const bool Docked=H->GetDockedActor()==O;
   const bool HomeValid=ValidHome(R.Home) && (!H->GetDockedActor() || Docked);

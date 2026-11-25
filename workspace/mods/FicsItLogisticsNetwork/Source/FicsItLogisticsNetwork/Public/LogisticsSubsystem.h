@@ -15,7 +15,6 @@ class AFGWheeledVehicleIdentifier;
 class AFGWheeledVehicle;
 class AFGDockingStationIdentifier;
 class UFGItemDescriptor;
-class UFILNRemoteControl;
 class UFILNTransferObserver;
 DECLARE_LOG_CATEGORY_EXTERN(LogFILN, Log, All);
 
@@ -32,6 +31,7 @@ struct FFILNStationConfig {
  UPROPERTY(SaveGame) TSubclassOf<UFGItemDescriptor> Resource;
  // Preserve pre-FILN slot restrictions for explicit uninstall preparation.
  UPROPERTY(SaveGame) TArray<TSubclassOf<UFGItemDescriptor>> OriginalFilters;
+ UPROPERTY(SaveGame) bool ExternalFilter=false;
 };
 USTRUCT()
 struct FFILNRegistration {
@@ -58,6 +58,7 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) FGuid ProviderLease;
  UPROPERTY(SaveGame) FGuid RequesterLease;
  UPROPERTY(SaveGame) bool Held = false;
+ UPROPERTY(SaveGame) bool Relocating = false;
  UPROPERTY(SaveGame) TArray<FGuid> IdleRoute;
  UPROPERTY(SaveGame) TSubclassOf<UFGItemDescriptor> Resource;
  UPROPERTY(SaveGame) int32 ExpectedCargo = 0;
@@ -97,7 +98,6 @@ private:
  UPROPERTY(SaveGame) TArray<FFILNStationConfig> StationConfigs;
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGDockingStationIdentifier>> DepotStations;
  UPROPERTY(SaveGame) TArray<FFILNRegistration> Registrations;
- friend class UFILNRemoteControl;
  friend class UFILNTransferObserver;
  UPROPERTY() TArray<TObjectPtr<UFILNTransferObserver>> TransferObservers;
  TMap<FGuid,TWeakObjectPtr<UFILNTransferObserver>> TransferByTruck;
@@ -126,7 +126,7 @@ private:
  FTimerHandle Watchdog;
  FTimerHandle DispatchTimer;
  FTimerHandle DeferredRebuild;
- UPROPERTY(SaveGame) bool bAutoDispatchEnabled = false;
+ UPROPERTY(SaveGame) bool bAutoDispatchEnabled = true;
  FFILNRoadCache RoadCache;
  int32 RequestCursor=0, ScanVehicle=0, ScanProvider=-1;
  int32 BestVehicle=INDEX_NONE, BestProvider=INDEX_NONE;
@@ -140,6 +140,14 @@ private:
  double NextDispatch=0;
  std::optional<filn::dispatch::Choice> BestOffer;
  void Schedule();
+ void ReconcilePlayerConfiguration();
+ void DiscoverHomeVehicles();
+ bool AdoptPlayerHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Requested);
+ bool StationResourceMatches(const FFILNStationConfig& Config) const;
+ TArray<TWeakObjectPtr<AFGDockingStationIdentifier>> PlayerStationScan;
+ TArray<TWeakObjectPtr<AFGWheeledVehicleIdentifier>> PlayerVehicleScan;
+ int32 PlayerStationCursor=0, PlayerVehicleCursor=0;
+ double NextPlayerStationScan=0, NextPlayerVehicleScan=0;
  bool BuildOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex,filn::dispatch::Offer& Offer,bool QueryRoads,bool& Pending);
  bool CommitOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex);
  void ResetScan();

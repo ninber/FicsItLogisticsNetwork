@@ -19,7 +19,7 @@
     {
       "id": "fluid-dispatch",
       "status": "not-verified",
-      "reason": "Shared adapter compiled; actual fluid behavior not verified",
+      "reason": "Player workflow corrected; previous custom menu not acceptable. New native build/game acceptance pending.",
       "history": [
         {
           "date": "2026-11-24",
@@ -28,7 +28,7 @@
       ],
       "implementation": "LogisticsDispatch.cpp + FILNRoadCache.h",
       "verification_method": "Native Fluid Trucks/stations; actual pipe ingress and inventory units/capacity",
-      "actual_result": "Shared adapter compiled; actual fluid behavior not verified"
+      "actual_result": "Not verified on this revision."
     },
     {
       "id": "vehicle-resource-compatibility",
@@ -191,7 +191,7 @@
     {
       "id": "fuel-management",
       "status": "not-verified",
-      "reason": "Native docking request source compiled; transfer/burn proof pending",
+      "reason": "Player workflow corrected; previous custom menu not acceptable. New native build/game acceptance pending.",
       "history": [
         {
           "date": "2026-11-24",
@@ -200,12 +200,12 @@
       ],
       "implementation": "LogisticsFuel.cpp",
       "verification_method": "Player-supplied actual home fuel decreases while vehicle fuel increases; no seeding",
-      "actual_result": "Native docking request source compiled; transfer/burn proof pending"
+      "actual_result": "Not verified on this revision."
     },
     {
       "id": "depot-return",
       "status": "not-verified",
-      "reason": "Native hook compiled; physical behavior not verified",
+      "reason": "Player workflow corrected; previous custom menu not acceptable. New native build/game acceptance pending.",
       "history": [
         {
           "date": "2026-11-24",
@@ -214,7 +214,7 @@
       ],
       "implementation": "Observe + FILNParking.cpp",
       "verification_method": "Complete route returns to owned home and holds AP on; next job releases hold",
-      "actual_result": "Native hook compiled; physical behavior not verified"
+      "actual_result": "Not verified on this revision."
     },
     {
       "id": "save-load-recovery",
@@ -275,7 +275,7 @@
     {
       "id": "management-ui",
       "status": "not-verified",
-      "reason": "User observed FILTERS/ordinary behavior, no FILN native controls. Targeted live-panel/lifecycle patch proposed; not compiled or runtime verified.",
+      "reason": "Player workflow corrected; previous custom menu not acceptable. New native build/game acceptance pending.",
       "history": [
         {
           "date": "2026-11-24",
@@ -284,7 +284,7 @@
       ],
       "implementation": "FILNStationControls.h/.cpp",
       "verification_method": "Original switch style/labels, selector, registration, admin controls, multiplayer",
-      "actual_result": "Failed manual native UI acceptance before proposed patch; no post-patch runtime evidence."
+      "actual_result": "Not verified on this revision."
     },
     {
       "id": "multiplayer-authority",
@@ -323,6 +323,27 @@
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/gh-win64-package-fixed.log",
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/gh-package-verification.log"
       ]
+    },
+    {
+      "id": "simple-player-workflow",
+      "status": "not-verified",
+      "reason": "Native depot asset and standalone FILTERS missing; optional live selector adapter unverified.",
+      "verification_method": "Build depot, place LOAD and UNLOAD stations, select requester item, assign vehicle home route and enable AP; verify actual delivery without FILN menus.",
+      "actual_result": "Not verified; no runtime claim."
+    },
+    {
+      "id": "occupied-depot-relocation",
+      "status": "not-verified",
+      "reason": "Source prototype; native route/arrival/reload unverified.",
+      "verification_method": "Assign second truck to claimed depot; verify owner unchanged, new truck drives to free reachable depot, holds; no-free and disconnected cases do not rewrite routes.",
+      "actual_result": "Not verified; no runtime claim."
+    },
+    {
+      "id": "native-web-statistics",
+      "status": "not-verified",
+      "reason": "Native dashboard telemetry not implemented.",
+      "verification_method": "Existing web dashboard receives native statistics while Lua dispatcher is disabled.",
+      "actual_result": "Not verified; no runtime claim."
     }
   ]
 }

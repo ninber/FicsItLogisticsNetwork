@@ -29,11 +29,6 @@ bool Inventory(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor> Resource,
  if(Amount>MAX_int32 || Size>MAX_int32 || Size<0) return false;
  Kinds=Types.Num(); Quantity=static_cast<int>(Amount); Capacity=static_cast<int>(Size); return true;
 }
-bool ExactFilter(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor> Resource) {
- if(!IsValid(I) || !Resource || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
- for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) if(I->GetAllowedItemOnIndex(Slot)!=Resource) return false;
- return true;
-}
 bool TransportMedium(const UObject* Object,filn::dispatch::Medium& Out) {
  const auto* Property=Object?FindFProperty<FBoolProperty>(Object->GetClass(),TEXT("mIsFluidStorageInventory")):nullptr;
  if(!Property) return false;
@@ -59,7 +54,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  if(!VehicleActor->HasFuel() || !FuelReady(R)) { R.Diagnostic=TEXT("Awaiting full compatible native fuel inventory at assigned home"); return false; }
  if(QB->GetIsInLoadMode() || !QB->HasPower() || QB->IsProductionPaused()) { R.Diagnostic=TEXT("Requester mode/power/standby ineligible"); return false; }
  if(!QB->GetInventory() || !QB->GetInventory()->IsEmpty()) { R.Diagnostic=TEXT("Requester is not empty"); return false; }
- if(!ExactFilter(QB->GetInventory(),C.Resource)) { R.Diagnostic=TEXT("Requester native filter no longer matches FILN resource"); return false; }
+ if(!StationResourceMatches(C)) { R.Diagnostic=TEXT("Requester native filter no longer matches FILN resource"); return false; }
  // Automatic scheduling never opts a truck back in after a player disables autopilot.
  // Existing vanilla valid route and a native home docking observation are prerequisites.
  const auto Error=R.Vehicle->GetAutopilotErrorStatus();
@@ -90,7 +85,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
   auto* ID=ProviderCandidates[P].Get(); auto* PB=IsValid(ID)?ID->GetStation():nullptr;
   if(!IsValid(PB) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode()) return false;
   const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& Entry){return Entry.Station==ID;});
-  if(PC && (PC->Resource!=C.Resource || !ExactFilter(PB->GetInventory(),C.Resource))) return false;
+  if(PC && (PC->Resource!=C.Resource || !StationResourceMatches(*PC))) return false;
   if(Fluid && PB->GetCurrentFluidDescriptor() && PB->GetCurrentFluidDescriptor()!=C.Resource) return false;
   filn::dispatch::Station Provider;
   Provider.id=Id(StationId(ID)); Provider.label=TCHAR_TO_UTF8(*ID->GetStationName().ToString()); Provider.explicitFilter=PC!=nullptr;
@@ -125,19 +120,20 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
 }
 bool ALogisticsSubsystem::EndpointConfigurationValid(const FFILNRegistration& R) const {
  auto* Q=IsValid(R.Requester)?R.Requester->GetStation():nullptr;
- if(!IsValid(Q) || Q->GetIsInLoadMode() || IsDepot(R.Requester) || !R.Resource || !ExactFilter(Q->GetInventory(),R.Resource)) return false;
+ if(!IsValid(Q) || Q->GetIsInLoadMode() || IsDepot(R.Requester) || !R.Resource) return false;
  const auto* QC=StationConfigs.FindByPredicate([&](const FFILNStationConfig& C){return C.Station==R.Requester;});
- if(!QC || QC->Resource!=R.Resource) return false;
+ if(!QC || QC->Resource!=R.Resource || !StationResourceMatches(*QC)) return false;
  if(R.RetainedCargo) return !filn::dispatch::IsStorage(TCHAR_TO_UTF8(*R.Requester->GetStationName().ToString())) ||
   (R.CargoOriginKnown && !R.CargoOriginStorage) || (R.DeliveredCargo>0 && R.LastCargo==0);
  auto* P=IsValid(R.Provider)?R.Provider->GetStation():nullptr;
  if(!IsValid(P) || !P->GetIsInLoadMode() || IsDepot(R.Provider)) return false;
  const auto* PC=StationConfigs.FindByPredicate([&](const FFILNStationConfig& C){return C.Station==R.Provider;});
- return (!PC || (PC->Resource==R.Resource && ExactFilter(P->GetInventory(),R.Resource))) &&
+ return (!PC || (PC->Resource==R.Resource && StationResourceMatches(*PC))) &&
   filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*R.Provider->GetStationName().ToString()),TCHAR_TO_UTF8(*R.Requester->GetStationName().ToString()));
 }
 void ALogisticsSubsystem::Schedule() {
  check(IsInGameThread());
+ ReconcilePlayerConfiguration();
  if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || bChangingFilters || bPreparingUninstall || StationConfigs.IsEmpty() || Registrations.IsEmpty()) return;
  const double Now=GetWorld()->GetTimeSeconds();
  if(!bScanning) {

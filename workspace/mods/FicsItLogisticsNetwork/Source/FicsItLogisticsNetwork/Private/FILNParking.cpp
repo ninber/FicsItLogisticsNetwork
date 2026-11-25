@@ -18,7 +18,9 @@ bool ALogisticsSubsystem::HoldVehicle(AFGWheeledVehicleIdentifier* V) {
  const auto Phase=static_cast<filn::State>(R.State);
  const bool Arrival=R.JobId.IsValid() && R.Automatic && IsValid(Home) &&
   filn::recovery::CanFinalizeHome(Phase==filn::State::Returning,Phase==filn::State::Unloading,R.DeliveredCargo>0,R.AbortReturn,Home->GetDockedActor()==VehicleActor);
- const bool Idle=R.Held && Phase==filn::State::Idle && !R.JobId.IsValid();
+ const bool RelocationArrival=R.Relocating && Phase==filn::State::Idle && !R.JobId.IsValid() && IsValid(Home) && IsValid(VehicleActor) && Home->GetDockedActor()==VehicleActor && V->GetVehicleRoute()==R.IdleRoute;
+ if(RelocationArrival) return V->IsAutopilotEnabled() && !VehicleActor->GetDriver() && FMath::Abs(VehicleActor->GetForwardSpeed())<=1.f;
+ const bool Idle=R.Held && !R.Relocating && Phase==filn::State::Idle && !R.JobId.IsValid();
  if(!Idle && !Arrival) return false;
  if(!IsValid(VehicleActor) || VehicleActor->GetDriver() || !V->IsAutopilotEnabled() || !IsValid(Home) || !Home->GetDockingPathNode()) { R.Held=false; return false; }
  if(Arrival) {

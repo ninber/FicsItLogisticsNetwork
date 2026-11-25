@@ -151,13 +151,16 @@ void ALogisticsSubsystem::Rebuild() {
  // Apply only validated native configuration. A filter conflict is not a
  // successful restore; do not resume automatic control until it is resolved.
  TArray<FFILNStationConfig> LiveConfigs;
- for(const auto& C:StationConfigs) if(IsValid(C.Station)) LiveConfigs.Add(C);
+ for(const auto& C:StationConfigs) if(IsValid(C.Station) && !C.ExternalFilter) LiveConfigs.Add(C);
  if(!ChangeStationFilters(LiveConfigs,false)) {
   bDispatchBlocked=true; bAutoDispatchEnabled=false;
   UE_LOG(LogFILN,Error,TEXT("Saved FILN filter conflict: native job reconciliation withheld"));
   return;
  }
  bRegistryValidated=true;
+ bAutoDispatchEnabled=!bPreparingUninstall;
+ PlayerStationScan.Empty(); PlayerVehicleScan.Empty(); PlayerStationCursor=PlayerVehicleCursor=0;
+ NextPlayerStationScan=NextPlayerVehicleScan=0;
  for(const auto& Depot:DepotStations) if(IsValid(Depot)) {
   if(auto* B=Building(Depot); IsValid(B) && !B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
  }
@@ -249,6 +252,7 @@ bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,
  if((!IsFluid && Form!=EResourceForm::RF_SOLID) || IsFluid!=FluidProperty->GetPropertyValue_InContainer(B)) return false;
  FFILNStationConfig* Existing=StationConfigs.FindByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
  if(Existing) {
+  if(Existing->ExternalFilter) return false;
   // Only FILN-owned restrictions may be changed; one transaction, no preliminary writes.
   for(const auto& Original:Existing->OriginalFilters) if(Original && Original!=Resource) return false;
   ResetScan();
@@ -271,7 +275,7 @@ bool ALogisticsSubsystem::RestoreStationFilters(const TArray<int32>& Indices) {
  TArray<FFILNStationConfig> Configs; TSet<int32> Seen;
  for(int32 Index:Indices) {
   if(!StationConfigs.IsValidIndex(Index) || Seen.Contains(Index)) return false;
-  Seen.Add(Index); Configs.Add(StationConfigs[Index]);
+  Seen.Add(Index); if(!StationConfigs[Index].ExternalFilter) Configs.Add(StationConfigs[Index]);
  }
  return ChangeStationFilters(Configs,true);
 }
@@ -490,6 +494,7 @@ void ALogisticsSubsystem::Observe() {
  check(IsInGameThread());
  if(!HasAuthority() || !bRegistryValidated || bPreparingUninstall || bChangingFilters) return;
  AuditLostRegistrations();
+ DiscoverHomeVehicles();
  AuditIdleFleet();
  ServiceFuel();
  // Bounded round-robin across active jobs only. Recovery and idle records are not scanned.
