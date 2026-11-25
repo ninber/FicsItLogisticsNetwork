@@ -6,6 +6,7 @@
 #include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "FGInventoryComponent.h"
+#include "FGDockableInterface.h"
 #include "Resources/FGItemDescriptor.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -66,6 +67,11 @@ Stock InspectStock(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor> Reque
  S.Json->SetNumberField(TEXT("kinds"),S.Kinds);
  S.Json->SetStringField(TEXT("item"),Descriptor(S.Item));
  return S;
+}
+const TCHAR* FILNTelemetryMedium(EResourceForm Form) {
+ if(Form==EResourceForm::RF_SOLID) return TEXT("solid");
+ if(Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS) return TEXT("fluid");
+ return TEXT("unknown");
 }
 const TCHAR* Phase(const FFILNRegistration& R) {
  if(R.Relocating) return TEXT("Relocating");
@@ -133,9 +139,10 @@ void ALogisticsSubsystem::SampleTelemetry() {
    TSubclassOf<UFGItemDescriptor> Selected;
    if(Config && StationResourceMatches(*Config)) Selected=Config->Resource;
    const auto Stock=InspectStock(B->GetInventory(),Selected);
-   const bool Solid=SupportsSolidCargo(B), Explicit=Selected && Solid;
-   const bool Supply=Load && Stock.Valid && Stock.Kinds==1 && Stock.Total>0 && Stock.Item && UFGItemDescriptor::GetForm(Stock.Item)==EResourceForm::RF_SOLID;
-   const bool Configured=!Depot && Solid && Stock.Valid && (Explicit || Supply) && Stock.Kinds<=1 && (!Selected || Stock.Total==Stock.Amount);
+   const FString Medium=FILNTelemetryMedium(B->GetDockingStationResourceForm());
+   const bool Explicit=Selected && StationAcceptsResource(B,Selected);
+   const bool Supply=Load && Stock.Valid && Stock.Kinds==1 && Stock.Total>0 && StationAcceptsResource(B,Stock.Item) && (!Config || Explicit);
+   const bool Configured=!Depot && Stock.Valid && (Explicit || Supply) && Stock.Kinds<=1 && (!Selected || Stock.Total==Stock.Amount);
    if(Configured && Stock.Item) {
     const TWeakObjectPtr<UClass> Resource(Stock.Item.Get());
     if(!TelemetryResourceSet.Contains(Resource)) { TelemetryResourceSet.Add(Resource); TelemetryResources.Add(Resource); }
@@ -143,6 +150,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
    if(!Stock.Valid) Error(Guid(S),TEXT("Station inventory not readable"));
    if(Explicit && Stock.Total!=Stock.Amount) Error(Guid(S),TEXT("Station cargo conflicts with selected resource"));
    auto O=Obj(); O->SetStringField(TEXT("id"),Guid(S)); O->SetStringField(TEXT("guid"),Guid(S)); O->SetStringField(TEXT("name"),S->GetStationName().ToString());
+   O->SetStringField(TEXT("medium"),Medium); O->SetStringField(TEXT("quantity_unit"),Medium==TEXT("fluid")?TEXT("native fluid units"):TEXT("items"));
    O->SetStringField(TEXT("role"),Load?TEXT("provider"):TEXT("requester")); O->SetBoolField(TEXT("configured"),Configured); O->SetBoolField(TEXT("is_depot"),Depot);
    O->SetStringField(TEXT("item"),Configured?Descriptor(Stock.Item):FString()); O->SetNumberField(TEXT("amount"),static_cast<double>(Stock.Total));
    O->SetNumberField(TEXT("capacity"),Configured?static_cast<double>(Stock.Capacity):0.); O->SetArrayField(TEXT("contents"),Stock.Contents);
@@ -167,7 +175,9 @@ void ALogisticsSubsystem::SampleTelemetry() {
    O->SetBoolField(TEXT("managed"),R!=nullptr); O->SetBoolField(TEXT("home_powered"),IsValid(H) && H->HasPower() && !H->IsProductionPaused());
    O->SetBoolField(TEXT("autopilot"),V->IsAutopilotEnabled()); O->SetBoolField(TEXT("driver"),Owner->GetDriver()!=nullptr);
    O->SetBoolField(TEXT("has_fuel"),Owner->HasFuel()); O->SetBoolField(TEXT("docking"),V->IsCurrentlyDocking());
-   O->SetBoolField(TEXT("held"),R && R->Held); O->SetBoolField(TEXT("solid_supported"),SupportsSolidCargo(Owner));
+   const FString Medium=Owner->GetClass()->ImplementsInterface(UFGDockableInterface::StaticClass())?FILNTelemetryMedium(IFGDockableInterface::Execute_GetDockInventoryResourceForm(Owner)):TEXT("unknown");
+   O->SetBoolField(TEXT("held"),R && R->Held); O->SetStringField(TEXT("medium"),Medium);
+   O->SetStringField(TEXT("quantity_unit"),Medium==TEXT("fluid")?TEXT("native fluid units"):TEXT("items"));
    O->SetNumberField(TEXT("native_error"),static_cast<int32>(V->GetAutopilotErrorStatus())); O->SetNumberField(TEXT("target"),V->GetCurrentTargetWaypointIndex());
    O->SetObjectField(TEXT("cargo"),Cargo.Json); O->SetObjectField(TEXT("fuel"),Fuel.Json);
    FVector Location; FRotator Rotation; Owner->GetVehicleLocationAndRotation(Location,Rotation);
@@ -181,13 +191,13 @@ void ALogisticsSubsystem::SampleTelemetry() {
     J->SetNumberField(TEXT("loaded"),R->LoadedCargo); J->SetNumberField(TEXT("unloaded"),R->DeliveredCargo); J->SetNumberField(TEXT("truckload"),R->ExpectedCargo); J->SetStringField(TEXT("error"),R->Diagnostic);
     O->SetObjectField(TEXT("job"),J);
    } else if(const auto* Why=PendingHomeReason.Find(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V))) O->SetStringField(TEXT("native_pending_reason"),*Why);
-   if(R && Cargo.Valid && IsValid(H) && H->HasPower() && !H->IsProductionPaused() && V->IsAutopilotEnabled() && !Owner->GetDriver() && SupportsSolidCargo(Owner) && !VehicleClass.IsEmpty()) {
+   if(R && Cargo.Valid && IsValid(H) && H->HasPower() && !H->IsProductionPaused() && V->IsAutopilotEnabled() && !Owner->GetDriver() && VehicleStationCompatible(Owner,H) && Medium!=TEXT("unknown") && !VehicleClass.IsEmpty()) {
     auto* Inventory=Owner->GetStorageInventory(); const int32 Slots=Inventory->GetSizeLinear();
-    const FString TypeKey=VehicleClass+TEXT("|")+FString::FromInt(Slots);
+    const FString TypeKey=VehicleClass+TEXT("|")+FString::FromInt(Slots)+TEXT("|")+Medium;
     if(!TelemetryTypeKeys.Contains(TypeKey)) {
      TelemetryTypeKeys.Add(TypeKey); auto Row=Obj(), ByItem=Obj();
-     Row->SetStringField(TEXT("class"),VehicleClass); Row->SetNumberField(TEXT("slots"),Slots); Row->SetStringField(TEXT("sampled_vehicle"),Id); Row->SetObjectField(TEXT("by_item"),ByItem);
-     TelemetryCapacityRows.Add(Val(Row)); TelemetryTypes.Add({Inventory,Slots,ByItem});
+     Row->SetStringField(TEXT("class"),VehicleClass); Row->SetStringField(TEXT("medium"),Medium); Row->SetNumberField(TEXT("slots"),Slots); Row->SetStringField(TEXT("sampled_vehicle"),Id); Row->SetObjectField(TEXT("by_item"),ByItem);
+     TelemetryCapacityRows.Add(Val(Row)); TelemetryTypes.Add({Inventory,Slots,ByItem,Medium==TEXT("fluid")});
     }
    }
    TelemetryVehicles.Add(Val(O)); continue;
@@ -196,12 +206,16 @@ void ALogisticsSubsystem::SampleTelemetry() {
    auto& Type=TelemetryTypes[TelemetryTypeCursor]; auto* I=Type.Inventory.Get(); auto* Class=TelemetryResources[TelemetryResourceCursor++].Get();
    if(IsValid(I) && IsValid(Class) && I->GetSizeLinear()==Type.Slots && Type.Slots>0 && Type.Slots<=4096 && Class->IsChildOf(UFGItemDescriptor::StaticClass())) {
     TSubclassOf<UFGItemDescriptor> Resource(Class); int64 Capacity=0; bool Valid=true;
-    for(int32 Slot=0;Slot<Type.Slots;++Slot) {
+    const auto Form=UFGItemDescriptor::GetForm(Resource);
+    const bool Compatible=Type.Fluid?(Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS):Form==EResourceForm::RF_SOLID;
+    for(int32 Slot=0;Compatible && Slot<Type.Slots;++Slot) {
      const auto Filter=I->GetAllowedItemOnIndex(Slot);
      if(!Filter || Filter==Resource) { const auto N=I->GetSlotSizeForItem(Slot,Resource); if(N<0) Valid=false; else Capacity+=N; }
     }
-    if(Valid && Capacity<=MAX_int32) Type.ByItem->SetNumberField(Class->GetPathName(),static_cast<double>(Capacity));
-    else Error(Class->GetPathName(),TEXT("Vehicle capacity readback invalid"));
+    if(Compatible) {
+     if(Valid && Capacity<=MAX_int32) Type.ByItem->SetNumberField(Class->GetPathName(),static_cast<double>(Capacity));
+     else Error(Class->GetPathName(),TEXT("Vehicle capacity readback invalid"));
+    }
    } else Error(TEXT("capacity"),TEXT("Representative inventory or resource changed during scan"));
    if(TelemetryResourceCursor>=TelemetryResources.Num()) { ++TelemetryTypeCursor; TelemetryResourceCursor=0; }
    // One exact capacity calculation per scheduler callback; no matrix spike.

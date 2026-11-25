@@ -169,6 +169,7 @@ private:
   TWeakObjectPtr<class UFGInventoryComponent> Inventory;
   int32 Slots=0;
   TSharedPtr<FJsonObject> ByItem;
+  bool Fluid=false;
  };
  TArray<FTelemetryCapacity> TelemetryTypes;
  TSet<FString> TelemetryTypeKeys;
@@ -182,7 +183,6 @@ private:
  void DiscoverHomeVehicles();
  bool AdoptPlayerHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Requested);
  bool StationResourceMatches(const FFILNStationConfig& Config) const;
- static bool SupportsSolidCargo(const UObject* Object);
  static bool StationAcceptsResource(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource);
  static bool VehicleStationCompatible(AFGWheeledVehicle* Vehicle,AFGBuildableDockingStation* Station);
  TArray<TWeakObjectPtr<AFGDockingStationIdentifier>> PlayerStationScan;

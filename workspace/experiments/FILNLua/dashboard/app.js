@@ -10,7 +10,7 @@ function coords(p){return p?`x ${p.x}, y ${p.y}, z ${p.z} m`:'';}
 function cargo(inv){return (inv?.items||[]).map(v=>`${number(v.amount)} ${item(v.item)}`).join(' · ')||'Empty';}
 function named(row){const c=node('td',row.name||row.id,'name');detail(c,`${row.id} · ${coords(row.position)}`);return c;}
 function num(text,sub){const c=node('td',text,'numeric');if(sub)detail(c,sub);return c;}
-const columns={requests:[['name','Requester / item'],['reason','Why it is waiting'],['best_stock','Best provider / truckload'],['missing','Missing at best provider'],['combined_stock','Combined stock'],['observed_empty_seconds','Observed empty'],['vehicles','Assigned vehicles']],fleet:[['id','Vehicle'],['status','State'],['home_name','Route / job'],['cargo','Cargo'],['fuel','Fuel'],['dispatcher_reason','Dispatcher / recovery']],inventories:[['name','Station'],['role','Role / state'],['amount','Cargo inventory'],['capacity','Item capacity'],['net_items_per_minute','Net stock / min'],['fuel','Dedicated fuel inventory'],['sample_age','Sample age']]};
+const columns={requests:[['name','Requester / item'],['reason','Why it is waiting'],['best_stock','Best provider / truckload'],['missing','Missing at best provider'],['combined_stock','Combined stock'],['observed_empty_seconds','Observed empty'],['vehicles','Assigned vehicles']],fleet:[['id','Vehicle'],['status','State'],['home_name','Route / job'],['cargo','Cargo'],['fuel','Fuel'],['dispatcher_reason','Dispatcher / recovery']],inventories:[['name','Station'],['role','Role / state'],['amount','Cargo inventory'],['capacity','Cargo capacity'],['net_items_per_minute','Net stock / min'],['fuel','Dedicated fuel inventory'],['sample_age','Sample age']]};
 function render(){if(!current)return;const data=current;
  $('overview').replaceChildren();for(const [label,value]of [['Empty requests',data.counts.empty_requests],['Potential blockers',data.counts.blocked],['Active trucks',data.counts.active],['On a job',data.counts.working],['Available',data.counts.available],['Matching cargo ready',data.counts.retained_ready],['Cargo blocked',data.counts.cargo_blocked],['Untracked FILN',data.counts.untracked_routes],['Stations',data.counts.stations]]){const m=node('div',undefined,'metric');m.append(node('strong',number(value)),node('span',label));$('overview').append(m);}
  const q=$('search').value.trim().toLowerCase();
@@ -27,7 +27,7 @@ function render(){if(!current)return;const data=current;
   const why=node('td',undefined,'reason');why.append(node('span',r.reason,`badge ${r.priority>=60?'bad':r.code==='delivery_in_progress'?'good':''}`));
   if(r.providers.length){const d=node('details'),s=node('summary',`${r.providers.length} matching providers`);d.append(s);for(const p of r.providers){d.append(node('p',`${p.id} ${p.name}: ${number(p.amount)}${p.occupied?' · occupied':''} · ${coords(p.position)}`));}why.append(d);}
   if(r.route_checks.length){const d=node('details');d.append(node('summary',`Recent dispatcher checks (${r.route_checks.length} depots)`));for(const c of r.route_checks){d.append(node('p',`${c.home_id} ${c.home_name}: ${c.reason.replaceAll('_',' ')} · ${duration(c.age)} ago${c.full!==undefined?' · full providers '+c.full:''}${c.provider?' · provider '+(current.inventories.find(s=>s.guid===c.provider)?.name||c.provider):''}`));for(const failure of c.failures||[]){const provider=current.inventories.find(s=>s.guid===failure.provider);d.append(node('p',`${provider?provider.id+' '+provider.name:failure.provider}: ${failure.leg.replaceAll('_',' ')} · ${failure.reason.replaceAll('_',' ')}`));}}why.append(d);}
-  const supply=num(`${number(r.best_stock)} / ${number(r.truckload)}`,r.best_provider);
+  const supply=num(`${number(r.best_stock)} / ${number(r.truckload)}`,r.best_provider);if(r.medium==='fluid')detail(supply,r.quantity_unit||'native fluid units');
   if(r.truckload){const p=node('progress');p.max=r.truckload;p.value=r.best_stock;supply.append(p);if(r.truckload_max!==r.truckload)detail(supply,`Vehicle capacities ${number(r.truckload)}–${number(r.truckload_max)}`);}
   tr.append(name,why,supply,num(number(r.missing),r.batch_fill_seconds?`Batch-fill estimate ~${duration(r.batch_fill_seconds)}`:'Batch-fill estimate unavailable'),num(number(r.combined_stock),`${r.full_providers} full / unreserved`),num(duration(r.observed_empty_seconds),`Sample ${duration(r.sample_age)} old`),num(r.vehicles.join(', ')||'—'));
  }else if(tab==='fleet'){
@@ -74,11 +74,11 @@ function renderItems(data,q){
    const icon=node('div',undefined,'item-icon'),img=node('img');img.src=g.icon;img.alt=g.item_name;img.width=48;img.height=48;
    img.addEventListener('error',()=>{if(!img.src.endsWith('/unknown.svg'))img.src='/icons/unknown.svg';});icon.append(img);
    const title=node('div');title.append(node('h2',g.item_name),node('small',label));heading.append(icon,title);panel.append(heading);
-   panel.append(node('div',role==='providers'?`${number(g.provided)} items · ${g.providers.length} stations`:`${g.requested} empty / ${g.requesters.length} stations`, 'item-total'));
+   panel.append(node('div',role==='providers'?`${number(g.provided)} ${g.quantity_unit||'items'} · ${g.providers.length} stations`:`${g.requested} empty / ${g.requesters.length} stations`, 'item-total'));
    const table=node('table'),head=node('thead'),tr=node('tr');for(const h of ['Station','Stock / capacity','State / vehicles'])tr.append(node('th',h));head.append(tr);table.append(head);
    const body=node('tbody');for(const s of g[role]){
     const row=node('tr'),name=named(s),stock=num(`${number(s.amount)} / ${number(s.capacity)}`);
-    const p=node('progress');p.max=s.capacity||1;p.value=s.amount||0;stock.append(p);
+    const p=node('progress');p.max=s.capacity||1;p.value=s.amount||0;stock.append(p);if(s.medium==='fluid')detail(stock,s.quantity_unit||'native fluid units');
     if(s.net_items_per_minute!==null)detail(stock,`${s.net_items_per_minute>=0?'+':''}${number(s.net_items_per_minute)} / min net`);
     const state=node('td',s.reason,'station-state');
     if(s.vehicles.length)detail(state,`Assigned: ${s.vehicles.join(', ')}`);

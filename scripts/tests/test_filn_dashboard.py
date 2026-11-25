@@ -279,4 +279,20 @@ class NativeDashboardTests(unittest.TestCase):
         s=fixture();s['runtime']='native';v=s['vehicles'][0];v.update(held=True,solid_supported=False)
         result=analyze(s,100)
         self.assertEqual(result['counts']['active'],0)
-        self.assertEqual(result['fleet'][0]['status'],'Outside FILN / fluid support deferred')
+        self.assertEqual(result['fleet'][0]['status'],'Outside FILN / unsupported or legacy cargo medium')
+
+    def test_native_fluid_capacity_and_matching_are_medium_specific(self):
+        s=fixture();s['runtime']='native'
+        for station in s['stations']:
+            station.update(medium='fluid',quantity_unit='native fluid units',item='water')
+        s['stations'][0]['amount']=4800
+        v=s['vehicles'][0];v.update(held=True,medium='fluid',solid_supported=False)
+        s['capacity_samples'][0].update(medium='fluid',by_item={'water':4800})
+        r=analyze(s,100)
+        self.assertEqual(r['counts']['available'],1)
+        self.assertEqual(r['requests'][0]['truckload'],4800)
+        self.assertEqual(r['requests'][0]['quantity_unit'],'native fluid units')
+        s['stations'][0]['medium']='solid'
+        self.assertEqual(analyze(s,100)['requests'][0]['code'],'provider_short')
+        v['medium']='solid'
+        self.assertEqual(analyze(s,100)['requests'][0]['code'],'unknown_capacity')

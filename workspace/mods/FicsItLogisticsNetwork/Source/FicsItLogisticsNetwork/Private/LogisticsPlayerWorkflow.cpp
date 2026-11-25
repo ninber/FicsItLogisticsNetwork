@@ -10,7 +10,6 @@
 #include "FGInventoryComponent.h"
 #include "FGDockableInterface.h"
 #include "Resources/FGItemDescriptor.h"
-#include "UObject/UnrealType.h"
 #include "Engine/World.h"
 
 namespace {
@@ -21,10 +20,6 @@ filn::player::CargoMedium FILNPlayerMedium(EResourceForm Form) {
  if(Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS) return M::Fluid;
  return M::Unknown;
 }
-}
-bool ALogisticsSubsystem::SupportsSolidCargo(const UObject* Object) {
- const auto* Property=IsValid(Object)?FindFProperty<FBoolProperty>(Object->GetClass(),TEXT("mIsFluidStorageInventory")):nullptr;
- return Property && !Property->GetPropertyValue_InContainer(Object);
 }
 bool ALogisticsSubsystem::StationAcceptsResource(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  if(!IsValid(Station) || !Resource) return false;

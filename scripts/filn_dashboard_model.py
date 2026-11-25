@@ -13,6 +13,17 @@ def item_name(path):
     return re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', raw.removeprefix('Desc_').removesuffix('_C')) or 'Unconfigured'
 
 
+def medium_compatible(first, second):
+    # Older Lua and native snapshots omit medium. Keep their legacy solid
+    # behavior; new fluid records require an explicit matching medium.
+    a, b = first.get('medium', 'solid'), second.get('medium', 'solid')
+    return a in ('solid', 'fluid') and a == b
+
+
+def unsupported_native(snapshot, vehicle):
+    return snapshot.get('runtime') == 'native' and (vehicle.get('medium') == 'unknown' or ('medium' not in vehicle and vehicle.get('solid_supported') is False))
+
+
 def analyze(snapshot, now, history=None):
     history = history if history is not None else {}
     stations = snapshot.get('stations', [])
@@ -43,8 +54,8 @@ def analyze(snapshot, now, history=None):
         free = max(0,requester.get('capacity',0)-requester.get('amount',0)) if requester.get('item') and requester.get('item')==cargo.get('item') else None
         fuel = v.get('fuel', {})
         idle = not job or job.get('state') == 'Idle'
-        if snapshot.get('runtime') == 'native' and v.get('solid_supported') is False:
-            status = 'Outside FILN / fluid support deferred'
+        if unsupported_native(snapshot, v):
+            status = 'Outside FILN / unsupported or legacy cargo medium'
         elif not v.get('managed'):
             if observed_home and not v.get('autopilot'):
                 status = 'Outside dispatcher / autopilot off'
@@ -97,7 +108,7 @@ def analyze(snapshot, now, history=None):
                    reconciliation=reconciliation,
                    dispatcher_reason=(job.get('recovery_details') or {}).get('last_error') or job.get('error') or reconciliation.get('reason') or v.get('native_pending_reason') or dispatch.get('reasons', {}).get(v.get('home'), ''))
         fleet.append(row)
-    active = [v for v in fleet if v.get('managed') and not (snapshot.get('runtime') == 'native' and v.get('solid_supported') is False) and v.get('home_powered') and v.get('autopilot') and not v.get('driver') and (v.get('job')or{}).get('state')!='Detached']
+    active = [v for v in fleet if v.get('managed') and not unsupported_native(snapshot, v) and v.get('home_powered') and v.get('autopilot') and not v.get('driver') and (v.get('job')or{}).get('state')!='Detached']
     available = [v for v in active if v['status'] == 'Available / waiting for dispatch']
     working = [v for v in active if v.get('job') and v['job'].get('state') not in ('Idle', 'Detached')]
     inventory = []
@@ -127,10 +138,11 @@ def analyze(snapshot, now, history=None):
     for s in inventory:
         if s.get('role') != 'requester' or s.get('is_depot') or not s.get('configured') or not s.get('item'):
             continue
-        eligible_types = {(v.get('class'), v.get('cargo', {}).get('slots')) for v in active}
-        needs = [t['by_item'][s['item']] for t in capacities if (t.get('class'), t.get('slots')) in eligible_types and t.get('by_item', {}).get(s['item'], 0)>0]
+        eligible_types = {(v.get('class'), v.get('cargo', {}).get('slots'), v.get('medium','solid')) for v in active if medium_compatible(v,s)}
+        compatible_available = [v for v in available if medium_compatible(v,s)]
+        needs = [t['by_item'][s['item']] for t in capacities if (t.get('class'), t.get('slots'), t.get('medium','solid')) in eligible_types and t.get('by_item', {}).get(s['item'], 0)>0]
         need = min(needs) if needs else None
-        matching = [p for p in providers if p.get('item') == s['item']]
+        matching = [p for p in providers if p.get('item') == s['item'] and medium_compatible(p,s)]
         storage_excluded = [p for p in matching if dispatch.get('storage_tag_rule_enabled') and '[S]' in p.get('name','').upper() and '[S]' in s.get('name','').upper()]
         matching = [p for p in matching if p not in storage_excluded]
         usable = [p for p in matching if not p.get('occupied') and p['guid'] not in reservations]
@@ -145,7 +157,7 @@ def analyze(snapshot, now, history=None):
             if check and 0 <= now-check.get('at', 0) <= 60:
                 checks.append(dict(check, home=home, home_name=by.get(home, {}).get('name', home), home_id=by.get(home, {}).get('id', ''), age=now-check['at']))
         checked = {c['home']: c for c in checks if c['age'] <= 30 and c.get('item') == s['item']}
-        failed_homes = [v for v in available if checked.get(v.get('home'), {}).get('reason') in ('different_network', 'unreachable_legs', 'native_path_rejected')]
+        failed_homes = [v for v in compatible_available if checked.get(v.get('home'), {}).get('reason') in ('different_network', 'unreachable_legs', 'native_path_rejected')]
         priority = 0
         if s.get('amount', 0)>0:
             reason, code = 'Stock present; request inactive until station is empty', 'stock_present'
@@ -169,10 +181,10 @@ def analyze(snapshot, now, history=None):
             reason, code, priority = ('Stock split across providers; one provider must hold a full truckload', 'split_stock', 85) if total>=need else ('Waiting for one provider to produce a full truckload', 'provider_short', 85)
         elif not dispatch.get('enabled'):
             reason, code, priority = 'Automatic dispatch paused', 'dispatcher_paused', 100
-        elif not available:
-            reason, code, priority = 'No available truck; inspect fleet cargo, fuel, active jobs and recovery', 'no_available_truck', 70
-        elif available and len(failed_homes) == len(available):
-            reason, code, priority = f'Recent route checks failed for all {len(available)} currently available trucks; inspect depot evidence', 'route_checks_failed', 95
+        elif not compatible_available:
+            reason, code, priority = 'No available compatible truck; inspect fleet cargo, fuel, active jobs and recovery', 'no_available_truck', 70
+        elif compatible_available and len(failed_homes) == len(compatible_available):
+            reason, code, priority = f'Recent route checks failed for all {len(compatible_available)} currently available trucks; inspect depot evidence', 'route_checks_failed', 95
         else:
             reason, code, priority = 'Stock available; awaiting dispatcher route / vehicle selection', 'awaiting_dispatcher_check', 60
         if code=='route_checks_failed':
@@ -188,10 +200,10 @@ def analyze(snapshot, now, history=None):
             rate = best.get('net_items_per_minute')
             if rate and rate>0:
                 eta = (need-stock)/rate*60
-        retained = [v for v in active if (not dispatch.get('storage_tag_rule_enabled') or '[S]' not in s.get('name','').upper()) and v['status']=='Matching cargo / waiting for requester' and v.get('cargo',{}).get('item')==s['item'] and 0<v['cargo']['amount']<=s.get('capacity',0)]
+        retained = [v for v in active if medium_compatible(v,s) and (not dispatch.get('storage_tag_rule_enabled') or '[S]' not in s.get('name','').upper()) and v['status']=='Matching cargo / waiting for requester' and v.get('cargo',{}).get('item')==s['item'] and 0<v['cargo']['amount']<=s.get('capacity',0)]
         if retained and s.get('amount',0)==0 and s.get('powered') and not s.get('standby') and not jobs and s['guid'] not in reservations and not stale and not errors:
             reason,code,priority = ('Matching retained cargo available; awaiting route check','retained_cargo_available',55) if dispatch.get('enabled') else ('Automatic dispatch paused','dispatcher_paused',100)
-        requests.append(dict(retained_vehicles=[v['id'] for v in retained],guid=s['guid'],id=s['id'],name=s['name'],item=s['item'],item_name=s['item_name'],inventory=s.get('amount',0),
+        requests.append(dict(retained_vehicles=[v['id'] for v in retained],guid=s['guid'],id=s['id'],name=s['name'],item=s['item'],item_name=s['item_name'],inventory=s.get('amount',0),medium=s.get('medium','solid'),quantity_unit=s.get('quantity_unit','items'),
                              code=code,reason=reason,priority=priority,route_checks=checks,truckload=need,truckload_max=max(needs) if needs else None,
                              best_stock=stock,best_provider=best['name'] if best else '—',missing=max(0,need-stock) if need else None,
                              combined_stock=total,full_providers=len(full),providers=matching,vehicles=[v['id'] for v in jobs],
@@ -215,7 +227,7 @@ def group_items(inventory, requests, fleet, reservations):
             continue
         known = s.get('configured') and s.get('item') and len(s.get('contents', [])) <= 1
         key = s['item'] if known else ''
-        g = groups.setdefault(key, dict(item=key or None, item_name=item_name(key), providers=[], requesters=[], unconfigured=[], retained_vehicles=[]))
+        g = groups.setdefault(key, dict(item=key or None, item_name=item_name(key), quantity_unit=s.get('quantity_unit','items'), providers=[], requesters=[], unconfigured=[], retained_vehicles=[]))
         row = dict(s)
         assigned = [v['id'] for v in fleet if s['guid'] in ((v.get('job') or {}).get('provider') if not (v.get('job') or {}).get('provider_released') else None, (v.get('job') or {}).get('requester')) and (v.get('job') or {}).get('state') not in ('Idle','Detached')]
         row.update(vehicles=assigned, reservation=reservations.get(s['guid']))

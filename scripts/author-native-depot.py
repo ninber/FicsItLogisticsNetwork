@@ -29,9 +29,6 @@ def assign(obj, value, *names):
     _, name = prop(obj, *names)
     obj.set_editor_property(name, value)
 
-def cls(path):
-    return require(unreal.load_class(None, path), f"Missing class {path}")
-
 def package(name, parent, configure, validate):
     path = DEST + "/" + name
     assets = unreal.EditorAssetLibrary
@@ -46,7 +43,13 @@ def package(name, parent, configure, validate):
         unreal.BlueprintEditorLibrary.compile_blueprint(bp)
         existing = False
     generated = require(assets.load_blueprint_class(path), f"No generated class {path}")
-    require(prop(bp, "parent_class")[0] == parent, f"Unexpected parent: {path}")
+    # UE 5.6 UBlueprint.ParentClass is not a public editor property. Verify the
+    # persisted asset registry parent tag on existing/freshly reloaded assets.
+    if existing:
+        data = assets.find_asset_data(path)
+        tag = unreal.AssetRegistryHelpers.get_tag_value(data, "ParentClass")
+        parent_path = str(tag).split("\'")[-2] if tag and "\'" in str(tag) else str(tag)
+        require(parent_path == parent.get_path_name(), f"Unexpected parent: {path}: {tag}")
     cdo = unreal.get_default_object(generated)
     if not existing:
         configure(cdo)
