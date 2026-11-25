@@ -26,7 +26,7 @@ using Value=TSharedPtr<FJsonValue>;
 Object Obj() { return MakeShared<FJsonObject>(); }
 Value Val(const Object& O) { return MakeShared<FJsonValueObject>(O); }
 FString Guid(AFGDockingStationIdentifier* S) { return IsValid(S)?S->GetPathNodeGUID().ToString():FString(); }
-FString Descriptor(TSubclassOf<UFGItemDescriptor> D) { return D?D->GetPathName():FString(); }
+FString FILNTelemetryDescriptorPath(TSubclassOf<UFGItemDescriptor> D) { return D?D->GetPathName():FString(); }
 int64 Stamp() { return FDateTime::UtcNow().ToUnixTimestamp(); }
 Object Position(const FVector& P) {
  auto O=Obj(); O->SetNumberField(TEXT("x"),P.X/100.); O->SetNumberField(TEXT("y"),P.Y/100.); O->SetNumberField(TEXT("z"),P.Z/100.); return O;
@@ -65,7 +65,7 @@ Stock InspectStock(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor> Reque
  S.Json->SetNumberField(TEXT("capacity"),static_cast<double>(S.Capacity));
  S.Json->SetNumberField(TEXT("slots"),Slots);
  S.Json->SetNumberField(TEXT("kinds"),S.Kinds);
- S.Json->SetStringField(TEXT("item"),Descriptor(S.Item));
+ S.Json->SetStringField(TEXT("item"),FILNTelemetryDescriptorPath(S.Item));
  return S;
 }
 const TCHAR* FILNTelemetryMedium(EResourceForm Form) {
@@ -152,7 +152,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
    auto O=Obj(); O->SetStringField(TEXT("id"),Guid(S)); O->SetStringField(TEXT("guid"),Guid(S)); O->SetStringField(TEXT("name"),S->GetStationName().ToString());
    O->SetStringField(TEXT("medium"),Medium); O->SetStringField(TEXT("quantity_unit"),Medium==TEXT("fluid")?TEXT("native fluid units"):TEXT("items"));
    O->SetStringField(TEXT("role"),Load?TEXT("provider"):TEXT("requester")); O->SetBoolField(TEXT("configured"),Configured); O->SetBoolField(TEXT("is_depot"),Depot);
-   O->SetStringField(TEXT("item"),Configured?Descriptor(Stock.Item):FString()); O->SetNumberField(TEXT("amount"),static_cast<double>(Stock.Total));
+   O->SetStringField(TEXT("item"),Configured?FILNTelemetryDescriptorPath(Stock.Item):FString()); O->SetNumberField(TEXT("amount"),static_cast<double>(Stock.Total));
    O->SetNumberField(TEXT("capacity"),Configured?static_cast<double>(Stock.Capacity):0.); O->SetArrayField(TEXT("contents"),Stock.Contents);
    O->SetBoolField(TEXT("powered"),B->HasPower()); O->SetBoolField(TEXT("standby"),B->IsProductionPaused()); O->SetBoolField(TEXT("occupied"),B->GetDockedActor()!=nullptr);
    O->SetObjectField(TEXT("position"),Position(B->GetActorLocation())); O->SetObjectField(TEXT("fuel"),InspectStock(B->GetFuelInventory()).Json);
@@ -187,7 +187,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
    if(R) {
     O->SetStringField(TEXT("home"),Guid(R->Home));
     auto J=Obj(); J->SetStringField(TEXT("kind"),R->RetainedCargo?TEXT("cargo"):TEXT("pickup")); J->SetStringField(TEXT("state"),Phase(*R));
-    J->SetStringField(TEXT("provider"),Guid(R->Provider)); J->SetStringField(TEXT("requester"),Guid(R->Requester)); J->SetStringField(TEXT("item"),Descriptor(R->Resource));
+    J->SetStringField(TEXT("provider"),Guid(R->Provider)); J->SetStringField(TEXT("requester"),Guid(R->Requester)); J->SetStringField(TEXT("item"),FILNTelemetryDescriptorPath(R->Resource));
     J->SetNumberField(TEXT("loaded"),R->LoadedCargo); J->SetNumberField(TEXT("unloaded"),R->DeliveredCargo); J->SetNumberField(TEXT("truckload"),R->ExpectedCargo); J->SetStringField(TEXT("error"),R->Diagnostic);
     O->SetObjectField(TEXT("job"),J);
    } else if(const auto* Why=PendingHomeReason.Find(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V))) O->SetStringField(TEXT("native_pending_reason"),*Why);
