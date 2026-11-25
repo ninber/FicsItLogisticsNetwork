@@ -18,7 +18,7 @@ bool ALogisticsSubsystem::RetryNavigation(FFILNRegistration& R,double Now,bool S
  if(!IsValid(VehicleActor) || !VehicleActor->GetStorageInventory() || !R.Resource) return false;
  const auto Phase=static_cast<S>(R.State);
  auto* Target=Phase==S::ToProvider?R.Provider.Get():Phase==S::ToRequester?R.Requester.Get():Phase==S::Returning?R.Home.Get():nullptr;
- if(!IsValid(Target) || !IsValid(Target->GetStation())) return false;
+ if(!IsValid(Target) || !VehicleStationCompatible(VehicleActor,Target->GetStation())) return false;
  const FGuid Destination=Target->GetPathNodeGUID();
  const int32 Waypoint=V->GetCurrentTargetWaypointIndex();
  const auto Matches=[&]() {
@@ -71,7 +71,7 @@ bool ALogisticsSubsystem::RestoreHomeRoute(FFILNRegistration& R) {
  check(IsInGameThread());
  if(!HasAuthority() || !IsValid(R.Vehicle) || !IsValid(R.Home)) return false;
  auto* V=R.Vehicle.Get(); auto* O=V->GetOwnerVehicle(); auto* H=R.Home->GetStation();
- if(!IsValid(O) || !IsValid(H) || !O->GetStorageInventory() || !ValidHome(R.Home)) return false;
+ if(!IsValid(O) || !IsValid(H) || !O->GetStorageInventory() || !ValidHome(R.Home) || !VehicleStationCompatible(O,H)) return false;
  if(!filn::recovery::SafeHomeCompletion(true,V->GetVehicleRoute()==R.RouteIntent,V->IsAutopilotEnabled(),
     O->GetDriver()!=nullptr,H->GetDockedActor()==O,FMath::Abs(O->GetForwardSpeed())<=1.f,
     R.Resource && O->GetStorageInventory()->GetNumItems(R.Resource)==R.LastCargo)) return false;
@@ -93,7 +93,7 @@ bool ALogisticsSubsystem::TryAbortToHome(FFILNRegistration& R,double Now) {
  if(!HasAuthority() || bDispatchBlocked || !R.Automatic || !R.JobId.IsValid() ||
     !IsValid(R.Vehicle) || !IsValid(R.Home) || !R.Resource || !ValidHome(R.Home)) return false;
  auto* V=R.Vehicle.Get(); auto* O=V->GetOwnerVehicle(); auto* H=R.Home->GetStation();
- if(!IsValid(O) || !IsValid(H) || !O->GetStorageInventory()) return false;
+ if(!IsValid(O) || !IsValid(H) || !O->GetStorageInventory() || !VehicleStationCompatible(O,H)) return false;
  auto* Cargo=O->GetStorageInventory();
  bool Verified=Cargo->GetNumItems(R.Resource)==R.LastCargo;
  TArray<FInventoryStack> Stacks; Cargo->GetInventoryStacks(Stacks);
@@ -128,7 +128,7 @@ bool ALogisticsSubsystem::TryAbortToHome(FFILNRegistration& R,double Now) {
   if(++Examined>32) break;
   auto* ID=Depot.Get();
   if(!IsValid(ID) || ID==R.Home || HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(ID)) || !ValidHome(ID) ||
-     ID->GetPathNodeGUID()==Home || !IsValid(ID->GetStation()) || ID->GetStation()->GetDockedActor()) continue;
+     ID->GetPathNodeGUID()==Home || !VehicleStationCompatible(O,ID->GetStation()) || ID->GetStation()->GetDockedActor()) continue;
   if(Reachable(Home,ID->GetPathNodeGUID()) && Reachable(ID->GetPathNodeGUID(),Home)) { Anchor=ID; break; }
  }
  if(!Anchor) return false;
@@ -155,7 +155,7 @@ void ALogisticsSubsystem::AuditIdleFleet() {
   if(!WatchTransfers(R)) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; R.Held=false; continue; }
   auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
   auto* H=IsValid(R.Home)?R.Home->GetStation():nullptr;
-  if(!IsValid(O) || !IsValid(H) || !H->GetDockingPathNode() || !O->GetStorageInventory()) { R.Held=false; continue; }
+  if(!IsValid(O) || !IsValid(H) || !H->GetDockingPathNode() || !O->GetStorageInventory() || !VehicleStationCompatible(O,H)) { R.Held=false; continue; }
   const FGuid Home=R.Home->GetPathNodeGUID();
   const TArray<FGuid> Route={Home};
   const FVector Delta=O->GetVehicleLocation()-H->GetDockingPathNode()->GetActorLocation();
@@ -228,7 +228,7 @@ bool ALogisticsSubsystem::RehomeParkedVehicle(int32 Index,AFGDockingStationIdent
  auto& R=Registrations[Index];
  auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
  auto* H=Home->GetStation(); auto* VS=AFGVehicleSubsystem::Get(GetWorld());
- if(!IsValid(O) || !O->HasAuthority() || !IsValid(H) || !VS || !O->GetStorageInventory()) return false;
+ if(!IsValid(O) || !O->HasAuthority() || !IsValid(H) || !VS || !O->GetStorageInventory() || !VehicleStationCompatible(O,H)) return false;
  const auto Node=Home->GetPathNodeGUID(); if(!Node.IsValid()) return false;
  const auto Id=[](const FGuid& G){ return std::string(TCHAR_TO_UTF8(*G.ToString())); };
  const auto Truck=Id(R.TruckId), OldBay=Id(R.BayId);

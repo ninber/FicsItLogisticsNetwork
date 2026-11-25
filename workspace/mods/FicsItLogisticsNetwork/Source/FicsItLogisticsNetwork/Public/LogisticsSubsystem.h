@@ -183,6 +183,8 @@ private:
  bool AdoptPlayerHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Requested);
  bool StationResourceMatches(const FFILNStationConfig& Config) const;
  static bool SupportsSolidCargo(const UObject* Object);
+ static bool StationAcceptsResource(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource);
+ static bool VehicleStationCompatible(AFGWheeledVehicle* Vehicle,AFGBuildableDockingStation* Station);
  TArray<TWeakObjectPtr<AFGDockingStationIdentifier>> PlayerStationScan;
  TArray<TWeakObjectPtr<AFGWheeledVehicleIdentifier>> PlayerVehicleScan;
  int32 PlayerStationCursor=0, PlayerVehicleCursor=0;

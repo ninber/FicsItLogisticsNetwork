@@ -8,21 +8,39 @@
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "FGInventoryComponent.h"
+#include "FGDockableInterface.h"
 #include "Resources/FGItemDescriptor.h"
 #include "UObject/UnrealType.h"
 #include "Engine/World.h"
 
 namespace {
 std::string Key(const FGuid& G) { return TCHAR_TO_UTF8(*G.ToString()); }
+filn::player::CargoMedium FILNPlayerMedium(EResourceForm Form) {
+ using M=filn::player::CargoMedium;
+ if(Form==EResourceForm::RF_SOLID) return M::Solid;
+ if(Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS) return M::Fluid;
+ return M::Unknown;
+}
 }
 bool ALogisticsSubsystem::SupportsSolidCargo(const UObject* Object) {
  const auto* Property=IsValid(Object)?FindFProperty<FBoolProperty>(Object->GetClass(),TEXT("mIsFluidStorageInventory")):nullptr;
  return Property && !Property->GetPropertyValue_InContainer(Object);
 }
+bool ALogisticsSubsystem::StationAcceptsResource(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource) {
+ if(!IsValid(Station) || !Resource) return false;
+ const auto Medium=FILNPlayerMedium(Station->GetDockingStationResourceForm());
+ if(!filn::player::Compatible(Medium,FILNPlayerMedium(UFGItemDescriptor::GetForm(Resource)))) return false;
+ return Medium!=filn::player::CargoMedium::Fluid || !Station->GetCurrentFluidDescriptor() || Station->GetCurrentFluidDescriptor()==Resource;
+}
+bool ALogisticsSubsystem::VehicleStationCompatible(AFGWheeledVehicle* Vehicle,AFGBuildableDockingStation* Station) {
+ if(!IsValid(Vehicle) || !IsValid(Station) || !Vehicle->GetClass()->ImplementsInterface(UFGDockableInterface::StaticClass())) return false;
+ return filn::player::Compatible(FILNPlayerMedium(IFGDockableInterface::Execute_GetDockInventoryResourceForm(Vehicle)),
+   FILNPlayerMedium(Station->GetDockingStationResourceForm()));
+}
 bool ALogisticsSubsystem::StationResourceMatches(const FFILNStationConfig& C) const {
  auto* B=IsValid(C.Station)?C.Station->GetStation():nullptr;
  auto* I=IsValid(B)?B->GetInventory():nullptr;
- if(!IsValid(I) || !C.Resource || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
+ if(!IsValid(I) || !StationAcceptsResource(B,C.Resource) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
  // Retired external records are not owned filters. Never infer or restore their
  // configuration from another actor's fields or from current stock.
  if(C.ExternalFilter || C.OriginalFilters.Num()!=I->GetSizeLinear()) return false;
@@ -72,7 +90,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  check(IsInGameThread());
  if(!IsValid(V) || !IsValid(Requested) || !IsDepot(Requested) || !ValidHome(Requested)) return false;
  auto* O=V->GetOwnerVehicle(); auto* VS=AFGVehicleSubsystem::Get(GetWorld());
- if(!IsValid(O) || !VS || !O->GetStorageInventory() || !SupportsSolidCargo(O)) return false;
+ if(!IsValid(O) || !VS || !O->GetStorageInventory() || !VehicleStationCompatible(O,Requested->GetStation())) return false;
  const auto Before=V->GetVehicleRoute();
  const FGuid Wanted=Requested->GetPathNodeGUID();
  if(!filn::player::OptedIn(O->HasAuthority(),V->IsAutopilotEnabled(),O->GetDriver()!=nullptr,Before.Num()==1 && Before[0]==Wanted,ByVehicle.Contains(V))) return false;
@@ -106,7 +124,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
      HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(D))) return false;
   auto* B=D->GetStation(); const auto Node=D->GetPathNodeGUID();
   if(!Node.IsValid() || (B->GetDockedActor() && B->GetDockedActor()!=O) ||
-     !B->HasPower() || B->IsProductionPaused() || !ValidHome(D)) return false;
+     !B->HasPower() || B->IsProductionPaused() || !ValidHome(D) || !VehicleStationCompatible(O,B)) return false;
   const auto* SavedId=StationIds.Find(TWeakObjectPtr<AFGDockingStationIdentifier>(D));
   if(SavedId && Reservations.StationBusy(Key(*SavedId))) return false;
   IndexRoster();

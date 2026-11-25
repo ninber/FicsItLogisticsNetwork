@@ -6,6 +6,7 @@
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "FGInventoryComponent.h"
+#include "FGDockableInterface.h"
 #include "Resources/FGItemDescriptor.h"
 #include "Engine/World.h"
 #include "HAL/PlatformTime.h"
@@ -29,11 +30,10 @@ bool Inventory(UFGInventoryComponent* I,TSubclassOf<UFGItemDescriptor> Resource,
  if(Amount>MAX_int32 || Size>MAX_int32 || Size<0) return false;
  Kinds=Types.Num(); Quantity=static_cast<int>(Amount); Capacity=static_cast<int>(Size); return true;
 }
-bool TransportMedium(const UObject* Object,filn::dispatch::Medium& Out) {
- const auto* Property=Object?FindFProperty<FBoolProperty>(Object->GetClass(),TEXT("mIsFluidStorageInventory")):nullptr;
- if(!Property) return false;
- Out=Property->GetPropertyValue_InContainer(Object)?filn::dispatch::Medium::Fluid:filn::dispatch::Medium::Solid;
- return true;
+bool FILNDispatchMedium(EResourceForm Form,filn::dispatch::Medium& Out) {
+ if(Form==EResourceForm::RF_SOLID) { Out=filn::dispatch::Medium::Solid; return true; }
+ if(Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS) { Out=filn::dispatch::Medium::Fluid; return true; }
+ return false;
 }
 }
 void ALogisticsSubsystem::ResetScan() {
@@ -49,8 +49,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  auto* QB=IsValid(C.Station)?C.Station->GetStation():nullptr;
  auto* HB=IsValid(R.Home)?R.Home->GetStation():nullptr;
  if(!IsValid(VehicleActor) || !IsValid(QB) || !IsValid(HB) || !C.Resource || !ValidHome(R.Home)) return false;
- // Current release supports solids only; retain medium-aware policy for later work.
- if(!SupportsSolidCargo(VehicleActor) || !SupportsSolidCargo(QB) || UFGItemDescriptor::GetForm(C.Resource)!=EResourceForm::RF_SOLID) return false;
+ if(C.ExternalFilter || !VehicleStationCompatible(VehicleActor,HB) || !VehicleStationCompatible(VehicleActor,QB) || !StationAcceptsResource(QB,C.Resource)) return false;
  if(VehicleActor->GetDriver()) { R.Diagnostic=TEXT("Player-controlled vehicle excluded"); return false; }
  if(!R.Vehicle->IsAutopilotEnabled()) { R.Diagnostic=TEXT("Autopilot disabled; explicit player opt-in required"); return false; }
  if(!VehicleActor->HasFuel() || !FuelReady(R)) { R.Diagnostic=TEXT("Awaiting full compatible native fuel inventory at assigned home"); return false; }
@@ -72,7 +71,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  Truck.id=Id(R.TruckId); Truck.home=Id(R.BayId); Truck.enrolled=true;
  Truck.homeReady=HB->HasPower() && !HB->IsProductionPaused(); Truck.idle=R.State==static_cast<uint8>(filn::State::Idle);
  Truck.autopilot=R.Vehicle->IsAutopilotEnabled(); Truck.driver=VehicleActor->GetDriver()!=nullptr; Truck.fuelReady=true; // checked once above
- if(!TransportMedium(VehicleActor,Truck.medium)) return false;
+ if(!FILNDispatchMedium(IFGDockableInterface::Execute_GetDockInventoryResourceForm(VehicleActor),Truck.medium)) return false;
  const auto Form=UFGItemDescriptor::GetForm(C.Resource);
  const bool Fluid=Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS;
  if((!Fluid && Form!=EResourceForm::RF_SOLID) || Fluid!=(Truck.medium==filn::dispatch::Medium::Fluid)) return false;
@@ -80,19 +79,19 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  if(!Inventory(VehicleActor->GetStorageInventory(),C.Resource,Truck.cargoKinds,Truck.cargoQuantity,Truck.cargoCapacity,&Truck.cargoResource)) return false;
  Request.id=Id(StationId(C.Station)); Request.label=TCHAR_TO_UTF8(*C.Station->GetStationName().ToString()); Request.resource=Descriptor(C.Resource);
  Request.explicitFilter=true; Request.loadMode=QB->GetIsInLoadMode(); Request.powered=QB->HasPower(); Request.paused=QB->IsProductionPaused();
- Request.occupied=QB->GetDockedActor()!=nullptr || Reservations.StationBusy(Request.id); if(!TransportMedium(QB,Request.medium)) return false;
+ Request.occupied=QB->GetDockedActor()!=nullptr || Reservations.StationBusy(Request.id); if(!FILNDispatchMedium(QB->GetDockingStationResourceForm(),Request.medium)) return false;
  Request.depot=IsDepot(C.Station);
  if(!Inventory(QB->GetInventory(),C.Resource,Request.kinds,Request.quantity,Request.capacity)) return false;
  if(P!=INDEX_NONE) {
   auto* ID=ProviderCandidates[P].Get(); auto* PB=IsValid(ID)?ID->GetStation():nullptr;
-  if(!IsValid(PB) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode() || !SupportsSolidCargo(PB)) return false;
+  if(!IsValid(PB) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode() || !VehicleStationCompatible(VehicleActor,PB) || !StationAcceptsResource(PB,C.Resource)) return false;
   const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& Entry){return Entry.Station==ID;});
   if(PC && (PC->Resource!=C.Resource || !StationResourceMatches(*PC))) return false;
   if(Fluid && PB->GetCurrentFluidDescriptor() && PB->GetCurrentFluidDescriptor()!=C.Resource) return false;
   filn::dispatch::Station Provider;
   Provider.id=Id(StationId(ID)); Provider.label=TCHAR_TO_UTF8(*ID->GetStationName().ToString()); Provider.explicitFilter=PC!=nullptr;
   Provider.loadMode=PB->GetIsInLoadMode(); Provider.powered=PB->HasPower(); Provider.paused=PB->IsProductionPaused();
-  Provider.occupied=PB->GetDockedActor()!=nullptr || Reservations.StationBusy(Provider.id); if(!TransportMedium(PB,Provider.medium)) return false;
+  Provider.occupied=PB->GetDockedActor()!=nullptr || Reservations.StationBusy(Provider.id); if(!FILNDispatchMedium(PB->GetDockingStationResourceForm(),Provider.medium)) return false;
   Provider.depot=IsDepot(ID);
   std::string Actual;
   if(!Inventory(PB->GetInventory(),C.Resource,Provider.kinds,Provider.quantity,Provider.capacity,&Actual) ||
@@ -122,13 +121,14 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
 }
 bool ALogisticsSubsystem::EndpointConfigurationValid(const FFILNRegistration& R) const {
  auto* Q=IsValid(R.Requester)?R.Requester->GetStation():nullptr;
- if(!IsValid(Q) || Q->GetIsInLoadMode() || IsDepot(R.Requester) || !R.Resource) return false;
+ auto* O=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
+ if(!IsValid(Q) || Q->GetIsInLoadMode() || IsDepot(R.Requester) || !StationAcceptsResource(Q,R.Resource) || !VehicleStationCompatible(O,Q)) return false;
  const auto* QC=StationConfigs.FindByPredicate([&](const FFILNStationConfig& C){return C.Station==R.Requester;});
  if(!QC || QC->Resource!=R.Resource || !StationResourceMatches(*QC)) return false;
  if(R.RetainedCargo) return !filn::dispatch::IsStorage(TCHAR_TO_UTF8(*R.Requester->GetStationName().ToString())) ||
   (R.CargoOriginKnown && !R.CargoOriginStorage) || (R.DeliveredCargo>0 && R.LastCargo==0);
  auto* P=IsValid(R.Provider)?R.Provider->GetStation():nullptr;
- if(!IsValid(P) || !P->GetIsInLoadMode() || IsDepot(R.Provider)) return false;
+ if(!IsValid(P) || !P->GetIsInLoadMode() || IsDepot(R.Provider) || !StationAcceptsResource(P,R.Resource) || !VehicleStationCompatible(O,P)) return false;
  const auto* PC=StationConfigs.FindByPredicate([&](const FFILNStationConfig& C){return C.Station==R.Provider;});
  return (!PC || (PC->Resource==R.Resource && StationResourceMatches(*PC))) &&
   filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*R.Provider->GetStationName().ToString()),TCHAR_TO_UTF8(*R.Requester->GetStationName().ToString()));
@@ -144,7 +144,7 @@ void ALogisticsSubsystem::Schedule() {
   if(Now<NextDispatch) return;
   RequestCursor%=StationConfigs.Num();
   const auto& Q=StationConfigs[RequestCursor]; auto* QB=IsValid(Q.Station)?Q.Station->GetStation():nullptr;
-  if(Q.ExternalFilter || !IsValid(QB) || !SupportsSolidCargo(QB) || QB->GetIsInLoadMode() || IsDepot(Q.Station) || !Q.Resource || UFGItemDescriptor::GetForm(Q.Resource)!=EResourceForm::RF_SOLID || !QB->GetInventory() || !QB->GetInventory()->IsEmpty()) {
+  if(Q.ExternalFilter || !IsValid(QB) || QB->GetIsInLoadMode() || IsDepot(Q.Station) || !StationAcceptsResource(QB,Q.Resource) || !QB->GetInventory() || !QB->GetInventory()->IsEmpty()) {
    ++RequestCursor; if(RequestCursor>=StationConfigs.Num()) {RequestCursor=0; NextDispatch=Now+5.;} return;
   }
   auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
@@ -181,7 +181,7 @@ void ALogisticsSubsystem::Schedule() {
     if(Rank.Cursor<ProviderCandidates.Num()) {
      auto* ID=ProviderCandidates[Rank.Cursor].Get(); const auto& Q=StationConfigs[RequestCursor];
      auto* B=IsValid(ID)?ID->GetStation():nullptr;
-     if(IsValid(B) && SupportsSolidCargo(B) && B->GetIsInLoadMode() && ID!=Q.Station && !IsDepot(ID) && IsValid(Q.Station) && Q.Resource &&
+     if(IsValid(B) && StationAcceptsResource(B,Q.Resource) && B->GetIsInLoadMode() && ID!=Q.Station && !IsDepot(ID) && IsValid(Q.Station) && Q.Resource &&
         B->HasPower() && !B->IsProductionPaused() && !B->GetDockedActor() && IsValid(B->GetInventory())) {
       // Ignore irrelevant/mixed/empty cargo before scheduling expensive graph
       // work. Stock is not a road cache key; every new scan resamples it.

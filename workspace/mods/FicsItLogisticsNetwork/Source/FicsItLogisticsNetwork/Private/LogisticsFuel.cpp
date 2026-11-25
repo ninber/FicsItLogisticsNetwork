@@ -6,6 +6,7 @@
 #include "WheeledVehicles/FGWheeledVehicle.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "FGInventoryComponent.h"
+#include "FGDockableInterface.h"
 #include "Resources/FGItemDescriptor.h"
 #include "Engine/World.h"
 
@@ -56,7 +57,9 @@ FFuelSnapshot Inspect(const FFILNRegistration& R,double Now) {
 }
 }
 bool ALogisticsSubsystem::FuelReady(const FFILNRegistration& R) const {
- return filn::fuel::Decide(Inspect(R,GetWorld()->GetTimeSeconds()).Facts)==filn::fuel::Action::Ready;
+ auto* O=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
+ auto* H=IsValid(R.Home)?R.Home->GetStation():nullptr;
+ return VehicleStationCompatible(O,H) && filn::fuel::Decide(Inspect(R,GetWorld()->GetTimeSeconds()).Facts)==filn::fuel::Action::Ready;
 }
 void ALogisticsSubsystem::ServiceFuel() {
  if(!HasAuthority() || bDispatchBlocked) return;
@@ -65,7 +68,7 @@ void ALogisticsSubsystem::ServiceFuel() {
   FuelCursor%=Registrations.Num(); auto& R=Registrations[FuelCursor++];
   auto* V=R.Vehicle.Get(); auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
   auto* H=IsValid(R.Home)?R.Home->GetStation():nullptr;
-  if(!SupportsSolidCargo(O) && !R.FuelPending) continue;
+  if(!VehicleStationCompatible(O,H) && !R.FuelPending) continue;
   const auto Snapshot=Inspect(R,Now);
   if(R.FuelPending) {
    const bool Valid=Snapshot.Facts.valid && ValidHome(R.Home) && R.ObservedFuel && IsValid(O) && O->GetFuelInventory();
@@ -80,9 +83,9 @@ void ALogisticsSubsystem::ServiceFuel() {
    } else R.Diagnostic=TEXT("Native fuel service ended without verified receipt; no synthetic fuel");
    R.FuelPending=false; R.ObservedFuel=nullptr; R.FuelRetryAt=Now+15.; continue;
   }
-  if(!ValidHome(R.Home) || filn::fuel::Decide(Snapshot.Facts)!=filn::fuel::Action::RequestDock) continue;
+  if(!ValidHome(R.Home) || !VehicleStationCompatible(O,H) || filn::fuel::Decide(Snapshot.Facts)!=filn::fuel::Action::RequestDock) continue;
   // No inventory writes or fuel-type overrides: native docking transfers fuel.
-  if(!H->GetDockedActor() && !H->DockActor(O)) { R.FuelRetryAt=Now+15.; continue; }
+  if(!H->GetDockedActor() && (!IFGDockableInterface::Execute_CanDock(O,H) || !H->DockActor(O))) { R.FuelRetryAt=Now+15.; continue; }
   if(H->GetDockedActor()!=O || !V->IsAutopilotEnabled() || O->GetDriver() || V->GetVehicleRoute()!=R.IdleRoute) {
    R.FuelRetryAt=Now+15.; continue;
   }

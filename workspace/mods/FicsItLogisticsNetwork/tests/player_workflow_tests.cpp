@@ -3,6 +3,13 @@
 #include <cassert>
 int main() {
  using namespace filn::player;
+ using M=CargoMedium;
+ assert(Compatible(M::Solid,M::Solid));
+ assert(Compatible(M::Fluid,M::Fluid));
+ assert(!Compatible(M::Solid,M::Fluid));
+ assert(!Compatible(M::Fluid,M::Solid));
+ assert(!Compatible(M::Unknown,M::Unknown));
+ assert(!Compatible(M::Unknown,M::Fluid));
  DepotFacts free{true,true,true,false,false,false,true,false};
  assert(Free(free));
  auto d=free; d.claimed=true; assert(!Free(d));

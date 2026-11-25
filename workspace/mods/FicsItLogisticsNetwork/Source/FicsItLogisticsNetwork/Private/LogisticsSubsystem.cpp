@@ -217,6 +217,7 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
      I->GetSizeLinear()!=C.OriginalFilters.Num() || (Restore && B->GetDockedActor())) return false;
   Seen.Add(I);
   if(!Restore) {
+   if(!StationAcceptsResource(B,C.Resource)) return false;
    TArray<FInventoryStack> Contents; I->GetInventoryStacks(Contents);
    for(const auto& Stack:Contents) if(Stack.NumItems<0 || (Stack.NumItems>0 && Stack.Item.GetItemClass()!=C.Resource)) return false;
   }
@@ -248,13 +249,7 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
 bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  auto* B=Building(Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
  if(bDispatchBlocked || !bRegistryValidated || bChangingFilters || bPreparingUninstall || !HasAuthority() || !IsValid(Station) || Station->GetWorld()!=GetWorld() || !Inventory || !Resource || !Inventory->IsEmpty() || B->GetDockedActor()) return false;
- if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station))) || !SupportsSolidCargo(B) || UFGItemDescriptor::GetForm(Resource)!=EResourceForm::RF_SOLID) return false;
- const auto* FluidProperty=FindFProperty<FBoolProperty>(B->GetClass(),TEXT("mIsFluidStorageInventory"));
- if(!FluidProperty) return false;
- const auto Form=UFGItemDescriptor::GetForm(Resource);
- const bool IsFluid=Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS;
- if(IsFluid && B->GetCurrentFluidDescriptor() && B->GetCurrentFluidDescriptor()!=Resource) return false;
- if((!IsFluid && Form!=EResourceForm::RF_SOLID) || IsFluid!=FluidProperty->GetPropertyValue_InContainer(B)) return false;
+ if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station))) || !StationAcceptsResource(B,Resource)) return false;
  FFILNStationConfig* Existing=StationConfigs.FindByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
  if(Existing) {
   if(Existing->ExternalFilter) return false;
@@ -409,7 +404,7 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  for(const auto& C:StationConfigs) if(C.Station==H) return false;
  auto* VehicleActor=V->GetOwnerVehicle(); auto* Home=Building(H);
  auto* VS=AFGVehicleSubsystem::Get(GetWorld());
- if(!IsValid(VehicleActor) || !VehicleActor->HasAuthority() || !VS || !VehicleActor->GetStorageInventory() || !Home->GetDockingPathNode() || !SupportsSolidCargo(VehicleActor)) return false;
+ if(!IsValid(VehicleActor) || !VehicleActor->HasAuthority() || !VS || !VehicleActor->GetStorageInventory() || !Home->GetDockingPathNode() || !VehicleStationCompatible(VehicleActor,Home)) return false;
  const FGuid Node=H->GetPathNodeGUID();
  const FVector HomeLocation=Home->GetDockingPathNode()->GetActorLocation();
  FVector Position; FRotator Rotation; VehicleActor->GetVehicleLocationAndRotation(Position,Rotation);
@@ -463,7 +458,7 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
   }
  };
  if(VehicleActor->GetDriver() || V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()!=BeforeAP ||
-    !VehicleActor->GetStorageInventory()->IsEmpty() || !ValidHome(H)) return false;
+    !VehicleActor->GetStorageInventory()->IsEmpty() || !ValidHome(H) || !VehicleStationCompatible(VehicleActor,Home)) return false;
  if(Verdict==Decision::AssignHome) {
   V->SetVehicleRoute(Intended);
   if(V->GetVehicleRoute()!=Intended) {
@@ -515,7 +510,7 @@ void ALogisticsSubsystem::Observe() {
   const double Now=GetWorld()->GetTimeSeconds();
   R.Elapsed+=static_cast<float>(FMath::Max(0.0,Now-R.LastObserved)); R.LastObserved=Now;
   auto* PB=Building(R.Provider); auto* QB=Building(R.Requester); auto* HB=Building(R.Home);
-  if(!IsValid(R.Vehicle) || !IsValid(R.Vehicle->GetOwnerVehicle()) || !IsValid(HB) || !ValidHome(R.Home)) {
+  if(!IsValid(R.Vehicle) || !IsValid(R.Vehicle->GetOwnerVehicle()) || !IsValid(HB) || !ValidHome(R.Home) || !VehicleStationCompatible(R.Vehicle->GetOwnerVehicle(),HB)) {
    Recover(R,TEXT("Vehicle or home destroyed/unavailable")); ++Cursor; continue;
   }
   if(!HasTransferObserver(R) && (!WatchTransfers(R) || (!R.AbortReturn && !ArmDockReceipts(R)))) {

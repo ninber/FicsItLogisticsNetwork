@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 namespace filn::player {
+// Resource forms are converted from native enums at the adapter boundary.
+// Unknown is never a compatible cargo medium.
+enum class CargoMedium { Unknown, Solid, Fluid };
+inline bool Compatible(CargoMedium first,CargoMedium second) {
+ return first!=CargoMedium::Unknown && first==second;
+}
 struct DepotFacts {
  bool designated=false, valid=false, powered=false, claimed=false, occupied=false, reserved=false, uniqueNode=false, foreignRoute=false;
 };
