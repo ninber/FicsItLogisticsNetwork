@@ -42,7 +42,7 @@ bool ALogisticsSubsystem::ShouldSave_Implementation() const {
 }
 bool ALogisticsSubsystem::SetDispatchEnabled(bool Enabled) {
  if(!HasAuthority() || (Enabled && (!bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters))) return false;
- bAutoDispatchEnabled=Enabled; ResetScan(); return true;
+ bAutoDispatchEnabled=Enabled; if(Enabled) bUninstallPrepared=false; ResetScan(); return true;
 }
 void ALogisticsSubsystem::BeginPlay() {
  Super::BeginPlay();
@@ -158,7 +158,8 @@ void ALogisticsSubsystem::Rebuild() {
   return;
  }
  bRegistryValidated=true;
- bAutoDispatchEnabled=!bPreparingUninstall;
+ bAutoDispatchEnabled=!bPreparingUninstall && !bUninstallPrepared;
+ bDepotRecipeReady=false; NextDepotRecipeCheck=0;
  PlayerStationScan.Empty(); PlayerVehicleScan.Empty(); PlayerStationCursor=PlayerVehicleCursor=0;
  NextPlayerStationScan=NextPlayerVehicleScan=0; OverflowCursor.Empty(); PendingHomeReason.Empty();
  for(const auto& Depot:DepotStations) if(IsValid(Depot)) {
@@ -316,17 +317,17 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
  for(const auto& Depot:DepotStations) if(auto* B=Building(Depot); IsValid(B)) {
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
- StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty(); Rebuild();
+ StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty(); bUninstallPrepared=true; Rebuild();
  return bRegistryValidated && !bDispatchBlocked;
 }
 bool ALogisticsSubsystem::IsDepot(AFGDockingStationIdentifier* Station) const {
  if(!IsValid(Station)) return false;
- return HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station)) || DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station));
+ return IsAuthoredDepot(Station) || HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station)) || DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station));
 }
 void ALogisticsSubsystem::TrackDepot(AFGDockingStationIdentifier* Station) {
  if(!IsValid(Station)) return;
  const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(Station);
- if(!DepotIndex.Contains(Ref)) { DepotIndex.Add(Ref); DepotStations.Add(Station); }
+ if(!DepotIndex.Contains(Ref)) { StationId(Station); DepotIndex.Add(Ref); DepotStations.Add(Station); }
  if(auto* B=Building(Station); IsValid(B) && !B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
 }
 bool ALogisticsSubsystem::SetDepot(AFGDockingStationIdentifier* Station,bool Remove) {
@@ -493,6 +494,7 @@ bool ALogisticsSubsystem::Dispatch(FFILNRegistration& R,AFGDockingStationIdentif
 void ALogisticsSubsystem::Observe() {
  check(IsInGameThread());
  if(!HasAuthority() || !bRegistryValidated || bPreparingUninstall || bChangingFilters) return;
+ EnsureDepotRecipe();
  AuditLostRegistrations();
  DiscoverHomeVehicles();
  AuditIdleFleet();

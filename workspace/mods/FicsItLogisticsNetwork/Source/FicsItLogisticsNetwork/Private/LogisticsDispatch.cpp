@@ -179,7 +179,7 @@ void ALogisticsSubsystem::Schedule() {
     if(Rank.Cursor<ProviderCandidates.Num()) {
      auto* ID=ProviderCandidates[Rank.Cursor].Get(); const auto& Q=StationConfigs[RequestCursor];
      auto* B=IsValid(ID)?ID->GetStation():nullptr;
-     if(IsValid(B) && B->GetIsInLoadMode() && ID!=Q.Station && !IsDepot(ID) && IsValid(Q.Station) && Q.Resource &&
+     if(IsValid(B) && SupportsSolidCargo(B) && B->GetIsInLoadMode() && ID!=Q.Station && !IsDepot(ID) && IsValid(Q.Station) && Q.Resource &&
         B->HasPower() && !B->IsProductionPaused() && !B->GetDockedActor() && IsValid(B->GetInventory())) {
       // Ignore irrelevant/mixed/empty cargo before scheduling expensive graph
       // work. Stock is not a road cache key; every new scan resamples it.

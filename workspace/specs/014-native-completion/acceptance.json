@@ -359,6 +359,13 @@
       "implementation": "FILNTransferObserver.cpp + FILNTransferLedger.h",
       "verification_method": "Real full/partial unload on installed Smarter Truck Stations; compare native return, cargo/inventory and ledger; no duplicate credit or false recovery; confirm authoritative game-thread callback.",
       "actual_result": "Source-only; runtime not run."
+    },
+    {
+      "id": "dedicated-depot-buildable",
+      "status": "not-verified",
+      "reason": "Native recipe discovery, registration and editor authoring script implemented; no authored/cooked assets or real game placement verified.",
+      "verification_method": "Run editor authoring, cook, inspect package, build depot via native Build Gun, verify exact recipe identity and actual docking/parking/refueling.",
+      "actual_result": "Source only; not run."
     }
   ]
 }

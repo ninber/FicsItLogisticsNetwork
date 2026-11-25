@@ -160,3 +160,7 @@
 
 - [x] Audit installed Smarter Truck Stations source and SML 3.12.1 target-inventory delegate contract; implement independent after-operation unload receipt accounting, no replacement cargo writes.
 - [ ] Verify programmable UNLOAD native hook installation/thread context, full/partial returned quantity, no duplicate delegate credit, real recipient inventory and route recovery. See smarter-truck-stations-integration.md. If callback is off game thread, fail acceptance and implement a safe receipt bridge.
+
+- [x] Add exact native depot recipe identity, bounded discovery, SML Initialization-phase recipe registration and unlock following vanilla truck station availability; provide editor asset authoring script.
+- [ ] Execute editor authoring script, inspect generated .uasset files, cook, verify actual Build Gun placement, docking, save/reload and independent uninstall. Source only; not done.
+- [x] Remove retired menu translation unit from generated StarterProject installs; keep user-authored Content.

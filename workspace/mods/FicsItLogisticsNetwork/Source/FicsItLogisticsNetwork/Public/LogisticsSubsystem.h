@@ -145,6 +145,10 @@ private:
  std::optional<filn::dispatch::Choice> BestOffer;
  void Schedule();
  void ReconcilePlayerConfiguration();
+ void EnsureDepotRecipe();
+ static bool IsAuthoredDepot(const AFGDockingStationIdentifier* Station);
+ double NextDepotRecipeCheck=0;
+ bool bDepotRecipeReady=false;
  void DiscoverHomeVehicles();
  bool AdoptPlayerHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Requested);
  bool StationResourceMatches(const FFILNStationConfig& Config) const;
@@ -166,6 +170,7 @@ private:
  bool ChangeStationFilters(const TArray<FFILNStationConfig>& Configs,bool Restore,TSubclassOf<UFGItemDescriptor> PriorResource=nullptr);
  bool bChangingFilters=false;
  bool bPreparingUninstall=false;
+ UPROPERTY(SaveGame) bool bUninstallPrepared=false;
  bool SetDispatchEnabled(bool Enabled);
  bool EndpointConfigurationValid(const FFILNRegistration& R) const;
  void Observe();

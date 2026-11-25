@@ -48,7 +48,7 @@ bool ALogisticsSubsystem::StationResourceMatches(const FFILNStationConfig& C) co
  return true;
 }
 void ALogisticsSubsystem::ReconcilePlayerConfiguration() {
- if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters) return;
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bUninstallPrepared || bChangingFilters) return;
  const double Now=GetWorld()->GetTimeSeconds();
  if(PlayerStationCursor>=PlayerStationScan.Num()) {
   if(Now<NextPlayerStationScan) return;
@@ -58,7 +58,9 @@ void ALogisticsSubsystem::ReconcilePlayerConfiguration() {
  }
  for(int32 Work=0; Work<2 && PlayerStationCursor<PlayerStationScan.Num(); ++Work) {
   auto* ID=PlayerStationScan[PlayerStationCursor++].Get();
-  if(!IsValid(ID) || IsDepot(ID)) continue;
+  if(!IsValid(ID)) continue;
+  if(IsAuthoredDepot(ID)) { if(!DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(ID))) TrackDepot(ID); continue; }
+  if(IsDepot(ID)) continue;
   auto* B=ID->GetStation();
   auto Resource=SupportsSolidCargo(B)?PlayerFilter(B):TSubclassOf<UFGItemDescriptor>();
   const int32 Index=StationConfigs.IndexOfByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
