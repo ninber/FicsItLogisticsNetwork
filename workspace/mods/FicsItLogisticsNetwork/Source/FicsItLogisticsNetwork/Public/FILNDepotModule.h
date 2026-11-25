@@ -3,15 +3,13 @@
 #include "CoreMinimal.h"
 #include "Module/GameWorldModule.h"
 #include "FILNDepotModule.generated.h"
-class UFGRecipe;
 
-// The authored root Blueprint hard-references the recipe, ensuring it is cooked.
-// Register in SML Initialization, not after the registry has frozen.
-UCLASS(Blueprintable)
+// Native root: SML discovers loaded native classes with bRootModule=true.
+// No generated root Blueprint or dependency on its asset-registry tag.
+UCLASS(NotBlueprintable)
 class FICSITLOGISTICSNETWORK_API UFILNDepotModule : public UGameWorldModule {
  GENERATED_BODY()
 public:
- UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="FILN")
- TSubclassOf<UFGRecipe> DepotRecipe;
+ UFILNDepotModule();
  virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 };

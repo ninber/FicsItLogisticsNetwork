@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 import sys
 
-DEPOT_FILES = ("Desc_FILNDepot.uasset", "Recipe_FILNDepot.uasset", "RootGameWorldModule_FILNDepot.uasset")
+DEPOT_FILES = tuple(f"{kind}_{name}.uasset" for name in ("FILNDepot", "FILNFluidDepot", "FILNFluidStation") for kind in ("Desc", "Recipe"))
+RETIRED_ROOT = "RootGameWorldModule_FILNDepot.uasset"
 
 def check(project, require_depot=False):
     plugin = project.parent / "Mods" / "FicsItLogisticsNetwork"
@@ -18,8 +19,10 @@ def check(project, require_depot=False):
             or deps[0].get("Name") != "SML" or deps[0].get("Enabled") is not True
             or deps[0].get("Optional", False) or not deps[0].get("SemVersion")):
         raise ValueError("Expected required versioned SML-only dependency in installed FILN descriptor; sync canonical source")
+    depot = plugin / "Content" / "Depot"
+    if (depot / RETIRED_ROOT).exists():
+        raise ValueError("Retired generated root Blueprint present; preserve diagnostic evidence and move it outside plugin Content before building. Native root is now used.")
     if require_depot:
-        depot = plugin / "Content" / "Depot"
         for name in DEPOT_FILES:
             path = depot / name
             if not valid_package(path):

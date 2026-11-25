@@ -47,6 +47,11 @@ class NativePrerequisiteTests(unittest.TestCase):
         self.put(self.depot/mod.DEPOT_FILES[0],b"version https://git-lfs.github.com/spec/v1")
         with self.assertRaisesRegex(ValueError,"authored depot asset"):
             mod.check(self.project,True)
+    def test_retired_root_blocks_even_before_authoring(self):
+        self.install_descriptor()
+        self.put(self.depot/mod.RETIRED_ROOT,b"old asset")
+        with self.assertRaisesRegex(ValueError,"Retired generated root Blueprint"):
+            mod.check(self.project)
     def test_canonical_native_source_has_no_external_runtime_imports(self):
         root=SCRIPTS.parent/"workspace/mods/FicsItLogisticsNetwork"
         descriptor=json.loads((root/"FicsItLogisticsNetwork.uplugin").read_text())

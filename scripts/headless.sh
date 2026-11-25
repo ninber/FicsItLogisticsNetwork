@@ -39,8 +39,12 @@ case "$action" in
     export FILN_DEPOT_AUTHOR_RECEIPT="$report/receipt.json"
     "$UE_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$SATISFACTORY_PROJECT" -run=pythonscript "-script=$SATISFACTORY_MODDING_ROOT/scripts/author-native-depot.py" -unattended -NullRHI -NoSound -nop4 -nosplash "-abslog=$report/editor.log" -stdout
     [[ -s "$FILN_DEPOT_AUTHOR_RECEIPT" ]] || { echo "BLOCKED: no successful asset-authoring receipt; inspect $report/editor.log" >&2; exit 1; }
+    first_receipt="$FILN_DEPOT_AUTHOR_RECEIPT"
+    export FILN_DEPOT_AUTHOR_RECEIPT="$report/reload.json" FILN_DEPOT_VALIDATE_ONLY=1
+    "$UE_ROOT/Engine/Binaries/Linux/UnrealEditor-Cmd" "$SATISFACTORY_PROJECT" -run=pythonscript "-script=$SATISFACTORY_MODDING_ROOT/scripts/author-native-depot.py" -unattended -NullRHI -NoSound -nop4 -nosplash "-abslog=$report/reload.log" -stdout
+    [[ -s "$FILN_DEPOT_AUTHOR_RECEIPT" ]] && cmp -s "$first_receipt" "$FILN_DEPOT_AUTHOR_RECEIPT" || { echo "BLOCKED: fresh editor reload did not reproduce authored assets; inspect $report" >&2; exit 1; }
     python3 "$SATISFACTORY_MODDING_ROOT/scripts/check-native-prerequisites.py" "$SATISFACTORY_PROJECT" --require-depot
-    printf 'Depot authoring receipt: %s\n' "$FILN_DEPOT_AUTHOR_RECEIPT" ;;
+    printf 'Station authoring and reload receipts: %s\n' "$report" ;;
   prepare-uat)
     exec "$UE_ROOT/Engine/Binaries/ThirdParty/DotNet/8.0.300/linux-x64/dotnet" build "$(dirname "$SATISFACTORY_PROJECT")/Mods/Alpakit/Source/Alpakit.Automation/Alpakit.Automation.csproj" --no-restore -m:1 -nr:false /p:UseSharedCompilation=false "/p:EngineDir=$UE_ROOT/Engine" "/p:EnginePath=$UE_ROOT/Engine" /p:Configuration=Development ;;
   sdk) exec bash "$SATISFACTORY_MODDING_ROOT/scripts/verify-windows-sdk.sh" "$@" ;;
