@@ -6,6 +6,8 @@ const {cloneSave}=require('./clone-save.cjs');
 const {references}=require('./legacy-references.cjs');
 const {ORDINARY,PROGRAMMABLE,FILN,cargoItems}=require('./station-migration.cjs');
 const VANILLA='/Game/FactoryGame/Recipes/Buildings/Recipe_TruckStation.Recipe_TruckStation_C';
+const DEPOT_CLASS='/FicsItLogisticsNetwork/Depot/Build_FILNDepot.Build_FILNDepot_C';
+const DEPOT_RECIPE='/FicsItLogisticsNetwork/Depot/Recipe_FILNDepot.Recipe_FILNDepot_C';
 const REST='/KDataForge/Gen/FILNRestStop.Gen_FILNRestStop_Recipe_RestStop';
 const PROGRAM_RECIPE='/TruckStationSettings/Recipe_ProgrammableTruckStation.Recipe_ProgrammableTruckStation_C';
 const resource=/^\/Game\/FactoryGame\/Resource\/[\w/.]+_C$/;
@@ -50,7 +52,10 @@ function convert(save,selection) {
    }
   }
   changes.push({path,oldClass:station.typePath,oldRecipe:recipe,oldFilter:cloneSave(props.FilterItem),identifier:id.instanceName,node:node.instanceName,guid:key,mode,item,depot,role});
-  station.typePath=ORDINARY;props.mBuiltWithRecipe.value.pathName=VANILLA;delete props.FilterItem;
+  station.typePath=depot?DEPOT_CLASS:ORDINARY;
+  props.mBuiltWithRecipe.value.pathName=depot?DEPOT_RECIPE:VANILLA;
+  delete props.FilterItem;
+  Object.assign(changes.at(-1),{newClass:station.typePath,newRecipe:props.mBuiltWithRecipe.value.pathName,configurationPending:role==='station'});
   rows.push([role,key,item,mode].join('\t'));
  }
  // Invert precisely the three declared edits, and compare the full parsed body.
@@ -67,4 +72,9 @@ function convert(save,selection) {
  assert(Buffer.byteLength(rows.join('\n')+'\n','utf8')<=262144,'Manifest exceeds native import size limit');
  return {save:next,manifest:rows.join('\n')+'\n',changes,residual};
 }
-module.exports={convert,guid,VANILLA,REST,PROGRAM_RECIPE};
+function validateDepotReceipt(receipt) {
+ assert(receipt?.schema===4&&Array.isArray(receipt.buildings),'Schema-4 author/reload receipt required for named depot conversion');
+ const matches=receipt.buildings.filter(b=>b.recipe===DEPOT_RECIPE);
+ assert(matches.length===1&&matches[0].actor===DEPOT_CLASS&&matches[0].vanilla_actor===ORDINARY&&matches[0].vanilla_recipe===VANILLA,'Authored depot actor/recipe or vanilla parent differs from conversion contract');
+}
+module.exports={convert,guid,VANILLA,REST,PROGRAM_RECIPE,DEPOT_CLASS,DEPOT_RECIPE,validateDepotReceipt};

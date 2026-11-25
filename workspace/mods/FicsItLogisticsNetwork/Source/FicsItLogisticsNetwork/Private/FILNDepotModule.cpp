@@ -5,7 +5,12 @@
 #include "Registry/ModContentRegistry.h"
 #include "UObject/UObjectGlobals.h"
 
-UFILNDepotModule::UFILNDepotModule() { bRootModule=true; }
+UFILNDepotModule::UFILNDepotModule() {
+ bRootModule=true;
+ // SML 3.12.1 registers ModSubsystems in GameWorldModule CONSTRUCTION,
+ // after saved actors are available and before world BeginPlay.
+ ModSubsystems.Add(ALogisticsSubsystem::StaticClass());
+}
 
 void UFILNDepotModule::DispatchLifecycleEvent(ELifecyclePhase Phase) {
  if(Phase==ELifecyclePhase::INITIALIZATION) {

@@ -4,7 +4,6 @@
 #include "Async/Future.h"
 #include "Subsystem/ModSubsystem.h"
 #include "FGSaveInterface.h"
-#include "Subsystems/WorldSubsystem.h"
 #include "FILNCore.h"
 #include "FILNRoadCache.h"
 #include "FILNDispatchPolicy.h"
@@ -140,6 +139,7 @@ private:
  bool bDispatchBlocked = false;
  FTimerHandle Watchdog;
  FTimerHandle DispatchTimer;
+ FTimerHandle TelemetryTimer;
  FTimerHandle DeferredRebuild;
  UPROPERTY(SaveGame) bool bAutoDispatchEnabled = true;
  FFILNRoadCache RoadCache;
@@ -161,6 +161,7 @@ private:
  void StopNativeDashboardHeartbeat();
  double NextNativeDashboardHeartbeat=0;
  bool bNativeDashboardHeartbeatError=false;
+ bool bTelemetryPublished=false, bTelemetryRosterMissing=false;
  double NextTelemetryDemandCheck=0, NextTelemetryStart=0;
  bool bTelemetryDemand=false, bTelemetryCollecting=false;
  int32 TelemetryStationCursor=0, TelemetryVehicleCursor=0;
@@ -239,11 +240,3 @@ private:
  FGuid StationId(AFGDockingStationIdentifier* Station);
 };
 
-/** Registers the saved SML actor once, after game world actor initialization. */
-UCLASS()
-class FICSITLOGISTICSNETWORK_API ULogisticsBootstrap : public UWorldSubsystem {
- GENERATED_BODY()
-public:
- virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
- virtual void OnWorldBeginPlay(UWorld& World) override;
-};

@@ -136,7 +136,6 @@ void ALogisticsSubsystem::Schedule() {
  check(IsInGameThread());
  ConsumeDockReceipts();
  DiscoverDepots();
- SampleTelemetry();
  if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || bChangingFilters || bPreparingUninstall || StationConfigs.IsEmpty() || Registrations.IsEmpty()) return;
  const double Now=GetWorld()->GetTimeSeconds();
  if(!bScanning) {

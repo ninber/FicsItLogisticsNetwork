@@ -12,19 +12,11 @@
 #include "ModLoading/PluginModuleLoader.h"
 #include "Engine/World.h"
 
-bool ULogisticsBootstrap::ShouldCreateSubsystem(UObject* Outer) const {
- auto* World=Cast<UWorld>(Outer);
- return World && World->IsGameWorld() && World->GetNetMode()!=NM_Client &&
-  FPluginModuleLoader::ShouldLoadModulesForWorld(World) && !FPluginModuleLoader::IsMainMenuWorld(World);
-}
-void ULogisticsBootstrap::OnWorldBeginPlay(UWorld& World) {
- Super::OnWorldBeginPlay(World);
- if(auto* Manager=World.GetSubsystem<USubsystemActorManager>()) Manager->RegisterSubsystemActor(ALogisticsSubsystem::StaticClass());
-}
 class FFicsItLogisticsNetworkModule : public IModuleInterface {
  TArray<IConsoleObject*> Commands;
 public:
  virtual void StartupModule() override {
+  UE_LOG(LogFILN,Log,TEXT("FILN_NATIVE_MODULE_STARTUP"));
   UFILNResourceSelector::InstallHook();
   ALogisticsSubsystem::InstallParkingHook();
   ALogisticsSubsystem::InstallDockReceiptObserver();

@@ -4,6 +4,7 @@ on:
     paths:
       - 'workspace/mods/FicsItLogisticsNetwork/**'
       - 'scripts/test-filn.sh'
+      - 'scripts/save-tools/**'
       - 'scripts/install-filn.sh'
       - 'scripts/tests/test_install_filn.py'
       - 'scripts/report-native-acceptance.py'
@@ -25,6 +26,7 @@ on:
     paths:
       - 'workspace/mods/FicsItLogisticsNetwork/**'
       - 'scripts/test-filn.sh'
+      - 'scripts/save-tools/**'
       - 'scripts/install-filn.sh'
       - 'scripts/tests/test_install_filn.py'
       - 'scripts/report-native-acceptance.py'
@@ -76,3 +78,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/report-native-acceptance.py
+
+  migration-conversion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --test scripts/save-tools/native-station-conversion.test.cjs scripts/save-tools/legacy-unlock-cleanup.test.cjs

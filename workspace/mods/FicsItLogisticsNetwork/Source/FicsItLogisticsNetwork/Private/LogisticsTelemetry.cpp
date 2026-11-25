@@ -87,7 +87,7 @@ const TCHAR* Phase(const FFILNRegistration& R) {
  default:return TEXT("Recovery");
  }
 }
-FString TelemetryDirectory() { return FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("FILN")); }
+FString TelemetryDirectory() { return FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("FILN"))); }
 }
 void ALogisticsSubsystem::ResetTelemetry() {
  bTelemetryCollecting=false; bTelemetryDemand=false;
@@ -103,7 +103,10 @@ void ALogisticsSubsystem::RefreshNativeDashboardHeartbeat() {
  const double Now=FPlatformTime::Seconds();
  if(Now<NextNativeDashboardHeartbeat) return;
  NextNativeDashboardHeartbeat=Now+5.;
- if(TelemetryWorld.IsEmpty()) TelemetryWorld=FGuid::NewGuid().ToString();
+ if(TelemetryWorld.IsEmpty()) {
+  TelemetryWorld=FGuid::NewGuid().ToString();
+  UE_LOG(LogFILN,Log,TEXT("FILN_TELEMETRY_DIRECTORY %s world=%s"),*TelemetryDirectory(),*TelemetryWorld);
+ }
  const FString Directory=TelemetryDirectory();
  const FString Target=FPaths::Combine(Directory,TEXT("dashboard-native-mod.txt"));
  const FString Temp=Target+TEXT(".")+TelemetryWorld+TEXT(".tmp");
@@ -139,14 +142,26 @@ void ALogisticsSubsystem::SampleTelemetry() {
   const double Age=(FDateTime::UtcNow()-Modified).GetTotalSeconds();
   bTelemetryDemand=Age>=-5. && Age<=30.;
  }
- if(!bTelemetryDemand) {
+ // Publish one real initial snapshot even without a browser; subsequent scans are demand-driven.
+ if(TelemetryWrite.IsValid() && TelemetryWrite.IsReady()) {
+  const bool Written=TelemetryWrite.Get();
+  TelemetryWrite=TFuture<bool>();
+  if(Written && !bTelemetryPublished) UE_LOG(LogFILN,Log,TEXT("FILN_TELEMETRY_FIRST_SNAPSHOT %s"),*FPaths::Combine(TelemetryDirectory(),TEXT("telemetry.json")));
+  if(!Written) UE_LOG(LogFILN,Error,TEXT("FILN_TELEMETRY_WRITE_FAILED %s"),*TelemetryDirectory());
+  bTelemetryPublished=bTelemetryPublished || Written;
+ }
+ if(!bTelemetryDemand && bTelemetryPublished) {
   if(bTelemetryCollecting) { ResetTelemetry(); NextTelemetryDemandCheck=Now+5.; }
   return;
  }
  if(!bTelemetryCollecting) {
   if(Now<NextTelemetryStart || (TelemetryWrite.IsValid() && !TelemetryWrite.IsReady())) return;
-  if(TelemetryWrite.IsValid() && !TelemetryWrite.Get()) UE_LOG(LogFILN,Warning,TEXT("FILN telemetry write failed"));
-  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
+  auto* VS=AFGVehicleSubsystem::Get(GetWorld());
+  if(!VS) {
+   if(!bTelemetryRosterMissing) UE_LOG(LogFILN,Error,TEXT("FILN_TELEMETRY_ROSTER_UNAVAILABLE"));
+   bTelemetryRosterMissing=true; NextTelemetryStart=Now+5.; return;
+  }
+  bTelemetryRosterMissing=false;
   TelemetryStationQueue.Reset(); TelemetryVehicleQueue.Reset();
   TelemetryStations.Reset(); TelemetryVehicles.Reset(); TelemetryErrors.Reset(); TelemetryCapacityRows.Reset();
   TelemetryResources.Reset(); TelemetryResourceSet.Reset(); TelemetryTypes.Reset(); TelemetryTypeKeys.Reset();

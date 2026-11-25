@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 const test=require('node:test'),assert=require('node:assert/strict');
-const {convert,guid,VANILLA,REST}=require('./native-station-conversion.cjs');
+const {convert,guid,VANILLA,REST,DEPOT_CLASS,DEPOT_RECIPE,validateDepotReceipt}=require('./native-station-conversion.cjs');
 const {ORDINARY,PROGRAMMABLE,FILN}=require('./station-migration.cjs');
 const iron='/Game/FactoryGame/Resource/Parts/IronIngot/Desc_IronIngot.Desc_IronIngot_C';
 function fixture(depot=false) {
@@ -9,7 +9,31 @@ function fixture(depot=false) {
  return {levels:{main:{objects:[{instanceName:'s',typePath:depot?ORDINARY:PROGRAMMABLE,components:[{pathName:'s.inventory'}],properties:p,transform:{x:12}},{instanceName:'id',properties:{name:'kept'}},{instanceName:'node',properties:{mPathNodeGUID:{value:[1,2,3,4]},roads:['a','b']}},{instanceName:'s.inventory',properties:{mInventoryStacks:{values:[]}}}]}}};
 }
 test('preserves identity and resource assignment',()=>{const source=fixture();const before=structuredClone(source),r=convert(source,['s']);assert.deepEqual(source,before);assert.equal(r.save.levels.main.objects[0].typePath,ORDINARY);assert.equal(r.save.levels.main.objects[0].properties.mBuiltWithRecipe.value.pathName,VANILLA);assert.match(r.manifest,/station\t00000001000000020000000300000004\t.*IronIngot.*\tUNLOAD/);assert.deepEqual(r.save.levels.main.objects.slice(1),before.levels.main.objects.slice(1));});
-test('depot recipe conversion preserves native actor',()=>{const r=convert(fixture(true),['s']);assert.equal(r.changes[0].oldClass,ORDINARY);assert.match(r.manifest,/depot\t.*\t-\tLOAD/);});
+test('depot conversion preserves identity but installs dedicated FILN class AND recipe',()=>{
+ const source=fixture(true),before=structuredClone(source),r=convert(source,['s']);
+ const station=r.save.levels.main.objects[0];
+ assert.equal(station.typePath,DEPOT_CLASS);
+ assert.equal(station.properties.mBuiltWithRecipe.value.pathName,DEPOT_RECIPE);
+ assert.notEqual(station.typePath,ORDINARY);
+ assert.equal(station.instanceName,before.levels.main.objects[0].instanceName);
+ assert.deepEqual(station.components,before.levels.main.objects[0].components);
+ assert.deepEqual(station.transform,before.levels.main.objects[0].transform);
+ assert.deepEqual(r.save.levels.main.objects.slice(1),before.levels.main.objects.slice(1));
+ assert.deepEqual(source,before);
+ assert.equal(r.changes[0].configurationPending,false);
+ assert.match(r.manifest,/depot\t.*\t-\tLOAD/);
+});
+test('named depot conversion rejects wrong or old asset receipts',()=>{
+ const correct={schema:4,buildings:[{recipe:DEPOT_RECIPE,actor:DEPOT_CLASS,vanilla_recipe:VANILLA,vanilla_actor:ORDINARY}]};
+ assert.doesNotThrow(()=>validateDepotReceipt(correct));
+ assert.throws(()=>validateDepotReceipt({...correct,schema:3}));
+ assert.throws(()=>validateDepotReceipt({schema:4,buildings:[{...correct.buildings[0],actor:ORDINARY}]}));
+});
+test('explicit resource configuration is pending, not completed by class conversion',()=>{
+ const r=convert(fixture(),['s']);
+ assert.equal(r.changes[0].configurationPending,true);
+ assert.equal(r.changes[0].item,iron);
+});
 test('rejects ambiguous/missing selections without touching source',()=>{const s=fixture(),before=structuredClone(s);assert.throws(()=>convert(s,['s','s']));assert.throws(()=>convert(s,['s','missing']));assert.deepEqual(s,before);});
 test('rejects mixed/unknown filters and missing nodes',()=>{const s=fixture();s.levels.main.objects[0].properties.FilterItem.values.push({pathName:iron});assert.throws(()=>convert(s,['s']));const t=fixture();t.levels.main.objects[0].properties.mDockingPathNode.value.pathName='missing';assert.throws(()=>convert(t,['s']));});
 test('reports remaining legacy references without stripping them',()=>{const s=fixture();s.levels.main.objects[1].properties.other='/KDataForge/Gen/FILNRestStop.Other';assert.deepEqual(convert(s,['s']).residual,['id']);});

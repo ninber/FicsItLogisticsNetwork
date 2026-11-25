@@ -47,8 +47,11 @@ bool ALogisticsSubsystem::SetDispatchEnabled(bool Enabled) {
 void ALogisticsSubsystem::BeginPlay() {
  Super::BeginPlay();
  if(!HasAuthority()) return;
+ UE_LOG(LogFILN,Log,TEXT("FILN_NATIVE_WORLD_BEGIN actor=%s world=%s"),*GetPathName(),*GetWorld()->GetPathName());
+ RefreshNativeDashboardHeartbeat();
  Rebuild();
  GetWorldTimerManager().SetTimer(DispatchTimer,this,&ALogisticsSubsystem::Schedule,0.1f,true);
+ GetWorldTimerManager().SetTimer(TelemetryTimer,this,&ALogisticsSubsystem::SampleTelemetry,0.1f,true);
  GetWorldTimerManager().SetTimer(Watchdog,this,&ALogisticsSubsystem::Observe,1.f,true);
  UE_LOG(LogFILN,Log,TEXT("M1 subsystem ready; schema=%d registrations=%d. Runtime acceptance unverified."),SchemaVersion,Registrations.Num());
 }
@@ -56,6 +59,7 @@ void ALogisticsSubsystem::EndPlay(const EEndPlayReason::Type Reason) {
  ClearDockReceipts();
  GetWorldTimerManager().ClearTimer(Watchdog);
  GetWorldTimerManager().ClearTimer(DispatchTimer);
+ GetWorldTimerManager().ClearTimer(TelemetryTimer);
  GetWorldTimerManager().ClearTimer(DeferredRebuild); bRegistryValidated=false; DestroyedVehicles.Empty();
  StopNativeDashboardHeartbeat();
  ResetTelemetry();

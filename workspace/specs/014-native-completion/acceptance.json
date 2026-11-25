@@ -5,7 +5,7 @@
     {
       "id": "solid-dispatch",
       "status": "failed",
-      "reason": "User isolated depot/provider/requester/vehicle remained idle; actual automatic workflow failed, exact cause not yet localized.",
+      "reason": "Second user gameplay test: trucks repeat old routes, no dynamic dispatch. Failed.",
       "history": [
         {
           "date": "2026-11-24",
@@ -14,11 +14,15 @@
         {
           "date": "2026-11-25",
           "previous_reason": "Adapter compiled; real game run not performed"
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "User isolated depot/provider/requester/vehicle remained idle; actual automatic workflow failed, exact cause not yet localized."
         }
       ],
       "implementation": "LogisticsDispatch.cpp: BuildOffer/Schedule/CommitOffer",
       "verification_method": "Isolated solid provider/requester run; observe actual route, docking, transfer and home",
-      "actual_result": "User isolated depot/provider/requester/vehicle remained idle; actual automatic workflow failed, exact cause not yet localized."
+      "actual_result": "Second user gameplay test: trucks repeat old routes, no dynamic dispatch. Failed."
     },
     {
       "id": "fluid-dispatch",
@@ -236,17 +240,21 @@
     },
     {
       "id": "lua-to-native-migration",
-      "status": "out-of-scope",
-      "reason": "User explicitly moved legacy migration to external Codex/Lua tooling; no native importer shipped.",
+      "status": "failed",
+      "reason": "External migration is required but failed: legacy depot identity lost; explicit resource configurations were exported but not restored. Native importer remains outside scope; external migration itself is failed.",
       "history": [
         {
           "date": "2026-11-24",
           "previous_reason": "Importer not implemented"
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "User explicitly moved legacy migration to external Codex/Lua tooling; no native importer shipped."
         }
       ],
       "implementation": "External tools only",
       "verification_method": "Separate operator-owned migration workflow",
-      "actual_result": "Not verified; excluded from native release scope, not passed."
+      "actual_result": "External migration is required but failed: legacy depot identity lost; explicit resource configurations were exported but not restored. Native importer remains outside scope; external migration itself is failed."
     },
     {
       "id": "native-to-vanilla-migration",
@@ -335,13 +343,17 @@
     {
       "id": "simple-player-workflow",
       "status": "failed",
-      "reason": "User isolated vehicle did not dispatch; resource selector-to-registry integration missing in source.",
+      "reason": "Second user gameplay test: specialized station nonfunctional; no dynamic route assignments. Failed.",
       "verification_method": "Build depot, place LOAD and UNLOAD stations, select requester item, assign vehicle home route and enable AP; verify actual delivery without FILN menus.",
-      "actual_result": "User isolated vehicle did not dispatch; resource selector-to-registry integration missing in source.",
+      "actual_result": "Second user gameplay test: specialized station nonfunctional; no dynamic route assignments. Failed.",
       "history": [
         {
           "date": "2026-11-25",
           "previous_reason": "Own station/depot recipes and medium-aware native backend implemented in source; actual assets, standalone resource selector, and game acceptance missing."
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "User isolated vehicle did not dispatch; resource selector-to-registry integration missing in source."
         }
       ]
     },
@@ -355,13 +367,17 @@
     {
       "id": "native-web-statistics",
       "status": "failed",
-      "reason": "Native dashboard not running in user test; Lua-only automatic service integration remains incomplete.",
+      "reason": "Second user gameplay test: telemetry.json absent; dashboard fails. No successful native sample verified.",
       "verification_method": "Existing web dashboard receives native statistics while Lua dispatcher is disabled.",
-      "actual_result": "Native dashboard not running in user test; Lua-only automatic service integration remains incomplete.",
+      "actual_result": "Second user gameplay test: telemetry.json absent; dashboard fails. No successful native sample verified.",
       "history": [
         {
           "date": "2026-11-25",
           "previous_reason": "Native telemetry exports solid/fluid medium and exact native units; Python matching and capacities scoped by medium. Actual game telemetry, unit conversion and route-evidence parity unverified."
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Native dashboard not running in user test; Lua-only automatic service integration remains incomplete."
         }
       ]
     },
@@ -383,26 +399,34 @@
     {
       "id": "dedicated-depot-buildable",
       "status": "failed",
-      "reason": "User saw duplicate vanilla fluid build-menu names/assets; distinct identification failed.",
+      "reason": "Second user gameplay test: migrated depots became ordinary stations and specialized station does not work. Failed.",
       "verification_method": "Run editor authoring, cook, inspect package, build depot via native Build Gun, verify exact recipe identity and actual docking/parking/refueling.",
-      "actual_result": "User saw duplicate vanilla fluid build-menu names/assets; distinct identification failed.",
+      "actual_result": "Second user gameplay test: migrated depots became ordinary stations and specialized station does not work. Failed.",
       "history": [
         {
           "date": "2026-11-25",
           "previous_reason": "Native root registration replaces failed Blueprint root; authoring now creates solid depot, fluid depot and fluid logistics station descriptor/recipe pairs and requires fresh reload. Unreal authoring/cook/placement not run."
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "User saw duplicate vanilla fluid build-menu names/assets; distinct identification failed."
         }
       ]
     },
     {
       "id": "standalone-resource-selector",
       "status": "failed",
-      "reason": "No standalone native UI wiring to ConfigureStation; visual selection does not prove native configuration.",
+      "reason": "No successful authoritative resource configuration in second gameplay test; specialized station reported nonfunctional. UI-specific fault not isolated.",
       "verification_method": "Actual native-looking selector for solid/fluid, single compatible descriptor, multiplayer authority and visible rejection, reload and reserved/docked/nonempty change guards; no custom management menu.",
-      "actual_result": "No standalone native UI wiring to ConfigureStation; visual selection does not prove native configuration.",
+      "actual_result": "No successful authoritative resource configuration in second gameplay test; specialized station reported nonfunctional. UI-specific fault not isolated.",
       "history": [
         {
           "date": "2026-11-25",
           "previous_reason": "Original FILN selector for both native station types not implemented; upstream UI reference researched only."
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "No standalone native UI wiring to ConfigureStation; visual selection does not prove native configuration."
         }
       ]
     },
