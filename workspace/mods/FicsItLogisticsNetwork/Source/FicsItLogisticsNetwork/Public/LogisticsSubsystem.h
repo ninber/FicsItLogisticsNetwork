@@ -16,6 +16,7 @@ class AFGWheeledVehicle;
 class AFGDockingStationIdentifier;
 class UFGItemDescriptor;
 class UFILNTransferObserver;
+class AFGBuildableDockingStation;
 DECLARE_LOG_CATEGORY_EXTERN(LogFILN, Log, All);
 
 USTRUCT()
@@ -92,6 +93,7 @@ public:
  void Execute(const FString& Command, const TArray<FString>& Args);
  bool HoldVehicle(AFGWheeledVehicleIdentifier* Vehicle);
  static void InstallParkingHook();
+ static void InstallProgrammableUnloadObserver();
 private:
  UPROPERTY(SaveGame) int32 SchemaVersion = 1;
  UPROPERTY(SaveGame) TArray<FFILNStation> Stations;
@@ -103,7 +105,9 @@ private:
  TMap<FGuid,TWeakObjectPtr<UFILNTransferObserver>> TransferByTruck;
  bool WatchTransfers(FFILNRegistration& R);
  bool HasTransferObserver(const FFILNRegistration& R) const;
- void Transfer(AFGWheeledVehicleIdentifier* Vehicle,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,class UFGInventoryComponent* Other,bool Added);
+ void Transfer(AFGWheeledVehicleIdentifier* Vehicle,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,class UFGInventoryComponent* Other,bool Added,bool ConfirmedProgrammableUnload=false);
+ void ObserveProgrammableUnload(const AFGBuildableDockingStation* Station,UFGInventoryComponent* Cargo,int32 Result);
+ static bool IsProgrammableStation(const AFGBuildableDockingStation* Station);
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> HomeStations;
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> DepotIndex;
  void TrackDepot(AFGDockingStationIdentifier* Station);

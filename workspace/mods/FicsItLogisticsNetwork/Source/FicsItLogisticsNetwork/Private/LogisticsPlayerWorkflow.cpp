@@ -32,6 +32,9 @@ TSubclassOf<UFGItemDescriptor> PlayerFilter(AFGBuildableDockingStation* B) {
  return Selected && UFGItemDescriptor::GetForm(Selected)==EResourceForm::RF_SOLID ? Selected : TSubclassOf<UFGItemDescriptor>();
 }
 }
+bool ALogisticsSubsystem::IsProgrammableStation(const AFGBuildableDockingStation* Station) {
+ return IsValid(Station) && Station->GetClass()->GetPathName()==TEXT("/TruckStationSettings/Build_ProgrammableTruckStation.Build_ProgrammableTruckStation_C");
+}
 bool ALogisticsSubsystem::SupportsSolidCargo(const UObject* Object) {
  const auto* Property=IsValid(Object)?FindFProperty<FBoolProperty>(Object->GetClass(),TEXT("mIsFluidStorageInventory")):nullptr;
  return Property && !Property->GetPropertyValue_InContainer(Object);
@@ -40,7 +43,7 @@ bool ALogisticsSubsystem::StationResourceMatches(const FFILNStationConfig& C) co
  auto* B=IsValid(C.Station)?C.Station->GetStation():nullptr;
  auto* I=IsValid(B)?B->GetInventory():nullptr;
  if(!IsValid(I) || !C.Resource || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
- if(C.ExternalFilter) return PlayerFilter(B)==C.Resource;
+ if(C.ExternalFilter || IsProgrammableStation(B)) return PlayerFilter(B)==C.Resource;
  for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) if(I->GetAllowedItemOnIndex(Slot)!=C.Resource) return false;
  return true;
 }

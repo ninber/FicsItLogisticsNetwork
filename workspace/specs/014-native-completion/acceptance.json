@@ -351,6 +351,14 @@
       "reason": "New fluid enrollment, resource configuration and dispatch guarded; game test pending.",
       "verification_method": "Assign fluid truck/station to FILN; ensure no new ownership or cargo job, vanilla behavior unchanged.",
       "actual_result": "Source only; not verified."
+    },
+    {
+      "id": "programmable-unload-accounting",
+      "status": "not-verified",
+      "reason": "Upstream RemoveFromIndex omits targetInventory; native after-operation observation added, thread and actual result behavior unverified.",
+      "implementation": "FILNTransferObserver.cpp + FILNTransferLedger.h",
+      "verification_method": "Real full/partial unload on installed Smarter Truck Stations; compare native return, cargo/inventory and ledger; no duplicate credit or false recovery; confirm authoritative game-thread callback.",
+      "actual_result": "Source-only; runtime not run."
     }
   ]
 }

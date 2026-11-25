@@ -14,6 +14,11 @@ inline bool Record(Ledger& ledger,int amount,bool added) {
  ledger={static_cast<int>(cargo),static_cast<int>(loaded),static_cast<int>(delivered)};
  return true;
 }
+// The station call's actual return value is independent evidence of unloading.
+// A cargo delta without a successful matching operation is not delivery proof.
+inline bool ConfirmedUnload(const Ledger& ledger,int observed,int result,bool mixed) {
+ return !mixed && ledger.cargo>=0 && observed>=0 && result>0 && result<=ledger.cargo && ledger.cargo-result==observed;
+}
 inline bool Reconciled(const Ledger& ledger,int observed,bool mixed) {
  return !mixed && observed>=0 && observed==ledger.cargo;
 }

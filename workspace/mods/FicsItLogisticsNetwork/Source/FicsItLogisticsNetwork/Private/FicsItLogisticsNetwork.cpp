@@ -26,6 +26,7 @@ class FFicsItLogisticsNetworkModule : public IModuleInterface {
 public:
  virtual void StartupModule() override {
   ALogisticsSubsystem::InstallParkingHook();
+  ALogisticsSubsystem::InstallProgrammableUnloadObserver();
   for(const FString& Verb:TArray<FString>{TEXT("list"),TEXT("pair"),TEXT("unpair"),TEXT("dispatch"),TEXT("reset"),TEXT("rehome"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("depot"),TEXT("removeStation")}) {
    Commands.Add(IConsoleManager::Get().RegisterConsoleCommand(
     *(TEXT("filn.")+Verb),TEXT("FILN server prototype; see README for exact object-path arguments"),

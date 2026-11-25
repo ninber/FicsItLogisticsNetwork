@@ -157,3 +157,6 @@
 
 - [x] Declare versioned TruckStationSettings dependency and guard new solid-only enrollment/configuration/dispatch; retain fluid-aware portable policies for future support.
 - [ ] Verify installed dependency, solid requester FILTERS and actual delivery; verify fluid trucks/stations are not enrolled or dispatched. No standalone selector required for current scope.
+
+- [x] Audit installed Smarter Truck Stations source and SML 3.12.1 target-inventory delegate contract; implement independent after-operation unload receipt accounting, no replacement cargo writes.
+- [ ] Verify programmable UNLOAD native hook installation/thread context, full/partial returned quantity, no duplicate delegate credit, real recipient inventory and route recovery. See smarter-truck-stations-integration.md. If callback is off game thread, fail acceptance and implement a safe receipt bridge.

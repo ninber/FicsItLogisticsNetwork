@@ -10,7 +10,10 @@ int main() {
  CHECK(Record(l,60,true)); CHECK(Record(l,40,true));
  CHECK(l.cargo==100&&l.loaded==100&&l.delivered==0);
  CHECK(Reconciled(l,100,false)); CHECK(!Reconciled(l,99,false)); CHECK(!Reconciled(l,100,true));
- CHECK(Record(l,75,false)); CHECK(l.cargo==25&&l.delivered==75);
+ CHECK(ConfirmedUnload(l,25,75,false)); CHECK(!ConfirmedUnload(l,25,74,false));
+ CHECK(!ConfirmedUnload(l,25,75,true)); CHECK(!ConfirmedUnload(l,100,0,false));
+ CHECK(!ConfirmedUnload(l,100,75,false)); CHECK(!ConfirmedUnload(l,-1,101,false));
+ CHECK(Record(l,75,false)); CHECK(!ConfirmedUnload(l,25,75,false)); CHECK(l.cargo==25&&l.delivered==75);
  CHECK(!Record(l,26,false)); CHECK(l.cargo==25&&l.delivered==75);
  CHECK(Record(l,25,false)); CHECK(l.cargo==0&&l.delivered==100);
  CHECK(!Record(l,0,true)); CHECK(!Record(l,-1,false));
