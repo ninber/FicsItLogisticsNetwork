@@ -13,7 +13,7 @@
 #include "Engine/World.h"
 
 namespace {
-std::string Key(const FGuid& G) { return TCHAR_TO_UTF8(*G.ToString()); }
+std::string FILNPlayerGuidKey(const FGuid& G) { return TCHAR_TO_UTF8(*G.ToString()); }
 filn::player::CargoMedium FILNPlayerMedium(EResourceForm Form) {
  using M=filn::player::CargoMedium;
  if(Form==EResourceForm::RF_SOLID) return M::Solid;
@@ -121,7 +121,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
   if(!Node.IsValid() || (B->GetDockedActor() && B->GetDockedActor()!=O) ||
      !B->HasPower() || B->IsProductionPaused() || !ValidHome(D) || !VehicleStationCompatible(O,B)) return false;
   const auto* SavedId=StationIds.Find(TWeakObjectPtr<AFGDockingStationIdentifier>(D));
-  if(SavedId && Reservations.StationBusy(Key(*SavedId))) return false;
+  if(SavedId && Reservations.StationBusy(FILNPlayerGuidKey(*SavedId))) return false;
   IndexRoster();
   const bool Foreign=D==Requested?BlockingRequestedRoutes.Contains(Node):AllForeignRoutes.Contains(Node);
   return filn::player::Free({true,true,true,false,false,false,NodeCounts.FindRef(Node)==1,Foreign});
@@ -166,14 +166,14 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  if(!Move && !AtHome) { Pending(TEXT("Park at the selected free depot to establish home-only route")); return false; }
  FFILNRegistration R; R.Vehicle=V; R.Home=Destination; R.TruckId=FGuid::NewGuid(); R.BayId=StationId(Destination);
  R.IdleRoute=Move?TArray<FGuid>{Node,Wanted}:Before; R.Relocating=Move; R.Held=!Move;
- if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) return false;
+ if(!Ownership.Pair(FILNPlayerGuidKey(R.TruckId),FILNPlayerGuidKey(R.BayId))) return false;
  if(Move) {
   V->SetVehicleRoute(R.IdleRoute);
   if(V->GetVehicleRoute()==R.IdleRoute && V->IsAutopilotEnabled() && !O->GetDriver()) V->SetCurrentTargetWaypoint(0);
   if(V->GetVehicleRoute()!=R.IdleRoute || !V->IsAutopilotEnabled() || O->GetDriver() || V->GetCurrentTargetWaypointIndex()!=0) {
    if(!O->GetDriver() && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.IdleRoute) V->SetVehicleRoute(Before);
    if(V->GetVehicleRoute()!=Before || !V->IsAutopilotEnabled()) bDispatchBlocked=true;
-   Ownership.Unpair(Key(R.TruckId),Key(R.BayId)); return false;
+   Ownership.Unpair(FILNPlayerGuidKey(R.TruckId),FILNPlayerGuidKey(R.BayId)); return false;
   }
  }
  R.Diagnostic=Move?TEXT("Relocating to unclaimed depot; arrival pending"):TEXT("Automatically adopted player home-only route");
