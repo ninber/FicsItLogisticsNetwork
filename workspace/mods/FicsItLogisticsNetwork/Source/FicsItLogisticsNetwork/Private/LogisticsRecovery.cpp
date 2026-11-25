@@ -136,6 +136,7 @@ bool ALogisticsSubsystem::TryAbortToHome(FFILNRegistration& R,double Now) {
  const TArray<FGuid> Intent={Home,Anchor->GetPathNodeGUID()};
  V->SetVehicleRoute(Intent);
  if(V->GetVehicleRoute()!=Intent) return false;
+ DisarmDockReceipts(R.JobId);
  R.RouteIntent=Intent; R.AbortReturn=true; R.State=static_cast<uint8>(filn::State::Returning);
  V->SetCurrentTargetWaypoint(0);
  if(V->GetCurrentTargetWaypointIndex()!=0 || V->GetVehicleRoute()!=Intent || !V->IsAutopilotEnabled() || O->GetDriver()) return false;
@@ -260,7 +261,7 @@ bool ALogisticsSubsystem::RehomeParkedVehicle(int32 Index,AFGDockingStationIdent
  }
  if(IsValid(R.Home)) HomeStations.Remove(TWeakObjectPtr<AFGDockingStationIdentifier>(R.Home.Get()));
  R.Home=Home; R.BayId=Bay; HomeStations.Add(Home); TrackDepot(Home);
- if(R.JobId.IsValid()) Reservations.Release(Job);
+ if(R.JobId.IsValid()) { DisarmDockReceipts(R.JobId); Reservations.Release(Job); }
  R.JobId.Invalidate(); R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate();
  R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.IdleRoute=Intent;
  R.State=static_cast<uint8>(S::Idle); R.Held=false; R.Automatic=false;

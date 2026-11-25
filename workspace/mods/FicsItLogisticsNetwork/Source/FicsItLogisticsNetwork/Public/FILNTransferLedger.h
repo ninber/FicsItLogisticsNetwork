@@ -19,6 +19,29 @@ inline bool Record(Ledger& ledger,int amount,bool added) {
 inline bool ConfirmedUnload(const Ledger& ledger,int observed,int result,bool mixed) {
  return !mixed && ledger.cargo>=0 && observed>=0 && result>0 && result<=ledger.cargo && ledger.cargo-result==observed;
 }
+// A batch comprises only positive native station-operation return values.
+// Apply atomically after exact observed homogeneous vehicle inventory readback.
+struct DockBatch {
+ int loaded=0, unloaded=0;
+ bool invalid=false;
+ void Add(int amount,bool added) {
+  if(invalid || amount<=0 || (added && unloaded>0)) { invalid=true; return; }
+  int& total=added?loaded:unloaded;
+  if(amount>std::numeric_limits<int>::max()-total) { invalid=true; return; }
+  total+=amount;
+ }
+ void Append(const DockBatch& next) {
+  if(next.invalid) { invalid=true; return; }
+  if(next.loaded) Add(next.loaded,true);
+  if(next.unloaded) Add(next.unloaded,false);
+ }
+};
+inline bool ApplyDockBatch(Ledger& ledger,const DockBatch& batch,int observed,bool mixed) {
+ if(batch.invalid || mixed || observed<0 || (batch.loaded<=0 && batch.unloaded<=0) || batch.loaded<0 || batch.unloaded<0) return false;
+ Ledger copy=ledger;
+ if((batch.loaded && !Record(copy,batch.loaded,true)) || (batch.unloaded && !Record(copy,batch.unloaded,false)) || copy.cargo!=observed) return false;
+ ledger=copy; return true;
+}
 inline bool Reconciled(const Ledger& ledger,int observed,bool mixed) {
  return !mixed && observed>=0 && observed==ledger.cargo;
 }

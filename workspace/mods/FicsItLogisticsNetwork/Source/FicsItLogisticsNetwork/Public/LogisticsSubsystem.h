@@ -71,6 +71,7 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) int32 LastCargo = 0;
  double LastObserved = 0;
  double RouteActivationDeadline = 0;
+ double ReceiptMismatchSince=-1;
  // Runtime-only clock: saved journey identity and phase remain authoritative on reload.
  filn::recovery::RetryClock NavigationRetry;
  filn::recovery::Progress TravelProgress;
@@ -96,7 +97,7 @@ public:
  void Execute(const FString& Command, const TArray<FString>& Args);
  bool HoldVehicle(AFGWheeledVehicleIdentifier* Vehicle);
  static void InstallParkingHook();
- static void InstallProgrammableUnloadObserver();
+ static void InstallDockReceiptObserver();
 private:
  UPROPERTY(SaveGame) int32 SchemaVersion = 1;
  UPROPERTY(SaveGame) TArray<FFILNStation> Stations;
@@ -108,8 +109,11 @@ private:
  TMap<FGuid,TWeakObjectPtr<UFILNTransferObserver>> TransferByTruck;
  bool WatchTransfers(FFILNRegistration& R);
  bool HasTransferObserver(const FFILNRegistration& R) const;
- void Transfer(AFGWheeledVehicleIdentifier* Vehicle,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,class UFGInventoryComponent* Other,bool Added,bool ConfirmedProgrammableUnload=false);
- void ObserveProgrammableUnload(const AFGBuildableDockingStation* Station,UFGInventoryComponent* Cargo,int32 Result);
+ void Transfer(AFGWheeledVehicleIdentifier* Vehicle,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,class UFGInventoryComponent* Other,bool Added);
+ bool ArmDockReceipts(FFILNRegistration& Registration);
+ void DisarmDockReceipts(const FGuid& Job);
+ void ClearDockReceipts();
+ void ConsumeDockReceipts();
  static bool IsProgrammableStation(const AFGBuildableDockingStation* Station);
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> HomeStations;
  TSet<TWeakObjectPtr<AFGDockingStationIdentifier>> DepotIndex;

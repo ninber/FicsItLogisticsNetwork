@@ -167,3 +167,6 @@
 
 - [x] Implement native demand-gated snapshot export and existing browser dashboard native read-only mode; add HTTP/model tests.
 - [ ] Verify real native dashboard snapshots, correct path, no frame-time regression, capacity/route-evidence parity and save/world teardown; no Lua dependency.
+
+- [x] Replace game-thread-only unloading receipt assumption with bounded job-scoped native station operation aggregation for LOAD and UNLOAD; collect worker results without dispatch mutations, verify exact cargo ledger on game thread.
+- [ ] Verify actual callback scheduling, concurrent native transfer and registry teardown, delegate/no delegate, partial/full transfers, owner replacement, user takeover, mismatch retry, completion and real save/reload. No source/portable-only success claim.

@@ -26,3 +26,7 @@ References:
 ## Blueprint UI research
 
 See [Smarter Truck Stations UI architecture](smarter-truck-stations-ui.md) for inspection of the real binary Blueprint packages, verified inheritance, native descriptor-list and tab references, and implications for the dedicated depot. No new UI is required in current release scope.
+
+## Follow-up: factory-thread receipt bridge
+
+The first game-thread-only after-hook was superseded. The SML 3.12.1 docking station header explicitly defines the return value as the number of items transferred. Both LOAD and UNLOAD now use the actual final return value. A game-thread-installed watch is keyed by exact cargo inventory pointer and current job GUID; callback uses only a short lock, the operation's own station's direct docking/mode getters and integer accumulation. It does not resolve weak refs or call dispatcher logic on a worker. Game thread validates job, lease, endpoint, phase, route, owner, resource and homogeneous actual cargo; inventory delegates no longer credit transfers, avoiding duplicate accounting. A one-second bounded receipt mismatch retry handles possible callback/readback ordering, then fail closed. Actual native threading, direct getter behavior, save/reload, and game acceptance remain unverified. No receipt is inferred from a cargo delta alone.

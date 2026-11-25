@@ -53,7 +53,7 @@ void ALogisticsSubsystem::BeginPlay() {
  UE_LOG(LogFILN,Log,TEXT("M1 subsystem ready; schema=%d registrations=%d. Runtime acceptance unverified."),SchemaVersion,Registrations.Num());
 }
 void ALogisticsSubsystem::EndPlay(const EEndPlayReason::Type Reason) {
- ResetTelemetry();
+ ClearDockReceipts();
  GetWorldTimerManager().ClearTimer(Watchdog);
  GetWorldTimerManager().ClearTimer(DispatchTimer);
  GetWorldTimerManager().ClearTimer(DeferredRebuild); bRegistryValidated=false; DestroyedVehicles.Empty();
@@ -102,6 +102,7 @@ bool ALogisticsSubsystem::RestoreJobReservation(FFILNRegistration& R) {
 void ALogisticsSubsystem::Rebuild() {
  if(!HasAuthority() || !GetWorld() || GetWorld()->bIsTearingDown) return;
  bRegistryValidated=false; DestroyedVehicles.Empty();
+ ClearDockReceipts(); ResetTelemetry();
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
  TransferObservers.Empty(); TransferByTruck.Empty();
  Ownership=filn::Ownership(); Reservations=filn::Reservations();
@@ -191,7 +192,7 @@ void ALogisticsSubsystem::Rebuild() {
   }
   const bool Resume=Observed && R.Automatic && R.Resource && R.ExpectedCargo>0 && R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning) &&
     IsValid(O) && !O->GetDriver() && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home);
-  if(Resume) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
+  if(Resume && (R.AbortReturn || ArmDockReceipts(R))) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
   else Recover(R,TEXT("Saved journey cannot safely resume; inspect and return home before reset"));
  }
 }
@@ -385,6 +386,7 @@ bool ALogisticsSubsystem::Parked(const FFILNRegistration& R) const {
   Home->GetDockedActor()==R.Vehicle->GetOwnerVehicle() && !R.Vehicle->IsAutopilotEnabled();
 }
 void ALogisticsSubsystem::Recover(FFILNRegistration& R,const FString& Why) {
+ DisarmDockReceipts(R.JobId); R.ReceiptMismatchSince=-1;
  SetState(R,S::Recovery); R.Held=false; R.Diagnostic=Why; R.NavigationRetry.Reset();
  // Do not disable a player-owned or externally changed route.
  if(bRegistryValidated && R.JobId.IsValid() && Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId)) &&
@@ -496,6 +498,7 @@ bool ALogisticsSubsystem::Dispatch(FFILNRegistration& R,AFGDockingStationIdentif
 void ALogisticsSubsystem::Observe() {
  check(IsInGameThread());
  if(!HasAuthority() || !bRegistryValidated || bPreparingUninstall || bChangingFilters) return;
+ ConsumeDockReceipts();
  EnsureDepotRecipe();
  AuditLostRegistrations();
  DiscoverHomeVehicles();
@@ -514,7 +517,7 @@ void ALogisticsSubsystem::Observe() {
   if(!IsValid(R.Vehicle) || !IsValid(R.Vehicle->GetOwnerVehicle()) || !IsValid(HB) || !ValidHome(R.Home)) {
    Recover(R,TEXT("Vehicle or home destroyed/unavailable")); ++Cursor; continue;
   }
-  if(!HasTransferObserver(R) && !WatchTransfers(R)) {
+  if(!HasTransferObserver(R) && (!WatchTransfers(R) || (!R.AbortReturn && !ArmDockReceipts(R)))) {
    R.CargoOriginKnown=false; R.CargoOriginStorage=false;
    Recover(R,TEXT("Cargo observer no longer matches the native vehicle inventory")); ++Cursor; continue;
   }
@@ -537,10 +540,16 @@ void ALogisticsSubsystem::Observe() {
    for(const auto& Stack:Stacks) if(Stack.NumItems>0 && Stack.Item.GetItemClass()!=R.Resource) Mixed=true;
    const int32 Quantity=Cargo->GetNumItems(R.Resource);
    if(!filn::transfer::Reconciled({R.LastCargo,R.LoadedCargo,R.DeliveredCargo},Quantity,Mixed)) {
+    // Only a pending native operation may explain a temporary mismatch. Give
+    // its after-hook one bounded interval to report, never infer a delivery.
+    if(!Mixed && (R.ReceiptMismatchSince<0 || Now-R.ReceiptMismatchSince<1.0)) {
+     if(R.ReceiptMismatchSince<0) R.ReceiptMismatchSince=Now;
+     ++Cursor; continue;
+    }
     R.CargoOriginKnown=false; R.CargoOriginStorage=false;
-    Recover(R,TEXT("Cargo reconciliation disagrees with native source/target transfer events; no inferred transfer credited")); ++Cursor; continue;
+    Recover(R,TEXT("Cargo reconciliation disagrees with native docking receipts; no inferred transfer credited")); ++Cursor; continue;
    }
-   R.LastCargo=Quantity;
+   R.ReceiptMismatchSince=-1; R.LastCargo=Quantity;
    if((Before==S::Loading && !AtP && (Quantity<=0 || R.LoadedCargo<=0)) ||
       (Before==S::Unloading && !AtQ && R.DeliveredCargo<=0)) {
     Recover(R,TEXT("Station departed without measured matching cargo transfer")); ++Cursor; continue;
@@ -586,7 +595,7 @@ void ALogisticsSubsystem::Observe() {
    UE_LOG(LogFILN,Log,TEXT("job=%s state=%d; docking observation only, transfer unverified"),*R.JobId.ToString(),R.State);
    if(Next==S::Completed) {
     if(!Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { Recover(R,TEXT("Completion lease ownership mismatch")); bDispatchBlocked=true; ++Cursor; continue; }
-    Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
+    DisarmDockReceipts(R.JobId); Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
     if(R.AbortReturn) R.Diagnostic=FString::Printf(TEXT("Aborted shipment returned home; delivered=%d retained=%d; no delivery success inferred"),R.DeliveredCargo,R.LastCargo);
     R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.AbortReturn=false; R.DepartedHome=false; R.RouteActivationDeadline=0;
     R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate();
@@ -648,6 +657,7 @@ bool ALogisticsSubsystem::RemoveRegistrationAt(int32 Index) {
  auto& R=Registrations[Index];
  if(R.JobId.IsValid() && !Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { bDispatchBlocked=true; return false; }
  if(!Ownership.Unpair(Key(R.TruckId),Key(R.BayId))) { bDispatchBlocked=true; return false; }
+ DisarmDockReceipts(R.JobId);
  if(R.JobId.IsValid()) Reservations.Release(Key(R.JobId));
  if(IsValid(R.Home)) HomeStations.Remove(TWeakObjectPtr<AFGDockingStationIdentifier>(R.Home.Get()));
  for(auto It=ByVehicle.CreateIterator();It;++It) if(It.Value()==Index) It.RemoveCurrent();

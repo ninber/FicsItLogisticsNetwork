@@ -355,9 +355,9 @@
     {
       "id": "programmable-unload-accounting",
       "status": "not-verified",
-      "reason": "Upstream RemoveFromIndex omits targetInventory; native after-operation observation added, thread and actual result behavior unverified.",
-      "implementation": "FILNTransferObserver.cpp + FILNTransferLedger.h",
-      "verification_method": "Real full/partial unload on installed Smarter Truck Stations; compare native return, cargo/inventory and ledger; no duplicate credit or false recovery; confirm authoritative game-thread callback.",
+      "reason": "Native station operation results collected into job-scoped synchronized batches on factory or game thread; exact game-thread cargo reconciliation; Unreal runtime unverified.",
+      "implementation": "FILNDockReceipts.cpp + FILNTransferObserver.cpp + FILNTransferLedger.h",
+      "verification_method": "Real LOAD/UNLOAD on installed Smarter Truck Stations, worker/game-thread callbacks, full/partial quantities, recipient inventory, ledger, no duplicate credit, owner/route change and teardown",
       "actual_result": "Source-only; runtime not run."
     },
     {

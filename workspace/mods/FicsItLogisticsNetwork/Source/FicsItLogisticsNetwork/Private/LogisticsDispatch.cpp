@@ -135,6 +135,7 @@ bool ALogisticsSubsystem::EndpointConfigurationValid(const FFILNRegistration& R)
 }
 void ALogisticsSubsystem::Schedule() {
  check(IsInGameThread());
+ ConsumeDockReceipts();
  ReconcilePlayerConfiguration();
  SampleTelemetry();
  if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || bChangingFilters || bPreparingUninstall || StationConfigs.IsEmpty() || Registrations.IsEmpty()) return;
@@ -218,7 +219,7 @@ bool ALogisticsSubsystem::CommitOffer(int32 V,int32 Q,int32 P) {
  if(!BuildOffer(V,Q,P,Offer,true,Pending)) return false;
  if(ScanRoadRevision!=RoadCache.Invalidations) return false;
  const auto Choice=filn::dispatch::Evaluate(Offer); if(!Choice) return false;
- auto& R=Registrations[V]; auto* Requester=StationConfigs[Q].Station.Get();
+ auto& R=Registrations[V]; const FFILNRegistration Before=R; auto* Requester=StationConfigs[Q].Station.Get();
  auto* Provider=P==INDEX_NONE?nullptr:ProviderCandidates[P].Get();
  const FGuid Job=FGuid::NewGuid();
  const bool Acquired=Provider?Reservations.Acquire(Id(Job),Id(R.TruckId),Id(StationId(Provider)),Id(StationId(Requester))):
@@ -233,6 +234,7 @@ bool ALogisticsSubsystem::CommitOffer(int32 V,int32 Q,int32 P) {
  R.RouteIntent={R.Home->GetPathNodeGUID()};
  if(Provider) R.RouteIntent.Add(Provider->GetPathNodeGUID());
  R.RouteIntent.Add(Requester->GetPathNodeGUID()); R.RouteIntent.Add(R.Home->GetPathNodeGUID());
+ if(!ArmDockReceipts(R)) { Reservations.Release(Id(Job)); R=Before; return false; }
  const auto CanContinue=[&]() {
   return R.State==static_cast<uint8>(filn::State::Reserved) && IsValid(R.Vehicle) && IsValid(R.Vehicle->GetOwnerVehicle()) &&
    !R.Vehicle->GetOwnerVehicle()->GetDriver() && R.Vehicle->IsAutopilotEnabled() &&
