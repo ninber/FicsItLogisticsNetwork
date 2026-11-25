@@ -52,6 +52,12 @@ bool ALogisticsSubsystem::HasTransferObserver(const FFILNRegistration& R) const 
  auto* Observer=Ref?Ref->Get():nullptr;
  return Observer && IsValid(O) && Observer->Matches(V,O,O->GetStorageInventory());
 }
+void ALogisticsSubsystem::ForgetTransferObserver(const FGuid& TruckId) {
+ if(auto* Ref=TransferByTruck.Find(TruckId)) if(auto* Existing=Ref->Get()) {
+  Existing->Unbind(); TransferObservers.Remove(Existing);
+ }
+ TransferByTruck.Remove(TruckId);
+}
 bool ALogisticsSubsystem::WatchTransfers(FFILNRegistration& R) {
  if(HasTransferObserver(R)) return true;
  auto* V=IsValid(R.Vehicle)?R.Vehicle.Get():nullptr;
@@ -78,7 +84,9 @@ bool ALogisticsSubsystem::WatchTransfers(FFILNRegistration& R) {
  auto* Observer=NewObject<UFILNTransferObserver>(this);
  Observer->Bind(this,V,IsValid(O)?O->GetStorageInventory():nullptr,R.TruckId);
  TransferObservers.Add(Observer); TransferByTruck.Add(R.TruckId,Observer);
- return HasTransferObserver(R);
+ if(HasTransferObserver(R)) return true;
+ ForgetTransferObserver(R.TruckId);
+ return false;
 }
 void ALogisticsSubsystem::Transfer(AFGWheeledVehicleIdentifier* V,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,UFGInventoryComponent* Other,bool Added) {
  if(!HasAuthority() || !IsInGameThread() || !bRegistryValidated || Amount<=0) return;

@@ -182,6 +182,9 @@ void ALogisticsSubsystem::SampleTelemetry() {
    if(!Stock.Valid) Error(Guid(S),TEXT("Station inventory not readable"));
    if(Explicit && Stock.Total!=Stock.Amount) Error(Guid(S),TEXT("Station cargo conflicts with selected resource"));
    auto O=Obj(); O->SetStringField(TEXT("id"),Guid(S)); O->SetStringField(TEXT("guid"),Guid(S)); O->SetStringField(TEXT("name"),S->GetStationName().ToString());
+   O->SetStringField(TEXT("buildable_class"),B->GetClass()->GetPathName());
+   const auto BuiltWith=B->GetBuiltWithRecipe();
+   O->SetStringField(TEXT("built_with_recipe"),BuiltWith?BuiltWith->GetPathName():FString());
    O->SetStringField(TEXT("medium"),Medium); O->SetStringField(TEXT("quantity_unit"),Medium==TEXT("fluid")?TEXT("native fluid units"):TEXT("items"));
    O->SetStringField(TEXT("role"),Load?TEXT("provider"):TEXT("requester")); O->SetBoolField(TEXT("explicit_filter"),Explicit); O->SetBoolField(TEXT("configured"),Configured); O->SetBoolField(TEXT("is_depot"),Depot);
    O->SetStringField(TEXT("item"),Configured?FILNTelemetryDescriptorPath(Stock.Item):FString()); O->SetNumberField(TEXT("amount"),static_cast<double>(Stock.Total));

@@ -111,6 +111,7 @@ private:
  UPROPERTY() TArray<TObjectPtr<UFILNTransferObserver>> TransferObservers;
  TMap<FGuid,TWeakObjectPtr<UFILNTransferObserver>> TransferByTruck;
  bool WatchTransfers(FFILNRegistration& R);
+ void ForgetTransferObserver(const FGuid& TruckId);
  bool HasTransferObserver(const FFILNRegistration& R) const;
  void Transfer(AFGWheeledVehicleIdentifier* Vehicle,TSubclassOf<UFGItemDescriptor> Item,int32 Amount,class UFGInventoryComponent* Other,bool Added);
  bool ArmDockReceipts(FFILNRegistration& Registration);

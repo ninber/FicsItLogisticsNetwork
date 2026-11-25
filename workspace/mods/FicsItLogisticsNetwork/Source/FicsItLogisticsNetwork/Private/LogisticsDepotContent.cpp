@@ -17,7 +17,12 @@ bool ALogisticsSubsystem::IsAuthoredDepot(const AFGDockingStationIdentifier* Sta
  auto* B=IsValid(Station)?Station->GetStation():nullptr;
  if(!IsValid(B)) return false;
  const auto Recipe=B->GetBuiltWithRecipe();
- return Recipe && (Recipe->GetPathName()==FILNSolidDepotPath || Recipe->GetPathName()==FILNFluidDepotPath);
+ const FString BuildClass=B->GetClass()->GetPathName();
+ // New depot placements have their own actor identity. The recipe identity
+ // also recognizes older vanilla-actor FILN depots without rewriting saves.
+ return BuildClass==TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNDepot.Build_FILNDepot_C") ||
+  BuildClass==TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNFluidDepot.Build_FILNFluidDepot_C") ||
+  (Recipe && (Recipe->GetPathName()==FILNSolidDepotPath || Recipe->GetPathName()==FILNFluidDepotPath));
 }
 void ALogisticsSubsystem::EnsureDepotRecipe() {
  if(!HasAuthority() || !bRegistryValidated || bPreparingUninstall || bUninstallPrepared || bDepotRecipeReady) return;

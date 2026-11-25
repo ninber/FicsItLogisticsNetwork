@@ -399,7 +399,7 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  if(const auto* Existing=ByVehicle.Find(V)) {
   if(!Registrations.IsValidIndex(*Existing)) return false;
   const auto& R=Registrations[*Existing];
-  return R.Home==H && StateOf(R)==S::Idle && R.Held && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.IdleRoute;
+  return R.Home==H && StateOf(R)==S::Idle && R.Held && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.IdleRoute && HasTransferObserver(R);
  }
  for(const auto& R:Registrations) if(R.Home==H || (StateOf(R)!=S::Idle && (R.Provider==H || R.Requester==H))) return false;
  for(const auto& C:StationConfigs) if(C.Station==H) return false;
@@ -471,10 +471,14 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  }
  if(VehicleActor->GetDriver() || V->GetVehicleRoute()!=Intended || !V->IsAutopilotEnabled()) { Rollback(); return false; }
  if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) { Rollback(); return false; }
+ if(!WatchTransfers(R)) {
+  Ownership.Unpair(Key(R.TruckId),Key(R.BayId)); Rollback();
+  UE_LOG(LogFILN,Error,TEXT("Pair rejected: native cargo transfer observer unavailable")); return false;
+ }
  R.Held=true; R.IdleRoute=Intended;
  R.Diagnostic=TEXT("Explicit home-only enrollment; native route and autopilot read back");
  HomeStations.Add(H); TrackDepot(H);
- ByVehicle.Add(V,Registrations.Add(R)); WatchTransfers(Registrations.Last()); ResetScan();
+ ByVehicle.Add(V,Registrations.Add(R)); ResetScan();
  UE_LOG(LogFILN,Log,TEXT("PAIRED truck=%s bay=%s home-only/AP enabled"),*R.TruckId.ToString(),*R.BayId.ToString());
  return true;
 }

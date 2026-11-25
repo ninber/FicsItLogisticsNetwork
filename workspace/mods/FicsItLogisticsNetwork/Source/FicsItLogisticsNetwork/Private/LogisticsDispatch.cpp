@@ -43,7 +43,8 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  Pending=false; O={};
  if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !ProviderCandidates.IsValidIndex(P))) return false;
  auto& R=Registrations[V]; const auto& C=StationConfigs[Q];
- if(R.State!=static_cast<uint8>(filn::State::Idle) || !R.Held || R.JobId.IsValid() || !WatchTransfers(R)) return false;
+ if(R.State!=static_cast<uint8>(filn::State::Idle) || !R.Held || R.JobId.IsValid()) return false;
+ if(!WatchTransfers(R)) { R.Diagnostic=TEXT("Native cargo transfer observer unavailable; dispatch rejected"); return false; }
  R.Diagnostic=TEXT("No eligible compatible offer for this requester");
  auto* VehicleActor=IsValid(R.Vehicle)?R.Vehicle->GetOwnerVehicle():nullptr;
  auto* QB=IsValid(C.Station)?C.Station->GetStation():nullptr;

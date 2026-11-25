@@ -81,7 +81,12 @@ bool FILNClassArrayParameter(UObject* Target,const TCHAR* FunctionName,const TCH
  auto* Array=Function?FindFProperty<FArrayProperty>(Function,ParameterName):nullptr;
  auto* Inner=Array?CastField<FClassProperty>(Array->Inner):nullptr;
  if(!FILNParameterCount(Function,1) || !Array || !Inner || Inner->MetaClass!=UFGItemDescriptor::StaticClass() ||
-    !Array->HasAnyPropertyFlags(CPF_Parm) || Array->HasAnyPropertyFlags(CPF_OutParm|CPF_ReturnParm)!=Output) return false;
+    !Array->HasAnyPropertyFlags(CPF_Parm) || Array->HasAnyPropertyFlags(CPF_ReturnParm)) return false;
+ // SetDescriptors is a by-reference array input (OutParm + ReferenceParm
+ // in the serialized BP metadata); GetList is an output-only array.
+ const bool Reference=Array->HasAnyPropertyFlags(CPF_ReferenceParm);
+ const bool Out=Array->HasAnyPropertyFlags(CPF_OutParm);
+ if(Output?(!Out || Reference):(Out && !Reference)) return false;
  FStructOnScope Parameters(Function);
  FScriptArrayHelper Data(Array,Array->ContainerPtrToValuePtr<void>(Parameters.GetStructMemory()));
  if(!Output) {
