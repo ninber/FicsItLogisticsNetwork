@@ -4,17 +4,21 @@
   "cases": [
     {
       "id": "solid-dispatch",
-      "status": "not-verified",
-      "reason": "Adapter compiled; real game run not performed",
+      "status": "failed",
+      "reason": "User isolated depot/provider/requester/vehicle remained idle; actual automatic workflow failed, exact cause not yet localized.",
       "history": [
         {
           "date": "2026-11-24",
           "previous_reason": "Native automatic scheduler is not implemented"
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Adapter compiled; real game run not performed"
         }
       ],
       "implementation": "LogisticsDispatch.cpp: BuildOffer/Schedule/CommitOffer",
       "verification_method": "Isolated solid provider/requester run; observe actual route, docking, transfer and home",
-      "actual_result": "Adapter compiled; real game run not performed"
+      "actual_result": "User isolated depot/provider/requester/vehicle remained idle; actual automatic workflow failed, exact cause not yet localized."
     },
     {
       "id": "fluid-dispatch",
@@ -303,7 +307,7 @@
     {
       "id": "native-package",
       "status": "not-verified",
-      "reason": "Standalone SML-only package with authored depot and resource selector assets required; latest native code and cook unverified.",
+      "reason": "Win64 compile/cook/install and archive structural check passed for d9f1590aa7183f940ae59b67ac5e3f2535693393165431933c8f938fbcfe33b1; cooked asset completeness and player workflow failed or remain unverified.",
       "history": [
         {
           "date": "2026-11-24",
@@ -312,11 +316,15 @@
         {
           "previous_reason": "Blocked before entering Distrobox: Podman runtime read-only; exit 1",
           "github_baseline": "9623afb"
+        },
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Standalone SML-only package with authored depot and resource selector assets required; latest native code and cook unverified."
         }
       ],
       "implementation": "dev-exec.sh + headless.sh package + verifier",
       "verification_method": "Real Win64 Alpakit archive and SMM artifact validation",
-      "actual_result": "Not verified on current branch.",
+      "actual_result": "Win64 compile/cook/install and archive structural check passed for d9f1590aa7183f940ae59b67ac5e3f2535693393165431933c8f938fbcfe33b1; cooked asset completeness and player workflow failed or remain unverified.",
       "evidence": [
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/receipt.json",
         "workspace/test-results/gh-native-9623afb-20261124T221741Z/FicsItLogisticsNetwork-Windows.zip",
@@ -326,10 +334,16 @@
     },
     {
       "id": "simple-player-workflow",
-      "status": "not-verified",
-      "reason": "Own station/depot recipes and medium-aware native backend implemented in source; actual assets, standalone resource selector, and game acceptance missing.",
+      "status": "failed",
+      "reason": "User isolated vehicle did not dispatch; resource selector-to-registry integration missing in source.",
       "verification_method": "Build depot, place LOAD and UNLOAD stations, select requester item, assign vehicle home route and enable AP; verify actual delivery without FILN menus.",
-      "actual_result": "Not verified."
+      "actual_result": "User isolated vehicle did not dispatch; resource selector-to-registry integration missing in source.",
+      "history": [
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Own station/depot recipes and medium-aware native backend implemented in source; actual assets, standalone resource selector, and game acceptance missing."
+        }
+      ]
     },
     {
       "id": "occupied-depot-relocation",
@@ -340,10 +354,16 @@
     },
     {
       "id": "native-web-statistics",
-      "status": "not-verified",
-      "reason": "Native telemetry exports solid/fluid medium and exact native units; Python matching and capacities scoped by medium. Actual game telemetry, unit conversion and route-evidence parity unverified.",
+      "status": "failed",
+      "reason": "Native dashboard not running in user test; Lua-only automatic service integration remains incomplete.",
       "verification_method": "Existing web dashboard receives native statistics while Lua dispatcher is disabled.",
-      "actual_result": "Source only; no runtime acceptance."
+      "actual_result": "Native dashboard not running in user test; Lua-only automatic service integration remains incomplete.",
+      "history": [
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Native telemetry exports solid/fluid medium and exact native units; Python matching and capacities scoped by medium. Actual game telemetry, unit conversion and route-evidence parity unverified."
+        }
+      ]
     },
     {
       "id": "fluid-exclusion",
@@ -362,17 +382,29 @@
     },
     {
       "id": "dedicated-depot-buildable",
-      "status": "not-verified",
-      "reason": "Native root registration replaces failed Blueprint root; authoring now creates solid depot, fluid depot and fluid logistics station descriptor/recipe pairs and requires fresh reload. Unreal authoring/cook/placement not run.",
+      "status": "failed",
+      "reason": "User saw duplicate vanilla fluid build-menu names/assets; distinct identification failed.",
       "verification_method": "Run editor authoring, cook, inspect package, build depot via native Build Gun, verify exact recipe identity and actual docking/parking/refueling.",
-      "actual_result": "Source only; actual assets not authored."
+      "actual_result": "User saw duplicate vanilla fluid build-menu names/assets; distinct identification failed.",
+      "history": [
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Native root registration replaces failed Blueprint root; authoring now creates solid depot, fluid depot and fluid logistics station descriptor/recipe pairs and requires fresh reload. Unreal authoring/cook/placement not run."
+        }
+      ]
     },
     {
       "id": "standalone-resource-selector",
-      "status": "not-verified",
-      "reason": "Original FILN selector for both native station types not implemented; upstream UI reference researched only.",
+      "status": "failed",
+      "reason": "No standalone native UI wiring to ConfigureStation; visual selection does not prove native configuration.",
       "verification_method": "Actual native-looking selector for solid/fluid, single compatible descriptor, multiplayer authority and visible rejection, reload and reserved/docked/nonempty change guards; no custom management menu.",
-      "actual_result": "Not implemented."
+      "actual_result": "No standalone native UI wiring to ConfigureStation; visual selection does not prove native configuration.",
+      "history": [
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Original FILN selector for both native station types not implemented; upstream UI reference researched only."
+        }
+      ]
     },
     {
       "id": "no-smarter-truck-stations-dependency",
@@ -383,10 +415,16 @@
     },
     {
       "id": "fluid-station-buildables",
-      "status": "not-verified",
-      "reason": "Fluid descriptor/recipe authoring, native root registration, matching vanilla unlock and medium-aware depot discovery implemented in source. No editor-generated or cooked assets in remote tree.",
+      "status": "failed",
+      "reason": "Three fluid entries indistinguishable in actual game; fluid delivery not demonstrated.",
       "verification_method": "Clean UE editor authoring + independent reload; inspect actual cooked packages, standard Build Gun placement, native actor/pipe/fuel and recipe identity, compatible fluid-only automatic home ownership; fluid logistics LOAD/UNLOAD with verified resource selection and delivery.",
-      "actual_result": "Not authored or runtime tested."
+      "actual_result": "Three fluid entries indistinguishable in actual game; fluid delivery not demonstrated.",
+      "history": [
+        {
+          "date": "2026-11-25",
+          "previous_reason": "Fluid descriptor/recipe authoring, native root registration, matching vanilla unlock and medium-aware depot discovery implemented in source. No editor-generated or cooked assets in remote tree."
+        }
+      ]
     }
   ]
 }

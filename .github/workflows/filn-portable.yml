@@ -4,6 +4,9 @@ on:
     paths:
       - 'workspace/mods/FicsItLogisticsNetwork/**'
       - 'scripts/test-filn.sh'
+      - 'scripts/report-native-acceptance.py'
+      - 'workspace/specs/014-native-completion/acceptance.json'
+      - 'workspace/experiments/FILNLua/dashboard/app.js'
       - 'scripts/author-native-depot.py'
       - 'scripts/tests/test_native_depot_authoring.py'
       - 'scripts/filn-dashboard.py'
@@ -16,6 +19,9 @@ on:
     paths:
       - 'workspace/mods/FicsItLogisticsNetwork/**'
       - 'scripts/test-filn.sh'
+      - 'scripts/report-native-acceptance.py'
+      - 'workspace/specs/014-native-completion/acceptance.json'
+      - 'workspace/experiments/FILNLua/dashboard/app.js'
       - 'scripts/author-native-depot.py'
       - 'scripts/tests/test_native_depot_authoring.py'
       - 'scripts/filn-dashboard.py'
@@ -49,3 +55,10 @@ jobs:
       - run: python3 -m unittest discover -s scripts/tests -p 'test_native_prerequisites.py'
       - run: python3 -m unittest discover -s scripts/tests -p 'test_headless_local.py'
       - run: bash -n scripts/build.sh scripts/headless.sh scripts/install-filn.sh
+
+  native-acceptance:
+    name: Native gameplay and release acceptance (must fail until evidenced)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/report-native-acceptance.py

@@ -138,6 +138,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
    const auto* Config=StationConfigs.FindByPredicate([S](const FFILNStationConfig& C){return C.Station==S;});
    TSubclassOf<UFGItemDescriptor> Selected;
    if(Config && StationResourceMatches(*Config)) Selected=Config->Resource;
+   else if(Config) Error(Guid(S),TEXT("Saved FILN resource configuration failed native filter readback"));
    const auto Stock=InspectStock(B->GetInventory(),Selected);
    const FString Medium=FILNTelemetryMedium(B->GetDockingStationResourceForm());
    const bool Explicit=Selected && StationAcceptsResource(B,Selected);
@@ -151,7 +152,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
    if(Explicit && Stock.Total!=Stock.Amount) Error(Guid(S),TEXT("Station cargo conflicts with selected resource"));
    auto O=Obj(); O->SetStringField(TEXT("id"),Guid(S)); O->SetStringField(TEXT("guid"),Guid(S)); O->SetStringField(TEXT("name"),S->GetStationName().ToString());
    O->SetStringField(TEXT("medium"),Medium); O->SetStringField(TEXT("quantity_unit"),Medium==TEXT("fluid")?TEXT("native fluid units"):TEXT("items"));
-   O->SetStringField(TEXT("role"),Load?TEXT("provider"):TEXT("requester")); O->SetBoolField(TEXT("configured"),Configured); O->SetBoolField(TEXT("is_depot"),Depot);
+   O->SetStringField(TEXT("role"),Load?TEXT("provider"):TEXT("requester")); O->SetBoolField(TEXT("explicit_filter"),Explicit); O->SetBoolField(TEXT("configured"),Configured); O->SetBoolField(TEXT("is_depot"),Depot);
    O->SetStringField(TEXT("item"),Configured?FILNTelemetryDescriptorPath(Stock.Item):FString()); O->SetNumberField(TEXT("amount"),static_cast<double>(Stock.Total));
    O->SetNumberField(TEXT("capacity"),Configured?static_cast<double>(Stock.Capacity):0.); O->SetArrayField(TEXT("contents"),Stock.Contents);
    O->SetBoolField(TEXT("powered"),B->HasPower()); O->SetBoolField(TEXT("standby"),B->IsProductionPaused()); O->SetBoolField(TEXT("occupied"),B->GetDockedActor()!=nullptr);
@@ -230,7 +231,8 @@ void ALogisticsSubsystem::SampleTelemetry() {
   Dispatcher->SetBoolField(TEXT("registration_supported"),false);
   Dispatcher->SetBoolField(TEXT("enabled"),bAutoDispatchEnabled && bRegistryValidated && !bDispatchBlocked && !bPreparingUninstall && !bUninstallPrepared);
   Dispatcher->SetBoolField(TEXT("cargo_reuse_enabled"),true); Dispatcher->SetBoolField(TEXT("storage_tag_rule_enabled"),true);
-  Dispatcher->SetBoolField(TEXT("registry_validated"),bRegistryValidated); Dispatcher->SetBoolField(TEXT("depot_recipe_ready"),bDepotRecipeReady);
+  Dispatcher->SetBoolField(TEXT("registry_validated"),bRegistryValidated); Dispatcher->SetBoolField(TEXT("dispatch_blocked"),bDispatchBlocked);
+   Dispatcher->SetNumberField(TEXT("configured_station_count"),StationConfigs.Num()); Dispatcher->SetNumberField(TEXT("registered_vehicle_count"),Registrations.Num()); Dispatcher->SetNumberField(TEXT("tracked_depot_count"),DepotStations.Num()); Dispatcher->SetBoolField(TEXT("depot_recipe_ready"),bDepotRecipeReady);
   Dispatcher->SetObjectField(TEXT("reservations"),Leases);
   Stats->SetNumberField(TEXT("graph_hits"),static_cast<double>(RoadCache.Hits)); Stats->SetNumberField(TEXT("graph_builds"),static_cast<double>(RoadCache.Misses)); Stats->SetNumberField(TEXT("rank_invalidations"),static_cast<double>(RoadCache.Invalidations)); Stats->SetNumberField(TEXT("graph_work"),static_cast<double>(RoadCache.Work)); Dispatcher->SetObjectField(TEXT("stats"),Stats);
   Snapshot->SetNumberField(TEXT("schema_version"),1); Snapshot->SetStringField(TEXT("runtime"),TEXT("native")); Snapshot->SetStringField(TEXT("world"),TelemetryWorld);

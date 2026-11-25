@@ -83,18 +83,21 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
 }
 bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDockingStationIdentifier* Requested) {
  check(IsInGameThread());
- if(!IsValid(V) || !IsValid(Requested) || !IsDepot(Requested) || !ValidHome(Requested)) return false;
- auto* O=V->GetOwnerVehicle(); auto* VS=AFGVehicleSubsystem::Get(GetWorld());
- if(!IsValid(O) || !VS || !O->GetStorageInventory() || !VehicleStationCompatible(O,Requested->GetStation())) return false;
- const auto Before=V->GetVehicleRoute();
- const FGuid Wanted=Requested->GetPathNodeGUID();
- if(!filn::player::OptedIn(O->HasAuthority(),V->IsAutopilotEnabled(),O->GetDriver()!=nullptr,Before.Num()==1 && Before[0]==Wanted,ByVehicle.Contains(V))) return false;
- if(!Wanted.IsValid() || V->IsCurrentlyDocking()) return false;
+ if(!IsValid(V)) return false;
  const TWeakObjectPtr<AFGWheeledVehicleIdentifier> VehicleKey(V);
  const auto Pending=[&](const FString& Why) {
   auto& Previous=PendingHomeReason.FindOrAdd(VehicleKey);
-  if(Previous!=Why) { Previous=Why; UE_LOG(LogFILN,Log,TEXT("AUTO_HOME_PENDING vehicle=%s reason=%s"),*V->GetPathName(),*Why); }
+  if(Previous!=Why) { Previous=Why; UE_LOG(LogFILN,Warning,TEXT("AUTO_HOME_PENDING vehicle=%s reason=%s"),*V->GetPathName(),*Why); }
  };
+ if(!IsValid(Requested) || !IsDepot(Requested)) { Pending(TEXT("Assigned station is not a recognized FILN depot")); return false; }
+ if(!ValidHome(Requested)) { Pending(TEXT("Depot requires LOAD mode, empty cargo, docking node and fuel-only connections")); return false; }
+ auto* O=V->GetOwnerVehicle(); auto* VS=AFGVehicleSubsystem::Get(GetWorld());
+ if(!IsValid(O) || !VS || !O->GetStorageInventory()) { Pending(TEXT("Native vehicle owner, subsystem or cargo inventory unavailable")); return false; }
+ if(!VehicleStationCompatible(O,Requested->GetStation())) { Pending(TEXT("Vehicle and depot cargo media are incompatible")); return false; }
+ const auto Before=V->GetVehicleRoute();
+ const FGuid Wanted=Requested->GetPathNodeGUID();
+ if(!filn::player::OptedIn(O->HasAuthority(),V->IsAutopilotEnabled(),O->GetDriver()!=nullptr,Before.Num()==1 && Before[0]==Wanted,ByVehicle.Contains(V))) { Pending(TEXT("Enrollment requires authority, autopilot enabled, no driver and an exclusive home-only route")); return false; }
+ if(!Wanted.IsValid() || V->IsCurrentlyDocking()) { Pending(TEXT("Depot path node invalid or vehicle still docking")); return false; }
  // Cheap rejection before any roster work. For an enrollment attempt, build
  // route/node indexes once, not once per candidate depot. Game-thread only.
  TMap<FGuid,int32> NodeCounts;
@@ -151,7 +154,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
   }
   if(!Destination) Pending(TEXT("Occupied depot: no available reachable alternative in this pass; retrying"));
  }
- if(!Destination) return false;
+ if(!Destination) { if(!RequestedClaimed) Pending(TEXT("Depot unavailable: power, standby, occupied, reservation or conflicting route")); return false; }
  // Rebuild the small index once immediately before mutation; a native road
  // change or second claimant must not sneak through the earlier search.
  Indexed=false; NodeCounts.Reset(); AllForeignRoutes.Reset(); BlockingRequestedRoutes.Reset();
@@ -166,7 +169,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  if(!Move && !AtHome) { Pending(TEXT("Park at the selected free depot to establish home-only route")); return false; }
  FFILNRegistration R; R.Vehicle=V; R.Home=Destination; R.TruckId=FGuid::NewGuid(); R.BayId=StationId(Destination);
  R.IdleRoute=Move?TArray<FGuid>{Node,Wanted}:Before; R.Relocating=Move; R.Held=!Move;
- if(!Ownership.Pair(FILNPlayerGuidKey(R.TruckId),FILNPlayerGuidKey(R.BayId))) return false;
+ if(!Ownership.Pair(FILNPlayerGuidKey(R.TruckId),FILNPlayerGuidKey(R.BayId))) { Pending(TEXT("Exclusive depot ownership rejected")); return false; }
  if(Move) {
   V->SetVehicleRoute(R.IdleRoute);
   if(V->GetVehicleRoute()==R.IdleRoute && V->IsAutopilotEnabled() && !O->GetDriver()) V->SetCurrentTargetWaypoint(0);
