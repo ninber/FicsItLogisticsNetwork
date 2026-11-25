@@ -143,8 +143,8 @@ void UFILNResourceUIRegistration::Initialize(FSubsystemCollectionBase& Collectio
  if(Registry) Registry->RegisterRemoteCallObject(UFILNResourceRemote::StaticClass());
  else UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_RCO_MISSING"));
 }
-void UFILNResourceRemote::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const {
- Super::GetLifetimeReplicatedProps(Out); DOREPLIFETIME(UFILNResourceRemote,NetReady);
+void UFILNResourceRemote::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const {
+ Super::GetLifetimeReplicatedProps(OutLifetimeProps); DOREPLIFETIME(UFILNResourceRemote,NetReady);
 }
 uint32 UFILNResourceRemote::NextRequestId() {
  if(++ClientSequence==0) ++ClientSequence;
