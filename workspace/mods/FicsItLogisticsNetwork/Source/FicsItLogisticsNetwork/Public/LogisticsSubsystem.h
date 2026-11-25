@@ -107,6 +107,7 @@ private:
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGDockingStationIdentifier>> DepotStations;
  UPROPERTY(SaveGame) TArray<FFILNRegistration> Registrations;
  friend class UFILNTransferObserver;
+ friend class UFILNResourceRemote;
  UPROPERTY() TArray<TObjectPtr<UFILNTransferObserver>> TransferObservers;
  TMap<FGuid,TWeakObjectPtr<UFILNTransferObserver>> TransferByTruck;
  bool WatchTransfers(FFILNRegistration& R);

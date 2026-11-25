@@ -25,6 +25,7 @@ class FFicsItLogisticsNetworkModule : public IModuleInterface {
  TArray<IConsoleObject*> Commands;
 public:
  virtual void StartupModule() override {
+  UFILNResourceSelector::InstallHook();
   ALogisticsSubsystem::InstallParkingHook();
   ALogisticsSubsystem::InstallDockReceiptObserver();
   for(const FString& Verb:TArray<FString>{TEXT("list"),TEXT("pair"),TEXT("unpair"),TEXT("dispatch"),TEXT("reset"),TEXT("rehome"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("depot"),TEXT("removeStation")}) {
