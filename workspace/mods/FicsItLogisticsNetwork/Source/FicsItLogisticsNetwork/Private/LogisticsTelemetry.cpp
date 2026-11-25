@@ -160,27 +160,27 @@ void ALogisticsSubsystem::SampleTelemetry() {
   }
   if(TelemetryVehicleCursor<TelemetryVehicleQueue.Num()) {
    auto* V=TelemetryVehicleQueue[TelemetryVehicleCursor++].Get();
-   auto* Owner=IsValid(V)?V->GetOwnerVehicle():nullptr;
-   if(!IsValid(Owner)) { Error(TEXT("vehicle"),TEXT("Vehicle owner unavailable")); continue; }
+   auto* VehicleOwner=IsValid(V)?V->GetOwnerVehicle():nullptr;
+   if(!IsValid(VehicleOwner)) { Error(TEXT("vehicle"),TEXT("Vehicle owner unavailable")); continue; }
    const auto* Index=ByVehicle.Find(V); const auto* R=Index && Registrations.IsValidIndex(*Index)?&Registrations[*Index]:nullptr;
    auto* H=R && IsValid(R->Home)?R->Home->GetStation():nullptr;
-   const auto Cargo=InspectStock(Owner->GetStorageInventory(),R && R->JobId.IsValid()?R->Resource:TSubclassOf<UFGItemDescriptor>());
-   auto Fuel=InspectStock(Owner->GetFuelInventory());
-   if(!Fuel.Item && IsValid(H)) Fuel=InspectStock(Owner->GetFuelInventory(),InspectStock(H->GetFuelInventory()).Item);
+   const auto Cargo=InspectStock(VehicleOwner->GetStorageInventory(),R && R->JobId.IsValid()?R->Resource:TSubclassOf<UFGItemDescriptor>());
+   auto Fuel=InspectStock(VehicleOwner->GetFuelInventory());
+   if(!Fuel.Item && IsValid(H)) Fuel=InspectStock(VehicleOwner->GetFuelInventory(),InspectStock(H->GetFuelInventory()).Item);
    if(!Cargo.Valid || !Fuel.Valid) Error(V->GetPathName(),TEXT("Vehicle cargo or fuel inventory not readable"));
    auto O=Obj(); const FString Id=R?R->TruckId.ToString():V->GetPathName();
    O->SetStringField(TEXT("id"),Id); O->SetStringField(TEXT("key"),V->GetPathName()); O->SetStringField(TEXT("name"),V->GetVehicleName().ToString());
    const FString VehicleClass=V->GetVehicleClass()?V->GetVehicleClass()->GetPathName():FString();
    O->SetStringField(TEXT("class"),VehicleClass);
    O->SetBoolField(TEXT("managed"),R!=nullptr); O->SetBoolField(TEXT("home_powered"),IsValid(H) && H->HasPower() && !H->IsProductionPaused());
-   O->SetBoolField(TEXT("autopilot"),V->IsAutopilotEnabled()); O->SetBoolField(TEXT("driver"),Owner->GetDriver()!=nullptr);
-   O->SetBoolField(TEXT("has_fuel"),Owner->HasFuel()); O->SetBoolField(TEXT("docking"),V->IsCurrentlyDocking());
-   const FString Medium=Owner->GetClass()->ImplementsInterface(UFGDockableInterface::StaticClass())?FILNTelemetryMedium(IFGDockableInterface::Execute_GetDockInventoryResourceForm(Owner)):TEXT("unknown");
+   O->SetBoolField(TEXT("autopilot"),V->IsAutopilotEnabled()); O->SetBoolField(TEXT("driver"),VehicleOwner->GetDriver()!=nullptr);
+   O->SetBoolField(TEXT("has_fuel"),VehicleOwner->HasFuel()); O->SetBoolField(TEXT("docking"),V->IsCurrentlyDocking());
+   const FString Medium=VehicleOwner->GetClass()->ImplementsInterface(UFGDockableInterface::StaticClass())?FILNTelemetryMedium(IFGDockableInterface::Execute_GetDockInventoryResourceForm(VehicleOwner)):TEXT("unknown");
    O->SetBoolField(TEXT("held"),R && R->Held); O->SetStringField(TEXT("medium"),Medium);
    O->SetStringField(TEXT("quantity_unit"),Medium==TEXT("fluid")?TEXT("native fluid units"):TEXT("items"));
    O->SetNumberField(TEXT("native_error"),static_cast<int32>(V->GetAutopilotErrorStatus())); O->SetNumberField(TEXT("target"),V->GetCurrentTargetWaypointIndex());
    O->SetObjectField(TEXT("cargo"),Cargo.Json); O->SetObjectField(TEXT("fuel"),Fuel.Json);
-   FVector Location; FRotator Rotation; Owner->GetVehicleLocationAndRotation(Location,Rotation);
+   FVector Location; FRotator Rotation; VehicleOwner->GetVehicleLocationAndRotation(Location,Rotation);
    O->SetObjectField(TEXT("position"),Position(Location));
    TArray<Value> Route; for(const auto& Node:V->GetVehicleRoute()) Route.Add(MakeShared<FJsonValueString>(Node.ToString()));
    O->SetArrayField(TEXT("route"),Route); O->SetNumberField(TEXT("sampled_at"),static_cast<double>(Stamp()));
@@ -191,8 +191,8 @@ void ALogisticsSubsystem::SampleTelemetry() {
     J->SetNumberField(TEXT("loaded"),R->LoadedCargo); J->SetNumberField(TEXT("unloaded"),R->DeliveredCargo); J->SetNumberField(TEXT("truckload"),R->ExpectedCargo); J->SetStringField(TEXT("error"),R->Diagnostic);
     O->SetObjectField(TEXT("job"),J);
    } else if(const auto* Why=PendingHomeReason.Find(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V))) O->SetStringField(TEXT("native_pending_reason"),*Why);
-   if(R && Cargo.Valid && IsValid(H) && H->HasPower() && !H->IsProductionPaused() && V->IsAutopilotEnabled() && !Owner->GetDriver() && VehicleStationCompatible(Owner,H) && Medium!=TEXT("unknown") && !VehicleClass.IsEmpty()) {
-    auto* Inventory=Owner->GetStorageInventory(); const int32 Slots=Inventory->GetSizeLinear();
+   if(R && Cargo.Valid && IsValid(H) && H->HasPower() && !H->IsProductionPaused() && V->IsAutopilotEnabled() && !VehicleOwner->GetDriver() && VehicleStationCompatible(VehicleOwner,H) && Medium!=TEXT("unknown") && !VehicleClass.IsEmpty()) {
+    auto* Inventory=VehicleOwner->GetStorageInventory(); const int32 Slots=Inventory->GetSizeLinear();
     const FString TypeKey=VehicleClass+TEXT("|")+FString::FromInt(Slots)+TEXT("|")+Medium;
     if(!TelemetryTypeKeys.Contains(TypeKey)) {
      TelemetryTypeKeys.Add(TypeKey); auto Row=Obj(), ByItem=Obj();
