@@ -34,7 +34,7 @@ struct FReceipt {
 FCriticalSection ReceiptLock;
 TMap<const UFGInventoryComponent*,FWatch> Watches;
 TMap<const ALogisticsSubsystem*,TMap<FGuid,FReceipt>> Receipts;
-std::string Key(const FGuid& G) { return TCHAR_TO_UTF8(*G.ToString()); }
+std::string FILNDockReceiptGuidKey(const FGuid& G) { return TCHAR_TO_UTF8(*G.ToString()); }
 void RemoveJobLocked(const ALogisticsSubsystem* Subsystem,const FGuid& Job) {
  for(auto It=Watches.CreateIterator();It;++It)
   if(It.Value().Subsystem==Subsystem && It.Value().Job==Job) It.RemoveCurrent();
@@ -122,7 +122,7 @@ void ALogisticsSubsystem::ConsumeDockReceipts() {
   if(B.invalid || !SourceValid || !TargetValid || !CanLoad || !CanUnload || R.AbortReturn ||
      !IsValid(O) || !IsValid(Cargo) || V->GetOwnerVehicle()!=O || O->GetStorageInventory()!=Cargo ||
      O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.RouteIntent ||
-     !R.Resource || !EndpointConfigurationValid(R) || !Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) {
+     !R.Resource || !EndpointConfigurationValid(R) || !Reservations.OwnsJob(FILNDockReceiptGuidKey(R.JobId),FILNDockReceiptGuidKey(R.TruckId))) {
    R.CargoOriginKnown=false; R.CargoOriginStorage=false;
    Recover(R,TEXT("Native docking receipt does not match owned job, endpoint or phase")); continue;
   }
