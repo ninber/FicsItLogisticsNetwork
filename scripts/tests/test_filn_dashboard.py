@@ -264,6 +264,26 @@ class NativeDashboardTests(unittest.TestCase):
                 self.assertEqual(error.exception.code,405)
             finally:
                 server.shutdown();server.server_close();thread.join()
+    def test_native_never_reports_cached_snapshot_ready_after_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            d=Path(directory)
+            path=d/'telemetry.json'
+            snap=fixture();snap.update(runtime='native',exported_at=time.time())
+            path.write_text(json.dumps(snap))
+            state=server_module.State(d,native=True)
+            self.assertTrue(state.status()['ready'])
+            for replacement in ('invalid JSON',json.dumps(dict(snap,exported_at=time.time()-60)),json.dumps(dict(snap,exported_at=time.time()+60))):
+                path.write_text(replacement)
+                result=state.status()
+                self.assertFalse(result['ready'])
+                self.assertIsNone(result['data'])
+                self.assertTrue(result['error'])
+                path.write_text(json.dumps(snap))
+                self.assertTrue(state.status()['ready'])
+            path.write_text(json.dumps(dict(snap,errors=[{'error':'unreadable inventory'}])))
+            result=state.status()
+            self.assertFalse(result['ready'])
+            self.assertIn('sampling incomplete',result['error'])
     def test_native_rejects_lua_snapshot(self):
         with tempfile.TemporaryDirectory() as directory:
             d=Path(directory);(d/'telemetry.json').write_text(json.dumps(fixture()))

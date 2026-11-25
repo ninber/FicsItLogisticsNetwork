@@ -2,6 +2,7 @@
 """Loopback FILN telemetry with explicit parked-truck registration."""
 import argparse
 import json
+import math
 import secrets
 import threading
 import time
@@ -36,11 +37,20 @@ class State:
                     raise ValueError('Unsupported telemetry schema')
                 if self.native and data.get('runtime') != 'native':
                     raise ValueError('Native telemetry required; refusing Lua snapshot')
+                if self.native:
+                    stamp = data.get('exported_at')
+                    if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) or not math.isfinite(stamp) or not -5 <= now-stamp <= 45:
+                        raise ValueError('Native telemetry stale or invalid timestamp; no current snapshot')
+                    if not isinstance(data.get('dispatcher'), dict) or not isinstance(data.get('errors'), list):
+                        raise ValueError('Native telemetry missing dispatcher or sampling-error evidence')
                 self.snapshot = data
             except (OSError, ValueError, TypeError) as exc:
                 error = str(exc)
             if self.native:
-                return dict(runtime='native', csrf_token=None, registration=dict(supported=False,candidates=[],result=None), server_time=now, ready=self.snapshot is not None, error=error, progress=None, data=analyze(self.snapshot,now,self.history) if self.snapshot else None)
+                if error is not None:
+                    self.snapshot = None
+                    self.history.clear()
+                return dict(runtime='native', csrf_token=None, registration=dict(supported=False,candidates=[],result=None), server_time=now, ready=self.snapshot is not None and not self.snapshot['errors'], error=error or ('Native sampling incomplete' if self.snapshot and self.snapshot['errors'] else None), progress=None, data=analyze(self.snapshot,now,self.history) if self.snapshot else None)
             progress = None
             try:
                 progress = json.loads((self.scripts/'telemetry-progress.json').read_text())
