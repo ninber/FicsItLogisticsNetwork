@@ -2,6 +2,7 @@
 #include "LogisticsSubsystem.h"
 #include "FILNTransferLedger.h"
 #include "FILNDockFilterPolicy.h"
+#include "FILNDockFilterTransfer.h"
 #include "Resources/FGItemDescriptor.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGWheeledVehicle.h"
@@ -45,35 +46,6 @@ struct FDockFilterEntry {
 FCriticalSection DockFilterLock;
 TMap<const AFGBuildableDockingStation*,FDockFilterEntry> DockFilters;
 
-int32 SelectiveSolidUnload(const AFGBuildableDockingStation* Station,UFGInventoryComponent* Source,UFGInventoryComponent* Target,TSubclassOf<UFGItemDescriptor> Resource) {
- int32 Total=0;
- const int32 Slots=Source->GetSizeLinear();
- // Match the legacy station's selection semantics, but preserve the actual
- // stack state and use the native inventory APIs; no slot descriptor writes.
- for(int32 Slot=0;Slot<Slots;++Slot) {
-  FInventoryStack Stack;
-  if(!Source->GetStackFromIndex(Slot,Stack) || Stack.NumItems<0) {
-   UE_LOG(LogFILN,Error,TEXT("FILN_DOCK_FILTER_SOURCE_INVALID")); break;
-  }
-  if(Stack.NumItems==0 || Stack.Item.GetItemClass()!=Resource) continue;
-  const int64 BeforeSource=Source->GetNumItems(Resource),BeforeTarget=Target->GetNumItems(Resource);
-  if(BeforeSource<Stack.NumItems || BeforeTarget<0 || Stack.NumItems>MAX_int32-Total) {
-   UE_LOG(LogFILN,Error,TEXT("FILN_DOCK_FILTER_COUNT_INVALID")); break;
-  }
-  const int32 Added=Target->AddStack(Stack,true);
-  if(Added==0) break;
-  if(Added<0 || Added>Stack.NumItems) {
-   UE_LOG(LogFILN,Error,TEXT("FILN_DOCK_FILTER_ADD_INVALID")); break;
-  }
-  Source->RemoveFromIndex(Slot,Added,Target);
-  if(!filn::dockfilter::Conserved(BeforeSource,Source->GetNumItems(Resource),BeforeTarget,Target->GetNumItems(Resource),Added)) {
-   UE_LOG(LogFILN,Error,TEXT("FILN_DOCK_FILTER_TRANSFER_MISMATCH; no unverified receipt credited")); break;
-  }
-  Total+=Added;
-  if(Added<Stack.NumItems) break;
- }
- return Total;
-}
 FCriticalSection ReceiptLock;
 TMap<const UFGInventoryComponent*,FWatch> Watches;
 TMap<const ALogisticsSubsystem*,TMap<FGuid,FReceipt>> Receipts;
@@ -151,7 +123,11 @@ void ALogisticsSubsystem::InstallDockReceiptObserver() {
    switch(filn::dockfilter::Decide(true,false,Valid,Matching,Other,Station->GetDockingStationResourceForm()==EResourceForm::RF_SOLID)) {
     case A::Native: return; // preserve native transfer rate and fluid handling
     case A::Block: Scope.Override(0); return;
-    case A::SelectiveSolid: Scope.Override(SelectiveSolidUnload(Station,Cargo,Target,Resource)); return;
+    case A::SelectiveSolid: {
+     const auto Transfer=filn::dockfilter::SelectiveSolidUnload(Cargo,Target,Resource);
+     if(!Transfer.Verified) UE_LOG(LogFILN,Error,TEXT("FILN_DOCK_FILTER_TRANSFER_MISMATCH; no unverified receipt credited"));
+     Scope.Override(Transfer.Amount); return;
+    }
    }
   });
  // SML v3.12.1 after handlers receive the final native operation result.

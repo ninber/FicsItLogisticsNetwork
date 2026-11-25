@@ -5,6 +5,7 @@
 #include "GameFramework/Actor.h"
 #include "FGInventoryComponent.h"
 #include "FILNInventoryCapacity.h"
+#include "FILNDockFilterTransfer.h"
 #include "Resources/FGItemDescriptor.h"
 
 // Real native inventory operations, not a mocked FG implementation. The development
@@ -24,22 +25,35 @@ static bool InventoryAcceptance(FAutomationTestBase& Test,bool Fluid) {
   auto Other=LoadClass<UFGItemDescriptor>(nullptr,TEXT("/Game/FactoryGame/Resource/Parts/CopperSheet/Desc_CopperSheet.Desc_CopperSheet_C"));
   Passed=Test.TestNotNull(TEXT("Native resource descriptor"),Resource) && Test.TestNotNull(TEXT("Other resource descriptor"),Other);
   if(Passed) {
-   for(int32 Slot=0;Slot<2;++Slot) Inventory->SetAllowedItemOnIndex(Slot,Resource);
-   Passed&=Test.TestTrue(TEXT("Selected resource allowed"),Inventory->IsItemAllowed(Resource,0));
+   TArray<TSubclassOf<UFGItemDescriptor>> Original;
+   for(int32 Slot=0;Slot<2;++Slot) Original.Add(Inventory->GetAllowedItemOnIndex(Slot));
    int64 EmptyCapacity=0;
    const bool EmptyRead=filn::inventory::TryCapacity(Inventory,Resource,EmptyCapacity);
-   Passed&=Test.TestTrue(TEXT("Real native capacity on empty selected slots"),EmptyRead && EmptyCapacity>0);
+   Passed&=Test.TestTrue(TEXT("Real native capacity on unmodified empty slots"),EmptyRead && EmptyCapacity>0);
    if(EmptyRead && EmptyCapacity>0) {
-    Passed&=Test.TestEqual(TEXT("Add one selected item"),Inventory->AddStack(FInventoryStack(1,Resource),true),1);
+    Passed&=Test.TestEqual(TEXT("Add one real item"),Inventory->AddStack(FInventoryStack(1,Resource),true),1);
     int64 OccupiedCapacity=0;
     Passed&=Test.TestTrue(TEXT("Occupied and empty slots retain full native capacity"),filn::inventory::TryCapacity(Inventory,Resource,OccupiedCapacity) && OccupiedCapacity==EmptyCapacity);
     Inventory->Remove(Resource,1);
    }
-   Passed&=Test.TestFalse(TEXT("Wrong resource rejected"),Inventory->IsItemAllowed(Other,0));
-   Passed&=Test.TestEqual(TEXT("Wrong cargo cannot enter"),Inventory->AddStack(FInventoryStack(1,Other),true),0);
-   Passed&=Test.TestTrue(TEXT("No cargo deletion/contamination"),Inventory->IsEmpty());
-   for(int32 Slot=0;Slot<2;++Slot) Inventory->SetAllowedItemOnIndex(Slot,nullptr);
-   Passed&=Test.TestTrue(TEXT("Restored vanilla filter accepts other descriptor"),Inventory->IsItemAllowed(Other,0));
+   if(!Fluid && Passed) {
+    auto* Source=NewObject<UFGInventoryComponent>(Owner);
+    Source->RegisterComponent(); Source->Resize(2);
+    Passed&=Test.TestEqual(TEXT("Native mixed source slots"),Source->GetSizeLinear(),2);
+    Passed&=Test.TestEqual(TEXT("Insert matching cargo"),Source->AddStack(FInventoryStack(3,Resource),true),3);
+    Passed&=Test.TestEqual(TEXT("Insert unrelated cargo"),Source->AddStack(FInventoryStack(7,Other),true),7);
+    const auto Transfer=filn::dockfilter::SelectiveSolidUnload(Source,Inventory,Resource);
+    Passed&=Test.TestTrue(TEXT("Actual filtered native transfer verified"),Transfer.Verified);
+    Passed&=Test.TestEqual(TEXT("Actual selected quantity transferred"),Transfer.Amount,3);
+    Passed&=Test.TestEqual(TEXT("Selected cargo removed from source"),Source->GetNumItems(Resource),0);
+    Passed&=Test.TestEqual(TEXT("Unrelated cargo stays in source"),Source->GetNumItems(Other),7);
+    Passed&=Test.TestEqual(TEXT("Selected cargo reaches target"),Inventory->GetNumItems(Resource),3);
+    Passed&=Test.TestEqual(TEXT("Wrong cargo not added to target"),Inventory->GetNumItems(Other),0);
+    Passed&=Test.TestEqual(TEXT("Source slot count unchanged"),Source->GetSizeLinear(),2);
+   }
+   Passed&=Test.TestEqual(TEXT("Target slot count unchanged"),Inventory->GetSizeLinear(),2);
+   for(int32 Slot=0;Slot<2;++Slot)
+    Passed&=Test.TestTrue(TEXT("Native slot descriptor unchanged"),Inventory->GetAllowedItemOnIndex(Slot)==Original[Slot]);
   }
  }
  World->DestroyWorld(false); return Passed;
