@@ -39,7 +39,7 @@ bool FILNDispatchMedium(EResourceForm Form,filn::dispatch::Medium& Out) {
 void ALogisticsSubsystem::ResetScan() {
  bScanning=false; bCheckingRetained=true; Rankings.Empty(); ProviderCandidates.Empty(); ScanVehicle=0; ScanProvider=0; FirstEligibleProviderDistance=-1; BestOffer.reset(); BestVehicle=INDEX_NONE; BestProvider=INDEX_NONE;
 }
-bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Offer& O,bool QueryRoads,bool& Pending) {
+bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Offer& O,bool& Pending) {
  Pending=false; O={};
  if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters || !Registrations.IsValidIndex(V) || !StationConfigs.IsValidIndex(Q) || (P!=INDEX_NONE && !ProviderCandidates.IsValidIndex(P))) return false;
  auto& R=Registrations[V]; const auto& C=StationConfigs[Q];
@@ -99,10 +99,8 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
   Provider.resource=Actual;
   O.provider=Provider;
  }
- // Cheap eligibility first; zero values here are local sentinels only, never route evidence.
- O.roads={0,0,0,0};
- if(!filn::dispatch::Evaluate(O)) return false;
- if(!QueryRoads) return true;
+ // Check inventory and policy separately; unknown road costs stay negative.
+ if(!filn::dispatch::EligibleWithoutRoads(O)) { R.Diagnostic=TEXT("Offer fails cargo, capacity, station or eligibility policy"); return false; }
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); auto* Preset=VehicleActor->GetVehiclePathPreset();
  auto Distance=[&](const FGuid& From,const FGuid& To,double& Cost) {
   if(!RoadCache.Distance(VS,From,To,Preset,Cost)) { Pending=true; R.Diagnostic=TEXT("Directed road calculation pending within work budget"); return false; }
@@ -202,7 +200,7 @@ void ALogisticsSubsystem::Schedule() {
    Provider=Rank.Entries[ScanProvider].Value;
   }
   filn::dispatch::Offer Offer; bool Pending=false;
-  if(BuildOffer(ScanVehicle,RequestCursor,Provider,Offer,true,Pending)) {
+  if(BuildOffer(ScanVehicle,RequestCursor,Provider,Offer,Pending)) {
    auto Choice=filn::dispatch::Evaluate(Offer);
    if(Choice && (!BestOffer || filn::dispatch::Better(*Choice,*BestOffer))) { BestOffer=Choice; BestVehicle=ScanVehicle; BestProvider=Provider; }
    // Equal provider-to-requester distances must be compared by empty travel.
@@ -216,7 +214,7 @@ void ALogisticsSubsystem::Schedule() {
 }
 bool ALogisticsSubsystem::CommitOffer(int32 V,int32 Q,int32 P) {
  filn::dispatch::Offer Offer; bool Pending=false;
- if(!BuildOffer(V,Q,P,Offer,true,Pending)) return false;
+ if(!BuildOffer(V,Q,P,Offer,Pending)) return false;
  if(ScanRoadRevision!=RoadCache.Invalidations) return false;
  const auto Choice=filn::dispatch::Evaluate(Offer); if(!Choice) return false;
  auto& R=Registrations[V]; const FFILNRegistration Before=R; auto* Requester=StationConfigs[Q].Station.Get();

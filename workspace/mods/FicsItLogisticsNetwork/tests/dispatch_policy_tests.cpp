@@ -43,6 +43,12 @@ static Offer Pickup() {
 int main() {
     int checks = 0;
     Offer p = Pickup();
+    Offer noRoads = p;
+    noRoads.roads = {};
+    CHECK(EligibleWithoutRoads(noRoads));
+    CHECK(!Evaluate(noRoads));
+    noRoads.requester.explicitFilter = false;
+    CHECK(!EligibleWithoutRoads(noRoads));
     auto candidate = Evaluate(p);
     CHECK(candidate.has_value());
     CHECK(candidate->kind == Kind::Pickup);

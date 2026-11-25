@@ -111,52 +111,56 @@ inline bool HomePositionReady(double distanceSquared,double verticalDistance,dou
 }
 inline bool ValidCost(double cost) { return std::isfinite(cost) && cost >= 0.0; }
 
-inline std::optional<Choice> Evaluate(const Offer& offer) {
+inline bool EligibleWithoutRoads(const Offer& offer) {
     const Vehicle& v = offer.vehicle;
     const Station& q = offer.requester;
     if (v.id.empty() || v.home.empty() || !v.enrolled || !v.homeReady || !v.idle ||
         !v.autopilot || v.driver || !v.fuelReady || v.reserved || v.cargoCapacity < 1) {
-        return std::nullopt;
+        return false;
     }
     if (q.medium != v.medium || q.id.empty() || q.id == v.home || q.resource.empty() || !q.explicitFilter || q.loadMode ||
         !q.powered || q.paused || q.occupied || q.depot || q.kinds != 0 || q.quantity != 0 || q.capacity < 1) {
-        return std::nullopt;
+        return false;
     }
 
-    Kind kind;
-    int amount;
-    double distance;
-    std::string provider;
     if (offer.provider) {
         const Station& p = *offer.provider;
         if (v.cargoKinds != 0 || v.cargoQuantity != 0 || p.id.empty() || p.id == v.home || p.id == q.id ||
             p.medium != q.medium || !p.loadMode || !p.powered || p.paused || p.occupied || p.depot || p.kinds != 1 ||
             p.resource != q.resource || p.quantity < v.cargoCapacity || p.capacity < p.quantity ||
-            q.capacity < v.cargoCapacity || !PairAllowed(p.label, q.label) ||
-            !ValidCost(offer.roads.homeToProvider) || !ValidCost(offer.roads.providerToRequester) ||
-            !ValidCost(offer.roads.requesterToHome)) {
-            return std::nullopt;
+            q.capacity < v.cargoCapacity || !PairAllowed(p.label, q.label)) {
+            return false;
         }
-        kind = Kind::Pickup;
-        amount = v.cargoCapacity;
-        provider = p.id;
-        distance = offer.roads.homeToProvider + offer.roads.providerToRequester + offer.roads.requesterToHome;
     } else {
         // A recovered truck with a single item type may make a partial direct delivery.
         // Warehouse delivery needs a proven non-warehouse origin for retained cargo.
         if (v.cargoKinds != 1 || v.cargoQuantity < 1 || v.cargoQuantity > v.cargoCapacity ||
-            v.cargoResource != q.resource || q.capacity < v.cargoQuantity || (IsStorage(q.label) && (!v.cargoOriginKnown || v.cargoOriginStorage)) ||
-            !ValidCost(offer.roads.homeToRequester) || !ValidCost(offer.roads.requesterToHome)) {
-            return std::nullopt;
+            v.cargoResource != q.resource || q.capacity < v.cargoQuantity || (IsStorage(q.label) && (!v.cargoOriginKnown || v.cargoOriginStorage))) {
+            return false;
         }
-        kind = Kind::RetainedCargo;
-        amount = v.cargoQuantity;
-        distance = offer.roads.homeToRequester + offer.roads.requesterToHome;
     }
-    if (!std::isfinite(distance)) return std::nullopt; // even finite legs can overflow
-    return Choice{kind, v.home, v.id, provider, q.id, q.resource, amount, distance,
-                  offer.provider ? offer.roads.providerToRequester : 0.0,
-                  offer.provider ? offer.roads.homeToProvider : offer.roads.homeToRequester};
+    return true;
+}
+
+// Dispatch choices require actual directed road evidence.
+inline std::optional<Choice> Evaluate(const Offer& offer) {
+    if (!EligibleWithoutRoads(offer)) return std::nullopt;
+    const auto& v = offer.vehicle;
+    const auto& q = offer.requester;
+    const auto& roads = offer.roads;
+    if (!ValidCost(roads.requesterToHome)) return std::nullopt;
+    if (offer.provider) {
+        if (!ValidCost(roads.homeToProvider) || !ValidCost(roads.providerToRequester)) return std::nullopt;
+        const double distance = roads.homeToProvider + roads.providerToRequester + roads.requesterToHome;
+        if (!std::isfinite(distance)) return std::nullopt;
+        return Choice{Kind::Pickup, v.home, v.id, offer.provider->id, q.id, q.resource,
+                      v.cargoCapacity, distance, roads.providerToRequester, roads.homeToProvider};
+    }
+    if (!ValidCost(roads.homeToRequester)) return std::nullopt;
+    const double distance = roads.homeToRequester + roads.requesterToHome;
+    if (!std::isfinite(distance)) return std::nullopt;
+    return Choice{Kind::RetainedCargo, v.home, v.id, {}, q.id, q.resource,
+                  v.cargoQuantity, distance, 0.0, roads.homeToRequester};
 }
 
 inline bool Better(const Choice& a, const Choice& b) {
