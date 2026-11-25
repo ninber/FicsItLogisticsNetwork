@@ -18,12 +18,13 @@ def require(value, message):
     return value
 
 def prop(obj, *names):
+    failures = []
     for name in names:
         try:
             return obj.get_editor_property(name), name
-        except Exception:
-            pass
-    raise RuntimeError(f"Missing expected property {names} on {obj}")
+        except Exception as exc:
+            failures.append(f"{name}: {exc}")
+    raise RuntimeError(f"Cannot access expected property {names} on {obj}: " + "; ".join(failures))
 
 def assign(obj, value, *names):
     _, name = prop(obj, *names)
@@ -93,17 +94,20 @@ def author(suffix, label, parents):
         assign(amount, desc, "item_class", "ItemClass")
         assign(amount, 1, "amount", "Amount")
         assign(cdo, [amount], "m_product", "mProduct")
-        assign(cdo, True, "m_display_name_override", "mDisplayNameOverride")
+        # SML 3.12.1 FGRecipe.h declares mDisplayNameOverride without an
+        # editor-editable flag. Python cannot access it. Preserve the inherited
+        # flag and set both descriptor and recipe names: either naming path
+        # should resolve to the FILN label in the real game. The generated
+        # editor SDK GetRecipeName reads mDisplayName directly.
         assign(cdo, unreal.Text(label), "m_display_name", "mDisplayName")
     def recipe_validate(cdo):
         products = prop(cdo, "m_product", "mProduct")[0]
         require(len(products) == 1 and prop(products[0], "item_class", "ItemClass")[0] == desc and prop(products[0], "amount", "Amount")[0] == 1, "Incorrect depot recipe product")
-        require(prop(cdo, "m_display_name_override", "mDisplayNameOverride")[0], "Depot recipe name override missing")
         require(str(prop(cdo, "m_display_name", "mDisplayName")[0]) == label, "Depot recipe name mismatch")
         require(prop(cdo, "m_ingredients", "mIngredients")[0], "Inherited build cost missing")
         require(prop(cdo, "m_produced_in", "mProducedIn")[0], "Inherited build gun producer missing")
     recipe = package("Recipe_" + suffix, recipe_parent, recipe_config, recipe_validate)
-    return {"descriptor": desc.get_path_name(), "recipe": recipe.get_path_name(), "actor": actor.get_path_name(), "vanilla_recipe": recipe_parent.get_path_name()}
+    return {"descriptor": desc.get_path_name(), "recipe": recipe.get_path_name(), "actor": actor.get_path_name(), "vanilla_recipe": recipe_parent.get_path_name(), "display_name": label}
 
 def main():
     assets = unreal.EditorAssetLibrary
@@ -113,7 +117,7 @@ def main():
         require(assets.make_directory(DEST) or assets.does_directory_exist(DEST), "Cannot create depot content directory")
     solid = vanilla_recipe("Recipe_TruckStation", "Desc_TruckStation_C", False)
     fluid = vanilla_recipe("Recipe_FluidTruckStation", "Desc_FluidTruckStation_C", True)
-    result = {"schema": 2, "buildings": [
+    result = {"schema": 3, "buildings": [
         author("FILNDepot", "FILN Depot", solid),
         author("FILNFluidDepot", "FILN Fluid Depot", fluid),
         author("FILNFluidStation", "FILN Fluid Logistics Station", fluid)
