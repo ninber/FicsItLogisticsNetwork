@@ -1,3 +1,5 @@
+> **Scope/evidence notice (2026-11-25):** Historical implementation/research below may describe superseded dependency, solid-only, UI or Blueprint-root decisions. Current release requires SML-only standalone solid/fluid logistics and FILN-owned selector. See [current requirements](../../../specs/014-native-completion/standalone-station-implementation.md). Local Codex reports Linux native compile/link after unpublished unity fixes, but depot Blueprint authoring and fresh reload failed; no current package/game acceptance. Do not treat old successes as current runtime proof.
+
 > Historical PR #1 scope below is retained. Current native adapter implementation, builds,
 > failing integration results and blockers are in [Spec Kit continuation](../../../specs/014-native-completion/continuation.md).
 

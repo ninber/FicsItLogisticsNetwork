@@ -24,3 +24,5 @@ Current authority: spec.md, standalone-station-implementation.md, plan.md, accep
 Continuation: reconcile unpublished fixes/logs; solve depot native-root and asset reload, own solid/fluid selector; remove third-party dependencies and prerequisites, enable verified medium-aware configuration, docking, enrollment, fuel, dispatch and telemetry; actual SDK and gameplay tests. Never touch original City or running game. No generic management menu, no external harness.
 
 Native runtime and development prerequisite code intentionally unchanged until coordinated with local fixes. Package metadata enforcement exposes the inconsistency rather than accepting superseded artifacts.
+
+Active native architecture, headless and gameplay acceptance instructions have also been updated; historical UI, depot, dashboard and integration research has explicit scope/evidence notices.

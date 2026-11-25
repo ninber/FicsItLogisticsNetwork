@@ -1,3 +1,5 @@
+> **Scope/evidence notice (2026-11-25):** Historical implementation/research below may describe superseded dependency, solid-only, UI or Blueprint-root decisions. Current release requires SML-only standalone solid/fluid logistics and FILN-owned selector. See [current requirements](standalone-station-implementation.md). Local Codex reports Linux native compile/link after unpublished unity fixes, but depot Blueprint authoring and fresh reload failed; no current package/game acceptance. Do not treat old successes as current runtime proof.
+
 # Smarter Truck Stations integration audit (2026-11-25)
 
 Upstream inspected: IKholopov/SM_TruckStationSettings at f481adc3d607b0213b80e53be893b8362eed0448 (plugin version 1.1.0), and SML v3.12.1. No upstream license was identified in its tree or GitHub license metadata, so no third-party implementation or Blueprint assets are copied into FILN. Use the separately installed required dependency.

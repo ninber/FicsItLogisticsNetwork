@@ -14,7 +14,8 @@ bash scripts/headless.sh native       # only FILN module; requires initial build
 bash scripts/headless.sh uht          # explicit existing-manifest header generation
 bash scripts/headless.sh prepare-uat  # cached C# dependencies, single worker; no GUI
 bash scripts/headless.sh turnkey
-bash scripts/headless.sh package      # Alpakit includes Win64 build/cook/staging/archive
+bash scripts/headless.sh author-depot # currently blocked: root-module authoring/reload
+# bash scripts/headless.sh package    # only after fixed assets and standalone scope
 python3 scripts/verify-native-package.py PATH_TO_GENERATED_ZIP
 ```
 
@@ -37,7 +38,7 @@ Native station commands, for an independently authorized disposable test world o
 - `filn.list` resolves actual native station/vehicle object paths.
 - `filn.station STATION_OBJECT_PATH RESOURCE_DESCRIPTOR_CLASS_PATH` configures an empty,
   undocked, unreserved vanilla station. Wrong solid/fluid forms and conflicting existing
-  restrictions are rejected. This is a console interface, not the required management UI.
+  restrictions are rejected. This is a developer diagnostic, not the required player selector; current source still rejects fluids.
 - `filn.prepareUninstall` restores prior native slot restrictions only after complete
   preflight. Active jobs, docking, resize/filter conflicts block the operation. It preserves
   physical actors and inventory contents. Save afterward; independent loading without FILN
@@ -67,18 +68,8 @@ passing tests is required. Generated StarterProject FactoryGame functions are st
 so this command cannot establish true game inventory or dispatcher behavior. Do not
 weaken Resize/filter assertions if the header implementation returns default values.
 
-Runtime commands, only in an independently prepared disposable game:
+Runtime commands are developer-only; see the [native README](../README.md). Old filn.manage and filn.legacy commands and management UI were removed. Automatic player workflow is required. Do not deploy dependency-based draft.
 
-- `filn.manage STATION_IDENTIFIER_PATH`: opens native resource/depot controls for that station.
-- `filn.enable 1` / `filn.enable 0`: enable or disable new automatic assignments; existing
-  deliveries finish and idle owned trucks remain held. Default is disabled.
-- `filn.legacy preview` / `filn.legacy import`: inspect or import compatible legacy filters.
-  These do not convert actor classes or import Lua depot/job journals.
-- `filn.removeStation STATION_IDENTIFIER_PATH`: restores that station's previous filters,
-  rejecting active reservations or filter conflicts.
+Local Codex reports native Linux editor compilation/linkage after unpublished unity-build fixes; depot authoring and fresh reload failed. Reconcile local work before changing C++. SML native root registration is proposed, not verified. Development prerequisites still require TruckStationSettings; this is a tracked source inconsistency, not a release requirement. Package verifier rejects non-SML dependencies.
 
-The UI also exposes validated nearby vehicle enrollment and admin-only network/migration/
-uninstall actions. The ordinary LOAD/UNLOAD switch is reused, with a reversible text binding
-proxy for PROVIDER/REQUESTER on marked FILN stations. No visual/runtime acceptance is claimed.
-
-Current evidence and limitations: workspace/specs/014-native-completion/continuation.md.
+Current evidence: [consistency audit](../../../specs/014-native-completion/consistency-audit.md).

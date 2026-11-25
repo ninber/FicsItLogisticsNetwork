@@ -1,3 +1,5 @@
+> **Scope/evidence notice (2026-11-25):** Historical implementation/research below may describe superseded dependency, solid-only, UI or Blueprint-root decisions. Current release requires SML-only standalone solid/fluid logistics and FILN-owned selector. See [current requirements](standalone-station-implementation.md). Local Codex reports Linux native compile/link after unpublished unity fixes, but depot Blueprint authoring and fresh reload failed; no current package/game acceptance. Do not treat old successes as current runtime proof.
+
 # Depot authored content — implementation and acceptance
 
 The native depot is identified by the exact FILN recipe path, never by a station name, legacy KDataForge recipe or generic LOAD station. The existing vanilla actor class/CDO is reused, following the Lua crash workaround. Its ordinary UI stays intact. SML's root module registers the recipe during Initialization; the authoritative subsystem makes the recipe available after vanilla Truck Station unlock and confirms recipe-manager readback. No global class mutation or runtime-created actor templates.

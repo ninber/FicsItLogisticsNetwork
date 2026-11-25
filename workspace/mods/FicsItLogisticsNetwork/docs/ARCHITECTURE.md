@@ -1,31 +1,13 @@
 # Architecture and risk boundaries
 
-`ULogisticsBootstrap` is a native UWorldSubsystem only in authoritative gameplay worlds;
-it registers `ALogisticsSubsystem` with SML's SubsystemActorManager at world begin play.
-The actor implements IFGSaveInterface explicitly and stores schema-versioned registrations,
-station IDs, job intent and diagnostics. Native subsystem initialization and save order are
-still subject to UHT/UBT/runtime verification. Engine-independent FILNCore primitives are
-shared by adapter and host tests, not a mock reimplementation of game vehicle behavior.
+Current target: [standalone native requirements](../../../specs/014-native-completion/standalone-station-implementation.md). Source gaps are listed in the [consistency audit](../../../specs/014-native-completion/consistency-audit.md).
 
-A job owns truck/provider/requester reservations. The truck's home is permanently enrolled
-and excluded from cargo endpoints. Rejection acquires no partial slots. After route mutation
-failure, reservation is intentionally retained in Recovery. Confirmed home stop releases job
-slots but never home ownership. Authoritative console commands are an operator prototype,
-not remote player UI. The watchdog only observes active jobs and never scans all world actors.
+Authoritative gameplay belongs to the native saved ALogisticsSubsystem, registered via SML. Stable station IDs, home ownership, job reservations and intent are saved; native path GUIDs resolve current road endpoints. Never save volatile network IDs. Atomic reservation precedes route mutation, readback is mandatory, failure conservatively retains leases and cargo.
 
-Explicit station actors are not selected by aliases. Generated station instance IDs survive
-save/load, while current path GUIDs resolve route destinations. Network IDs are never saved.
-Topology rebuilds can replace network objects; traversability counters alone are insufficient.
-Future candidate caches include inactive compatible providers and selectively invalidate only
-structural/configuration/vehicle-constraint changes, not stock or dispatch activity.
+The medium-aware portable policy is shared by native dispatch and host tests. Both native adapters must supply actual resource form, capacity, quantity, docking compatibility and explicit requester selection; ordinary LOAD supply is observational. Empty demand, full fresh load, retained cargo priority, warehouse rules and directed nearest-provider ranking are preserved. No stock-derived requester identity.
 
-M0/M1 deliberately do not implement exact cargo quantities, filtering, stock-demand logic,
-priority, automatic provider selection, arbitrary buffer discovery, telemetry, cache, FIN or
-player widget. Real truck transfer amounts and unload success must be verified from game
-inventories. Empty cargo on home return is a necessary guard, not evidence that delivery occurred.
+Source implements bounded scheduling/cache, automatic enrollment/overflow for recorded or exact recipe-identified depots, recovery, fuel service and synchronized native operation receipts. Receipts aggregate across factory threads; authoritative reconciliation validates actual inventory and job identity. No Lua dispatcher, third-party station dependency or custom inventory writes in release design. Current third-party filter adapter and solid-only gates must be replaced; portable tests cannot establish native transfer semantics.
 
-Risks: generated stubs do not prove behavior; dock observations can be missed; route replacement
-may preserve unexpected target indices; home autopilot stop may interact with docking;
-save actor references and native subsystem registration may require lifecycle adjustment;
-no asset authoring/custom node support proof exists. Destroyed-reference recovery remains
-operator/manual and conservatively retains locks. No automatic release that could duplicate jobs.
+Use original game UI components for one FILN-owned resource selector; keep ordinary station actors and controls. No management panel, manual player registration or global widget-tree guessing. Author dedicated depot assets and verify native SML root discovery, availability, placement, compatibility and save behavior. Native web telemetry is bounded and read-only; report unknown quantities as unknown.
+
+Runtime, asset authoring and save/uninstall semantics remain unverified. Native tests must use isolated saves, never original City or automated UI. No successful route write proves delivery.

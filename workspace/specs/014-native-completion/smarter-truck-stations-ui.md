@@ -1,3 +1,5 @@
+> **Scope/evidence notice (2026-11-25):** Historical implementation/research below may describe superseded dependency, solid-only, UI or Blueprint-root decisions. Current release requires SML-only standalone solid/fluid logistics and FILN-owned selector. See [current requirements](standalone-station-implementation.md). Local Codex reports Linux native compile/link after unpublished unity fixes, but depot Blueprint authoring and fresh reload failed; no current package/game acceptance. Do not treat old successes as current runtime proof.
+
 # Smarter Truck Stations: native-looking UI architecture
 
 Research date: 2026-11-25. Upstream pinned commit f481adc3d607b0213b80e53be893b8362eed0448, v1.1.0.
