@@ -17,6 +17,14 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/TextBlock.h"
+#include "Components/Button.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
+#include "Components/SizeBox.h"
+#include "Engine/Texture2D.h"
+#include "Brushes/SlateColorBrush.h"
+#include "Styling/CoreStyle.h"
 #include "UObject/UnrealType.h"
 #include "UObject/StructOnScope.h"
 #include "Net/UnrealNetwork.h"
@@ -26,12 +34,6 @@
 #include "Engine/GameInstance.h"
 
 namespace {
-// Exact serialized SML 3.12.1 asset exports, not widget-name substring guesses.
-constexpr const TCHAR* FILNDockingWidget=TEXT("/Game/FactoryGame/Buildable/-Shared/Widgets/Widget_DockingStation.Widget_DockingStation_C");
-constexpr const TCHAR* FILNTabWidget=TEXT("/Game/FactoryGame/Interface/UI/InGame/-Shared/Widget_TabsContainer.Widget_TabsContainer_C");
-constexpr const TCHAR* FILNPartsWidget=TEXT("/Game/FactoryGame/Interface/UI/InGame/-Shared/InputPartsList/BPW_Input_PartsList.BPW_Input_PartsList_C");
-constexpr const TCHAR* FILNTabStruct=TEXT("/Game/FactoryGame/Interface/UI/InGame/-Shared/ImageAndText.ImageAndText");
-
 ALogisticsSubsystem* FILNSelectorSubsystem(UWorld* World) {
  auto* Manager=World?World->GetSubsystem<USubsystemActorManager>():nullptr;
  return Manager?Manager->GetSubsystemActor<ALogisticsSubsystem>():nullptr;
@@ -44,89 +46,37 @@ AFGBuildableDockingStation* FILNSelectorStation(UObject* Object) {
  if(auto* Hit=Cast<UFGHitResultWrapper>(Object)) return Cast<AFGBuildableDockingStation>(Hit->mHitResult.GetActor());
  return nullptr;
 }
-UVerticalBox* FILNSelectorContainer(UFGInteractWidget* Widget) {
- if(!IsValid(Widget) || Widget->GetClass()->GetPathName()!=FILNDockingWidget) return nullptr;
- return Cast<UVerticalBox>(Widget->GetWidgetFromName(TEXT("mInventoryContainer")));
-}
-UFILNResourceSelector* FILNFindSelector(UVerticalBox* Container) {
- if(!Container) return nullptr;
- for(int32 I=0;I<Container->GetChildrenCount();++I)
-  if(auto* Found=Cast<UFILNResourceSelector>(Container->GetChildAt(I))) return Found;
- return nullptr;
-}
-bool FILNParameterCount(UFunction* Function,int32 Count) {
- if(!Function) return false;
- int32 Actual=0;
- for(TFieldIterator<FProperty> It(Function);It;++It) if(It->HasAnyPropertyFlags(CPF_Parm)) ++Actual;
- return Actual==Count;
-}
-template<class PropertyType,class ValueType>
-bool FILNCallInput(UObject* Target,const TCHAR* FunctionName,const TCHAR* ParameterName,const ValueType& Value) {
- auto* Function=Target?Target->FindFunction(FunctionName):nullptr;
- auto* Property=Function?FindFProperty<PropertyType>(Function,ParameterName):nullptr;
- if(!FILNParameterCount(Function,1) || !Property || !Property->HasAnyPropertyFlags(CPF_Parm) || Property->HasAnyPropertyFlags(CPF_OutParm|CPF_ReturnParm)) return false;
- FStructOnScope Parameters(Function);
- Property->SetPropertyValue_InContainer(Parameters.GetStructMemory(),Value);
- Target->ProcessEvent(Function,Parameters.GetStructMemory());
- return true;
-}
-bool FILNCallNoInput(UObject* Target,const TCHAR* FunctionName) {
- auto* Function=Target?Target->FindFunction(FunctionName):nullptr;
- if(!FILNParameterCount(Function,0)) return false;
- Target->ProcessEvent(Function,nullptr); return true;
-}
-bool FILNClassArrayParameter(UObject* Target,const TCHAR* FunctionName,const TCHAR* ParameterName,bool Output,
- TArray<TSubclassOf<UFGItemDescriptor>>& Values) {
- auto* Function=Target?Target->FindFunction(FunctionName):nullptr;
- auto* Array=Function?FindFProperty<FArrayProperty>(Function,ParameterName):nullptr;
- auto* Inner=Array?CastField<FClassProperty>(Array->Inner):nullptr;
- if(!FILNParameterCount(Function,1) || !Array || !Inner || Inner->MetaClass!=UFGItemDescriptor::StaticClass() ||
-    !Array->HasAnyPropertyFlags(CPF_Parm) || Array->HasAnyPropertyFlags(CPF_ReturnParm)) return false;
- // SetDescriptors is a by-reference array input (OutParm + ReferenceParm
- // in the serialized BP metadata); GetList is an output-only array.
- const bool Reference=Array->HasAnyPropertyFlags(CPF_ReferenceParm);
- const bool Out=Array->HasAnyPropertyFlags(CPF_OutParm);
- if(Output?(!Out || Reference):(Out && !Reference)) return false;
- FStructOnScope Parameters(Function);
- FScriptArrayHelper Data(Array,Array->ContainerPtrToValuePtr<void>(Parameters.GetStructMemory()));
- if(!Output) {
-  for(const auto& Resource:Values) Inner->SetObjectPropertyValue(Data.GetRawPtr(Data.AddValue()),Resource.Get());
+// Resolve the actual inventory container by instance or reflected property.
+ // Do not reject a solid/fluid widget merely because its BP class path differs.
+ UVerticalBox* FILNSelectorContainer(UFGInteractWidget* Widget) {
+  if(!IsValid(Widget)) return nullptr;
+  if(auto* Box=Cast<UVerticalBox>(Widget->GetWidgetFromName(TEXT("mInventoryContainer")))) return Box;
+  if(auto* Prop=FindFProperty<FObjectPropertyBase>(Widget->GetClass(),TEXT("mInventoryContainer")))
+   if(auto* Box=Cast<UVerticalBox>(Prop->GetObjectPropertyValue_InContainer(Widget))) return Box;
+  return nullptr;
  }
- Target->ProcessEvent(Function,Parameters.GetStructMemory());
- if(Output) {
-  Values.Reset();
-  if(Data.Num()>1) return false;
-  for(int32 I=0;I<Data.Num();++I) {
-   auto* Resource=Cast<UClass>(Inner->GetObjectPropertyValue(Data.GetRawPtr(I)));
-   if(!Resource || !Resource->IsChildOf(UFGItemDescriptor::StaticClass())) return false;
-   Values.Add(Resource);
-  }
+ UFILNResourceSelector* FILNFindSelector(UVerticalBox* Container) {
+  if(!Container) return nullptr;
+  for(int32 I=0;I<Container->GetChildrenCount();++I)
+   if(auto* Found=Cast<UFILNResourceSelector>(Container->GetChildAt(I))) return Found;
+  return nullptr;
  }
- return true;
-}
-bool FILNBindEvent(UObject* Target,const TCHAR* Name,UObject* Receiver,FName FunctionName,int32 Arguments) {
- auto* Property=Target?FindFProperty<FMulticastInlineDelegateProperty>(Target->GetClass(),Name):nullptr;
- if(!Property || !FILNParameterCount(Property->SignatureFunction,Arguments)) return false;
- if(Arguments==1) {
-  const auto* Index=FindFProperty<FIntProperty>(Property->SignatureFunction,TEXT("ButtonIndex"));
-  if(!Index || !Index->HasAnyPropertyFlags(CPF_Parm) || Index->HasAnyPropertyFlags(CPF_OutParm|CPF_ReturnParm)) return false;
+ FLinearColor FILNFilterColor(const TCHAR* Hex) { return FLinearColor::FromSRGBColor(FColor::FromHex(Hex)); }
+ UTextBlock* FILNFilterLabel(UWidgetTree* Tree,const FText& Text,int32 Size=14) {
+  auto* Label=Tree->ConstructWidget<UTextBlock>(); Label->SetText(Text);
+  Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"),Size));
+  Label->SetColorAndOpacity(FSlateColor(FILNFilterColor(TEXT("E8EBED"))));
+  return Label;
  }
- auto* Event=Property->ContainerPtrToValuePtr<FMulticastScriptDelegate>(Target);
- FScriptDelegate Delegate; Delegate.BindUFunction(Receiver,FunctionName); Event->AddUnique(Delegate);
- return true;
-}
-bool FILNGenerateTabs(UUserWidget* Tabs) {
- auto* Array=Tabs?FindFProperty<FArrayProperty>(Tabs->GetClass(),TEXT("mButtons")):nullptr;
- auto* Inner=Array?CastField<FStructProperty>(Array->Inner):nullptr;
- if(!Inner || !Inner->Struct || Inner->Struct->GetPathName()!=FILNTabStruct) return false;
- auto* Label=FindFProperty<FTextProperty>(Inner->Struct,TEXT("Text_5_FD671CE446AF05CA543E228C049AB0F9"));
- if(!Label) return false;
- FScriptArrayHelper Buttons(Array,Array->ContainerPtrToValuePtr<void>(Tabs));
- Buttons.EmptyValues();
- for(const FText& Text:{NSLOCTEXT("FILN","StorageTab","STORAGE"),NSLOCTEXT("FILN","FiltersTab","FILTERS")})
-  Label->SetPropertyValue_InContainer(Buttons.GetRawPtr(Buttons.AddValue()),Text);
- return FILNCallNoInput(Tabs,TEXT("GenerateButtons"));
-}
+ void FILNFilterTabStyle(UButton* Button,bool Active) {
+  FButtonStyle Style;
+  Style.SetNormal(FSlateColorBrush(FILNFilterColor(Active?TEXT("EFA248"):TEXT("32383D"))));
+  Style.SetHovered(FSlateColorBrush(FILNFilterColor(Active?TEXT("FFC071"):TEXT("46515A"))));
+  Style.SetPressed(FSlateColorBrush(FILNFilterColor(TEXT("BD772E"))));
+  Style.SetNormalPadding(FMargin(12,7)); Style.SetPressedPadding(FMargin(12,7));
+  Button->SetStyle(Style);
+  if(auto* Label=Cast<UTextBlock>(Button->GetChildAt(0))) Label->SetColorAndOpacity(FSlateColor(FILNFilterColor(Active?TEXT("171C20"):TEXT("E8EBED"))));
+ }
 bool FILNSelectorMedium(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  if(!Station || !Resource) return false;
  const auto Form=UFGItemDescriptor::GetForm(Resource), Medium=Station->GetDockingStationResourceForm();
@@ -210,38 +160,79 @@ UFILNResourceRemote* UFILNResourceSelector::Remote() const {
  return PC?PC->GetRemoteCallObjectOfClass<UFILNResourceRemote>():nullptr;
 }
 bool UFILNResourceSelector::BuildControls() {
- auto* PC=GetOwningPlayer();
- auto* TabClass=LoadClass<UUserWidget>(nullptr,FILNTabWidget);
- auto* PartClass=LoadClass<UUserWidget>(nullptr,FILNPartsWidget);
- if(!WidgetTree || !PC || !TabClass || !PartClass) return false;
+ if(!GetOwningPlayer()) return false;
+ if(!WidgetTree) WidgetTree=NewObject<UWidgetTree>(this,TEXT("FILNFilterTree"));
  auto* Root=WidgetTree->ConstructWidget<UVerticalBox>(); WidgetTree->RootWidget=Root;
- Tabs=CreateWidget<UUserWidget>(PC,TabClass);
- Parts=CreateWidget<UUserWidget>(PC,PartClass);
- Feedback=WidgetTree->ConstructWidget<UTextBlock>();
- if(!Tabs || !Parts || !Feedback) return false;
- Feedback->SetAutoWrapText(true);
- Root->AddChildToVerticalBox(Tabs);
- Root->AddChildToVerticalBox(Parts);
+ auto* Bar=WidgetTree->ConstructWidget<UHorizontalBox>();
+ StorageTab=WidgetTree->ConstructWidget<UButton>();
+ FiltersTab=WidgetTree->ConstructWidget<UButton>();
+ StorageTab->AddChild(FILNFilterLabel(WidgetTree,NSLOCTEXT("FILN","StorageTab","STORAGE")));
+ FiltersTab->AddChild(FILNFilterLabel(WidgetTree,NSLOCTEXT("FILN","FiltersTab","FILTERS")));
+ FSlateChildSize Fill(ESlateSizeRule::Fill);
+ auto* Left=Bar->AddChildToHorizontalBox(StorageTab); Left->SetSize(Fill); Left->SetPadding(FMargin(0,0,3,0));
+ Bar->AddChildToHorizontalBox(FiltersTab)->SetSize(Fill);
+ StorageTab->OnClicked.AddDynamic(this,&UFILNResourceSelector::OpenStorage);
+ FiltersTab->OnClicked.AddDynamic(this,&UFILNResourceSelector::OpenFilters);
+ Root->AddChildToVerticalBox(Bar);
+ Parts=WidgetTree->ConstructWidget<UComboBoxString>();
+ Parts->SetMaxListHeight(360.f);
+ Parts->OnSelectionChanged.AddDynamic(this,&UFILNResourceSelector::NativeListChanged);
+ Parts->OnGenerateWidgetEvent.BindDynamic(this,&UFILNResourceSelector::GenerateChoice);
+ Feedback=FILNFilterLabel(WidgetTree, FText::GetEmpty(),13); Feedback->SetAutoWrapText(true);
+ Root->AddChildToVerticalBox(Parts)->SetPadding(FMargin(0,8,0,4));
  Root->AddChildToVerticalBox(Feedback);
  Parts->SetVisibility(ESlateVisibility::Collapsed); Feedback->SetVisibility(ESlateVisibility::Collapsed);
+ SetTabStyle(false);
  return true;
 }
 bool UFILNResourceSelector::HasContext(AFGBuildableDockingStation* Target) const { return Station.Get()==Target && bInitialized; }
+void UFILNResourceSelector::SetTabStyle(bool Filters) {
+ if(StorageTab) FILNFilterTabStyle(StorageTab,!Filters);
+ if(FiltersTab) FILNFilterTabStyle(FiltersTab,Filters);
+}
+FString UFILNResourceSelector::ChoiceFor(TSubclassOf<UFGItemDescriptor> Resource) {
+ if(!Resource) return TEXT("No filter");
+ for(const auto& Entry:Choices) if(Entry.Value==Resource) return Entry.Key;
+ FString Name=UFGItemDescriptor::GetItemName(Resource).ToString();
+ if(Name.IsEmpty()) Name=Resource->GetName();
+ if(Choices.Contains(Name)) Name+=TEXT(" [")+Resource->GetName()+TEXT("]");
+ Choices.Add(Name,Resource); Parts->AddOption(Name); return Name;
+}
+void UFILNResourceSelector::PopulateChoices() {
+ TGuardValue<bool> Guard(bSynchronizing,true);
+ Choices.Reset(); Parts->ClearOptions();
+ Choices.Add(TEXT("No filter"),TSubclassOf<UFGItemDescriptor>()); Parts->AddOption(TEXT("No filter"));
+ auto* Recipes=AFGRecipeManager::Get(GetWorld());
+ if(!Recipes || !Station.IsValid()) return;
+ TArray<TSubclassOf<UFGItemDescriptor>> Available;
+ for(const auto& Resource:Recipes->GetAllAvailableItemDescriptors())
+  if(Resource && FILNSelectorMedium(Station.Get(),Resource)) Available.AddUnique(Resource);
+ Available.Sort([](const TSubclassOf<UFGItemDescriptor>& A,const TSubclassOf<UFGItemDescriptor>& B) {
+  return UFGItemDescriptor::GetItemName(A).ToString()<UFGItemDescriptor::GetItemName(B).ToString();
+ });
+ for(const auto& Resource:Available) ChoiceFor(Resource);
+}
+UWidget* UFILNResourceSelector::GenerateChoice(FString Item) {
+ auto* Row=WidgetTree->ConstructWidget<UHorizontalBox>();
+ if(const auto* Resource=Choices.Find(Item); Resource && *Resource) {
+  if(auto* Icon=UFGItemDescriptor::GetSmallIcon(*Resource)) {
+   auto* Size=WidgetTree->ConstructWidget<USizeBox>(); Size->SetWidthOverride(26); Size->SetHeightOverride(26);
+   auto* Image=WidgetTree->ConstructWidget<UImage>(); Image->SetBrushFromTexture(Icon,true); Size->AddChild(Image);
+   Row->AddChildToHorizontalBox(Size)->SetPadding(FMargin(0,0,8,0));
+  }
+ }
+ Row->AddChildToHorizontalBox(FILNFilterLabel(WidgetTree,FText::FromString(Item)))->SetVerticalAlignment(VAlign_Center);
+ return Row;
+}
 void UFILNResourceSelector::SetContext(AFGBuildableDockingStation* Target,UVerticalBox* Container) {
  ClearContext();
- if(!IsValid(Target) || !IsValid(Container) || !Tabs || !Parts || !Feedback) return;
+ if(!IsValid(Target) || !IsValid(Container) || !Parts || !Feedback) return;
  Station=Target; InventoryContainer=Container; SetVisibility(ESlateVisibility::Visible);
- TGuardValue<bool> Guard(bSynchronizing,true);
- if(!FILNBindEvent(Tabs,TEXT("OnButtonClicked"),this,GET_FUNCTION_NAME_CHECKED(UFILNResourceSelector,NativeTabClicked),1) ||
-    !FILNBindEvent(Parts,TEXT("OnListChanged"),this,GET_FUNCTION_NAME_CHECKED(UFILNResourceSelector,NativeListChanged),0) ||
-    !FILNCallInput<FIntProperty>(Parts,TEXT("SetMaxItemAmount"),TEXT("mMaxItemAmount"),1) ||
-    !FILNCallInput<FTextProperty>(Parts,TEXT("SetName"),TEXT("mName"),NSLOCTEXT("FILN","ResourceLabel","Requested resource")) ||
-    !FILNGenerateTabs(Tabs)) {
-  Fail(NSLOCTEXT("FILN","SelectorContract","Native FILTERS widget contract mismatch")); return;
- }
- bInitialized=true;
- UE_LOG(LogFILN,Log,TEXT("FILN_SELECTOR_ATTACHED station=%s; selection not yet verified"),*Target->GetPathName());
+ PopulateChoices(); SetTabStyle(false); bInitialized=true;
+ UE_LOG(LogFILN,Log,TEXT("FILN_SELECTOR_ATTACHED station=%s"),*Target->GetPathName());
 }
+void UFILNResourceSelector::OpenStorage() { NativeTabClicked(0); }
+void UFILNResourceSelector::OpenFilters() { NativeTabClicked(1); }
 void UFILNResourceSelector::RestoreStorage() {
  for(const auto& Entry:StorageVisibility) if(Entry.Key.IsValid()) Entry.Key->SetVisibility(Entry.Value);
  StorageVisibility.Reset();
@@ -266,6 +257,7 @@ void UFILNResourceSelector::Fail(const FText& Reason) {
 void UFILNResourceSelector::NativeTabClicked(int32 ButtonIndex) {
  if(bSynchronizing || !bInitialized || !Station.IsValid()) return;
  if(ButtonIndex!=0 && ButtonIndex!=1) { Fail(NSLOCTEXT("FILN","BadTab","Unexpected native tab index")); return; }
+ SetTabStyle(ButtonIndex==1);
  if(ButtonIndex==0) {
   RestoreStorage(); bFilterOpen=false; bEditable=false; PendingRequest=0;
   Parts->SetVisibility(ESlateVisibility::Collapsed); Feedback->SetVisibility(ESlateVisibility::Collapsed); return;
@@ -287,11 +279,9 @@ void UFILNResourceSelector::Query() {
 }
 bool UFILNResourceSelector::ShowSelection(TSubclassOf<UFGItemDescriptor> Resource) {
  TGuardValue<bool> Guard(bSynchronizing,true);
- TArray<TSubclassOf<UFGItemDescriptor>> Values;
- if(Resource) Values.Add(Resource);
- if(!FILNClassArrayParameter(Parts,TEXT("SetDescriptors"),TEXT("mDescriptors"),false,Values)) return false;
- TArray<TSubclassOf<UFGItemDescriptor>> Actual;
- return FILNClassArrayParameter(Parts,TEXT("GetList"),TEXT("Items"),true,Actual) && Actual==Values;
+ const FString Name=ChoiceFor(Resource);
+ Parts->SetSelectedOption(Name);
+ return Parts->GetSelectedOption()==Name;
 }
 void UFILNResourceSelector::Reply(AFGBuildableDockingStation* Target,uint32 RequestId,bool Accepted,bool Editable,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message) {
  if(!bFilterOpen || !filn::selector::ReplyMatches(PendingRequest,RequestId,Station.Get()==Target)) return;
@@ -300,13 +290,11 @@ void UFILNResourceSelector::Reply(AFGBuildableDockingStation* Target,uint32 Requ
  bEditable=Editable; Parts->SetIsEnabled(Editable); Feedback->SetText(Message);
  if(!Accepted) UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_REPLY_REJECTED %s"),*Message.ToString());
 }
-void UFILNResourceSelector::NativeListChanged() {
- if(bSynchronizing || !bFilterOpen || !bEditable || PendingRequest || !Station.IsValid()) return;
- TArray<TSubclassOf<UFGItemDescriptor>> Values;
- if(!FILNClassArrayParameter(Parts,TEXT("GetList"),TEXT("Items"),true,Values)) {
-  Fail(NSLOCTEXT("FILN","SelectorListInvalid","Native selection must contain zero or one valid item")); return;
- }
- const auto Resource=Values.IsEmpty()?TSubclassOf<UFGItemDescriptor>():Values[0];
+void UFILNResourceSelector::NativeListChanged(FString SelectedItem,ESelectInfo::Type SelectionType) {
+ if(bSynchronizing || !bFilterOpen || !bEditable || PendingRequest || !Station.IsValid() || SelectionType==ESelectInfo::Direct) return;
+ const auto* Choice=Choices.Find(SelectedItem);
+ if(!Choice) { Query(); return; }
+ const auto Resource=*Choice;
  if(Resource && !FILNSelectorMedium(Station.Get(),Resource)) {
   Query(); Feedback->SetText(NSLOCTEXT("FILN","SelectorWrongMedium","Incompatible resource rejected; reading previous selection")); return;
  }
@@ -319,11 +307,12 @@ void UFILNResourceSelector::NativeListChanged() {
 
 namespace {
 void FILNAttachSelector(UFGInteractWidget* Widget,UObject* Object) {
- if(!IsInGameThread() || !IsValid(Widget) || Widget->GetClass()->GetPathName()!=FILNDockingWidget) return;
+ if(!IsInGameThread() || !IsValid(Widget)) return;
  auto* PC=Widget->GetOwningPlayer(); auto* Target=FILNSelectorStation(Object);
+ if(!Target) Target=FILNSelectorStation(Widget->mInteractObject.Get());
  if(!IsValid(PC) || !PC->IsLocalController() || !IsValid(Target) || Target->GetWorld()!=Widget->GetWorld()) return;
  auto* Container=FILNSelectorContainer(Widget);
- if(!Container) { UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_ERROR native mInventoryContainer missing or not VerticalBox")); return; }
+ if(!Container) { UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_ERROR class=%s native mInventoryContainer unavailable"),*Widget->GetClass()->GetPathName()); return; }
  if(auto* Existing=FILNFindSelector(Container)) {
   if(Existing->HasContext(Target)) return;
   Existing->ClearContext(); Existing->RemoveFromParent();

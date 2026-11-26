@@ -193,7 +193,7 @@ void ALogisticsSubsystem::Rebuild() {
  bAutoDispatchEnabled=!bPreparingUninstall && !bUninstallPrepared;
  bDepotRecipeReady=false; NextDepotRecipeCheck=0; DepotRecipeFailures.Reset();
  PlayerStationScan.Empty(); PlayerVehicleScan.Empty(); PlayerStationCursor=PlayerVehicleCursor=0;
- NextPlayerStationScan=NextPlayerVehicleScan=0; OverflowCursor.Empty(); PendingHomeReason.Empty();
+ NextPlayerStationScan=NextPlayerVehicleScan=0; OverflowCursor.Empty();
  for(const auto& Depot:DepotStations) if(IsValid(Depot)) {
   if(auto* B=Building(Depot); IsValid(B) && !B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
  }

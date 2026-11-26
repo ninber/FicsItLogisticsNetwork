@@ -2,6 +2,7 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/ComboBoxString.h"
 #include "Components/ActorComponent.h"
 #include "FGRemoteCallObject.h"
 #include "Subsystems/GameInstanceSubsystem.h"
@@ -12,6 +13,8 @@ class UFGItemDescriptor;
 class UFGInteractWidget;
 class UVerticalBox;
 class UTextBlock;
+class UButton;
+class UWidget;
 class UFILNResourceSelector;
 
 // Transient registry marker. Selection is handled separately by the native UI.
@@ -61,8 +64,13 @@ public:
 protected:
  void NativeDestruct() override;
 private:
- UPROPERTY() TObjectPtr<UUserWidget> Tabs;
- UPROPERTY() TObjectPtr<UUserWidget> Parts;
+ UPROPERTY() TObjectPtr<UButton> StorageTab;
+ UPROPERTY() TObjectPtr<UButton> FiltersTab;
+ UPROPERTY() TObjectPtr<UComboBoxString> Parts;
+ UPROPERTY() TMap<FString,TSubclassOf<UFGItemDescriptor>> Choices;
+ FString ChoiceFor(TSubclassOf<UFGItemDescriptor> Resource);
+ void PopulateChoices();
+ void SetTabStyle(bool Filters);
  UPROPERTY() TObjectPtr<UTextBlock> Feedback;
  TWeakObjectPtr<AFGBuildableDockingStation> Station;
  TWeakObjectPtr<UVerticalBox> InventoryContainer;
@@ -74,6 +82,9 @@ private:
  void Fail(const FText& Reason);
  bool ShowSelection(TSubclassOf<UFGItemDescriptor> Resource);
  UFILNResourceRemote* Remote() const;
- UFUNCTION() void NativeTabClicked(int32 ButtonIndex);
- UFUNCTION() void NativeListChanged();
+ UFUNCTION() void OpenStorage();
+ UFUNCTION() void OpenFilters();
+ UFUNCTION() void NativeListChanged(FString SelectedItem,ESelectInfo::Type SelectionType);
+ void NativeTabClicked(int32 ButtonIndex);
+ UFUNCTION() UWidget* GenerateChoice(FString Item);
 };
