@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
 #include "FILNStationControls.h"
+#include "FILNOrganizer.h"
 #include "FGHUD.h"
 #include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
@@ -28,6 +29,11 @@ public:
  virtual void StartupModule() override {
   UE_LOG(LogFILN,Log,TEXT("FILN_NATIVE_MODULE_STARTUP"));
   UFILNResourceSelector::InstallHook();
+  UFILNOrganizer::InstallInput();
+  Commands.Add(IConsoleManager::Get().RegisterConsoleCommand(TEXT("filn.organizer"),TEXT("Open read-only FILN Organizer"),
+   FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&,UWorld* World) {
+    if(World) UFILNOrganizer::Open(World->GetFirstPlayerController());
+   }),ECVF_Default));
   ALogisticsSubsystem::InstallParkingHook();
   ALogisticsSubsystem::InstallDockReceiptObserver();
   for(const FString& Verb:TArray<FString>{TEXT("list"),TEXT("pair"),TEXT("unpair"),TEXT("dispatch"),TEXT("reset"),TEXT("rehome"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("depot"),TEXT("removeStation")}) {
@@ -45,6 +51,7 @@ public:
   }
  }
  virtual void ShutdownModule() override {
+  UFILNOrganizer::RemoveInput();
   for(auto* Command:Commands) IConsoleManager::Get().UnregisterConsoleObject(Command,false);
   Commands.Empty();
  }

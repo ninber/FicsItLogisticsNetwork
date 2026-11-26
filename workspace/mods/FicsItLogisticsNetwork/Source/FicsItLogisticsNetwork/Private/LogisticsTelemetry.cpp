@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
 #include "FILNInventoryCapacity.h"
+#include "FILNOrganizerPolicy.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
@@ -163,7 +164,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
  // Only gate the start of a scan. Never discard accepted work when the
  // demand file ages out, including during a long scan or a paused world.
  if(!bTelemetryCollecting) {
-  if(!TelemetryDemand.ShouldStart(bTelemetryPublished) && Now>=OrganizerDemandUntil) return;
+  if(!filn::organizer::RequestScan(TelemetryDemand.ShouldStart(bTelemetryPublished),Now,OrganizerDemandUntil)) return;
   if(Now<NextTelemetryStart || (TelemetryWrite.IsValid() && !TelemetryWrite.IsReady())) return;
   auto* VS=AFGVehicleSubsystem::Get(GetWorld());
   if(!VS) {
