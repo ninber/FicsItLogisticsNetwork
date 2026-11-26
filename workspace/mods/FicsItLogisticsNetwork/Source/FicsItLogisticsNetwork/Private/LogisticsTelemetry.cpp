@@ -243,7 +243,8 @@ void ALogisticsSubsystem::SampleTelemetry() {
    O->SetStringField(TEXT("class"),VehicleClass);
    O->SetBoolField(TEXT("managed"),R!=nullptr);
    O->SetBoolField(TEXT("filn_member"),R!=nullptr || PendingDepotMembership.Contains(V));
-   O->SetBoolField(TEXT("registration_pending"),!R && PendingDepotMembership.Contains(V)); O->SetBoolField(TEXT("home_powered"),IsValid(H) && H->HasPower() && !H->IsProductionPaused());
+   O->SetBoolField(TEXT("registration_pending"),!R && PendingDepotMembership.Contains(V));
+   O->SetBoolField(TEXT("depot_capacity_warning"),HasDepotCapacityWarning(V)); O->SetBoolField(TEXT("home_powered"),IsValid(H) && H->HasPower() && !H->IsProductionPaused());
    O->SetBoolField(TEXT("autopilot"),V->IsAutopilotEnabled()); O->SetBoolField(TEXT("driver"),VehicleOwner->GetDriver()!=nullptr);
    O->SetBoolField(TEXT("has_fuel"),VehicleOwner->HasFuel()); O->SetBoolField(TEXT("docking"),V->IsCurrentlyDocking());
    const FString Medium=VehicleOwner->GetClass()->ImplementsInterface(UFGDockableInterface::StaticClass())?FILNTelemetryMedium(IFGDockableInterface::Execute_GetDockInventoryResourceForm(VehicleOwner)):TEXT("unknown");

@@ -231,3 +231,5 @@ The latest player requirements supersede older home-only enrollment assumptions 
 - [ ] T132 Repair old per-slot FILN restrictions automatically on existing converted saves, verify actual per-slot cargo, capacity and resource readback; do not remove real singleton cargo by guesswork.
 - [ ] T133 Make FILTERS visible and usable in actual native station UI, both solid and fluid, with correct server readback; no fragile reflected tab dependency.
 - [ ] T134 Test existing autosave, occupied stations, one bad station/job, automatic resumed dispatch and actual filter UI in cooked game. No manual reset/re-migration required.
+
+- [ ] T135 Test depot shortage (more FILN vehicles than compatible depots), waiting membership/cargo, red Vehicles and native map/compass warning, automatic assignment after adding/freeing a bay, warning clears on assignment or opt-out, unrelated deliveries continue. Distinguish unpowered/unreachable from no vacant bay. No saved map pins. Native warning hook must be validated in cooked game before acceptance.

@@ -313,15 +313,18 @@ void UFILNOrganizer::RenderVehicles() {
   auto* Head=WidgetTree->ConstructWidget<UHorizontalBox>();
   auto* Name=Head->AddChildToHorizontalBox(FILNOText(WidgetTree,FILNOName(V),16,FILNOInk(),true)); FILNOFill(Name);
   auto* Job=FILNOObject(V,TEXT("job")); auto* Cargo=FILNOObject(V,TEXT("cargo"));
+  const bool DepotWarning=FILNOBool(V,TEXT("depot_capacity_warning"));
   FString Status;
-  if(FILNOBool(V,TEXT("driver"))) Status=TEXT("Player driving");
+  if(DepotWarning) Status=TEXT("NO FREE DEPOT");
+  else if(FILNOBool(V,TEXT("driver"))) Status=TEXT("Player driving");
   else if(!FILNOBool(V,TEXT("autopilot"))) Status=TEXT("Autopilot off");
   else if(FILNOBool(V,TEXT("registration_pending"))) Status=TEXT("Registration pending");
   else if(!FILNOBool(V,TEXT("managed"))) Status=TEXT("Not registered");
   else if(!Healthy) Status=TEXT("Native route");
   else if(FILNOBool(V,TEXT("held"))) Status=TEXT("Waiting at depot");
   else { Status=FILNOString(Job,TEXT("state")); if(Status.IsEmpty()) Status=TEXT("Autopilot on"); }
-  FILNOAddH(Head,FILNOText(WidgetTree,Status,13,FILNOMuted())); FILNOAdd(Body,Head,4);
+  FILNOAddH(Head,FILNOText(WidgetTree,Status,13,DepotWarning?FILNOWarn():FILNOMuted(),DepotWarning)); FILNOAdd(Body,Head,4);
+  if(DepotWarning) FILNOAdd(Body,FILNOText(WidgetTree,TEXT("Waiting for a free compatible depot · retrying automatically"),13,FILNOWarn()),4);
   auto* Route=WidgetTree->ConstructWidget<UWrapBox>(); Route->SetInnerSlotPadding(FVector2D(4,2));
   const auto& Nodes=FILNOValues(V,TEXT("route")); const int32 Target=static_cast<int32>(FILNONumber(V,TEXT("target"),-1));
   if(Nodes.IsEmpty()) Route->AddChildToWrapBox(FILNOText(WidgetTree,TEXT("No route"),13,FILNOMuted()));

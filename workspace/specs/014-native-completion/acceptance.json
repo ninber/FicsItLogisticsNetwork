@@ -545,6 +545,14 @@
       "implementation": "LogisticsSubsystem.cpp / FILNStationControls.cpp",
       "verification_method": "Load existing converted autosave; verify real cargo and slot layout, filter tab and unrelated automatic deliveries",
       "actual_result": "User reports individual slots still restricted and Filters tab absent; native repair and selector must be tested on current autosave."
+    },
+    {
+      "id": "depot-capacity-warning",
+      "status": "not-verified",
+      "reason": "Source implementation; native warning rendering and live recovery unverified.",
+      "implementation": "LogisticsPlayerWorkflow.cpp / FILNDepotWarning.cpp / FILNOrganizer.cpp",
+      "verification_method": "More trucks than depots; actual native map/compass warning, free new compatible bay, auto-clear and assign, verify other jobs continue and ordinary warning still works.",
+      "actual_result": "No cooked game evidence."
     }
   ]
 }

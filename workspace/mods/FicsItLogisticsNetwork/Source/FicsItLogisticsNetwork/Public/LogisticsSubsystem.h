@@ -101,6 +101,7 @@ public:
  void Execute(const FString& Command, const TArray<FString>& Args);
  bool HoldVehicle(AFGWheeledVehicleIdentifier* Vehicle);
  static void InstallParkingHook();
+ static void InstallDepotWarningHook();
  static void InstallDockReceiptObserver();
  TSharedPtr<const FJsonObject> OrganizerSnapshot();
 private:
@@ -212,6 +213,9 @@ private:
  double NextPlayerStationScan=0, NextPlayerVehicleScan=0;
  TMap<TWeakObjectPtr<AFGWheeledVehicleIdentifier>,int32> OverflowCursor;
  TMap<TWeakObjectPtr<AFGWheeledVehicleIdentifier>,FString> PendingHomeReason;
+ TSet<TWeakObjectPtr<AFGWheeledVehicleIdentifier>> DepotCapacityWarnings;
+ bool HasDepotCapacityWarning(AFGWheeledVehicleIdentifier* Vehicle) const;
+ void SetDepotCapacityWarning(AFGWheeledVehicleIdentifier* Vehicle,bool Warning);
  bool BuildOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex,filn::dispatch::Offer& Offer,bool& Pending);
  bool CommitOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex);
  void ResetScan();

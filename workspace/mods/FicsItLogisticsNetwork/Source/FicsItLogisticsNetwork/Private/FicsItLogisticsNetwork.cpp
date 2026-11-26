@@ -35,6 +35,7 @@ public:
     if(World) UFILNOrganizer::Open(World->GetFirstPlayerController());
    }),ECVF_Default));
   ALogisticsSubsystem::InstallParkingHook();
+  ALogisticsSubsystem::InstallDepotWarningHook();
   ALogisticsSubsystem::InstallDockReceiptObserver();
   for(const FString& Verb:TArray<FString>{TEXT("list"),TEXT("pair"),TEXT("unpair"),TEXT("dispatch"),TEXT("reset"),TEXT("rehome"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("depot"),TEXT("removeStation")}) {
    Commands.Add(IConsoleManager::Get().RegisterConsoleCommand(

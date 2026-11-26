@@ -35,3 +35,5 @@ has executable evidence, rather than relying on untested class redirects.
 
 ## Recovery correction (R14)
 Replace fail-all rebuild with independent station/vehicle reconciliation and bounded retries. Verify old per-slot restrictions against saved original filters before clearing; use native setter only for recognizable FILN-written restrictions, never delete real cargo. Keep station-local failures visible. Repair selector without relying on exact fragile Blueprint contracts. Test actual last autosave and fresh solid/fluid stations, prove dispatch continues with one bad station/job.
+
+Depot capacity follow-up (R14a): derive per-vehicle capacity warning from live compatible vacant bays; keep pending membership and retry, update existing native vehicle representation only on warning transitions. Verify actual warning rendering/clearing, no native warning regression and continued unrelated jobs. Native highlight/light column is optional, only if an on-demand player action can use the existing game marker mechanism without changing unrelated highlights.
