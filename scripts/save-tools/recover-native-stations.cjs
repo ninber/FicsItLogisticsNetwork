@@ -113,4 +113,53 @@ function recover(save,receipt,history) {
  assert.equal(source.length,objects.length,'Object count changed');
  return {save:next,changes,stations:[...stations.values()],historicalMissing:missing};
 }
-module.exports={recover,validateAssets,asset,SUBSYSTEM};
+// Read the original pre-migration save directly; no intermediate manifest or
+// name/cargo inference. Absence of FilterItem in a legacy actor means no
+// serialized explicit resource, not permission to invent one.
+function recoverFromOriginal(current,original,receipt) {
+ const roles=validateAssets(receipt);
+ const oldObjects=objectsOf(original), oldBy=new Map(oldObjects.map(o=>[o.instanceName,o]));
+ assert.equal(oldBy.size,oldObjects.length,'Duplicate original actor identity');
+ const oldStations=new Map(), oldIds=new Map(), oldRoads=new Map();
+ const vanilla=new Set([...roles.values()].map(r=>r.vanilla_actor));
+ for(const o of oldObjects) {
+  if(o.typePath!==PROGRAMMABLE && !vanilla.has(o.typePath)) continue;
+  const p=o.properties, id=reference(p.mStationIdentifier), node=reference(p.mDockingPathNode);
+  assert(id && oldBy.has(id) && node && oldBy.has(node),'Original station identity incomplete: '+o.instanceName);
+  const road=guid(oldBy.get(node).properties?.mPathNodeGUID?.value);
+  assert(!oldIds.has(id) && !oldRoads.has(road),'Duplicate original station identifier/road');
+  const filter=p.FilterItem;
+  assert(filter===undefined || Array.isArray(filter.values),'Malformed original FilterItem: '+o.instanceName);
+  const entries=filter?.values??[];
+  assert(entries.length<=1 && entries.every(e=>e.levelName==='' && typeof e.pathName==='string' && e.pathName.startsWith('/')),
+    'Unsupported original resource selection: '+o.instanceName);
+  const info={actor:o.instanceName,id,node,road_guid:road,resource:entries[0]?.pathName??null,recipe:reference(p.mBuiltWithRecipe),class:o.typePath};
+  oldStations.set(info.actor,info);oldIds.set(id,info);oldRoads.set(road,info);
+ }
+ assert(oldStations.size>0,'No original stations found');
+ const result=recover(current,receipt);
+ const currentBy=new Map(objectsOf(current).map(o=>[o.instanceName,o]));
+ const covered=new Set();
+ let originallyUnset=0, originalExplicit=0;
+ for(const s of result.stations) {
+  const old=oldStations.get(s.actor);
+  assert(old && old===oldIds.get(s.id) && old===oldRoads.get(s.guid),'Original station identity missing or conflicting: '+s.actor);
+  assert.equal(reference(currentBy.get(s.actor).properties.mDockingPathNode),old.node,'Original road node changed: '+s.actor);
+  covered.add(old.actor);
+  if(s.role.endsWith('Depot')) {
+   assert(!old.resource,'Original filtered logistics station classified as depot: '+s.actor);
+   continue;
+  }
+  if(old.resource) {
+   assert.equal(s.resource,old.resource,'Original explicit filter missing or changed: '+s.actor);
+   ++originalExplicit;
+  } else {
+   // Never erase a selection made in the newer world, or infer a resource
+   // from an old empty template, label or incidental cargo.
+   ++originallyUnset;
+  }
+ }
+ const absent=[...oldStations.values()].filter(o=>!covered.has(o.actor));
+ return {...result,originalExplicit,originallyUnset,originalAbsent:absent};
+}
+module.exports={recover,recoverFromOriginal,validateAssets,asset,SUBSYSTEM};
