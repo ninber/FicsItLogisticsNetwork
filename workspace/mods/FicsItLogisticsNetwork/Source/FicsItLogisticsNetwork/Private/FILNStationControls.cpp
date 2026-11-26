@@ -316,7 +316,9 @@ void UFILNResourceSelector::NativeTabClicked(int32 ButtonIndex) {
  }
  auto* Container=InventoryContainer.Get();
  if(!Container) { Fail(NSLOCTEXT("FILN","MissingContainer","Native storage container no longer available")); return; }
- if(!bFilterOpen) for(int32 I=0;I<Container->GetChildrenCount();++I) {
+ // Re-clicking the active tab must not restart the query or close its dropdown.
+ if(bFilterOpen) return;
+ for(int32 I=0;I<Container->GetChildrenCount();++I) {
   auto* Child=Container->GetChildAt(I);
   if(Child && Child!=this) { StorageVisibility.Emplace(Child,Child->GetVisibility()); Child->SetVisibility(ESlateVisibility::Collapsed); }
  }
@@ -330,7 +332,8 @@ void UFILNResourceSelector::StopRefresh() {
 }
 void UFILNResourceSelector::RefreshIfBlocked() {
  if(!bFilterOpen || !bInitialized || !Station.IsValid()) { StopRefresh(); return; }
- if(!filn::selector::ShouldQuery(bEditable,PendingRequest,FPlatformTime::Seconds(),RequestDeadline)) return;
+ // Never disable or refresh the combo while the player is browsing its options.
+ if(!Parts || !filn::selector::ShouldQuery(bEditable,Parts->IsOpen(),PendingRequest,FPlatformTime::Seconds(),RequestDeadline)) return;
  if(PendingRequest) {
   PendingRequest=0;
   Feedback->SetText(NSLOCTEXT("FILN","SelectorTimeout","No confirmation received. Checking the current selection; changes are not resent."));
@@ -348,7 +351,7 @@ void UFILNResourceSelector::Query(bool Background) {
 bool UFILNResourceSelector::ShowSelection(TSubclassOf<UFGItemDescriptor> Resource) {
  TGuardValue<bool> Guard(bSynchronizing,true);
  const FString Name=ChoiceFor(Resource);
- Parts->SetSelectedOption(Name);
+ if(Parts->GetSelectedOption()!=Name) Parts->SetSelectedOption(Name);
  return Parts->GetSelectedOption()==Name;
 }
 void UFILNResourceSelector::Reply(AFGBuildableDockingStation* Target,uint32 RequestId,bool Accepted,bool Editable,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message) {
