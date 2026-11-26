@@ -138,7 +138,7 @@ void ALogisticsSubsystem::Rebuild() {
  }
  Stations=MoveTemp(CleanStations);
  TArray<TObjectPtr<AFGDockingStationIdentifier>> CleanDepots;
- for(const auto& D:DepotStations) if(IsValid(D) && D->GetWorld()==GetWorld()) {
+ for(const auto& D:DepotStations) if(IsValid(D) && D->GetWorld()==GetWorld() && IsValid(Building(D)) && !Building(D)->IsBuildableInsideBlueprintDesigner()) {
   const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(D.Get());
   if(DepotIndex.Contains(Ref)) continue;
   StationId(D); DepotIndex.Add(Ref); CleanDepots.Add(D);
@@ -175,7 +175,14 @@ void ALogisticsSubsystem::Rebuild() {
    RegistryIssue(FString::Printf(TEXT("Duplicate station config removed: %s"),*C.Station->GetPathName())); StationConfigs.RemoveAt(I); continue;
   }
   auto* B=Building(C.Station);
-  if(IsValid(B) && B->IsBuildableInsideBlueprintDesigner()) { StationConfigs.RemoveAt(I); continue; }
+  if(IsValid(B) && B->IsBuildableInsideBlueprintDesigner()) {
+   // Preserve a previously selected designer resource before retiring the world record.
+   if(FFILNStationSettings::HasProperty(B) && !C.ExternalFilter &&
+      (FFILNStationSettings::Read(B) || (C.Resource && FFILNStationSettings::Write(B,C.Resource)))) {
+    StationConfigs.RemoveAt(I); continue;
+   }
+   RegistryIssue(FString::Printf(TEXT("Designer setting requires authored SaveGame property: %s"),*B->GetPathName())); ++I; continue;
+  }
   ConfigActors.Add(C.Station); StationId(C.Station);
   if(FFILNStationSettings::HasProperty(B) && !C.ExternalFilter) {
    if(const auto Saved=FFILNStationSettings::Read(B)) C.Resource=Saved;
@@ -288,7 +295,8 @@ void ALogisticsSubsystem::RetryStationFilters() {
  if(bChangingFilters || bPreparingUninstall || bUninstallPrepared) return;
  for(int32 Work=0;Work<FMath::Min(4,StationConfigs.Num());++Work) {
   FilterRepairCursor%=StationConfigs.Num(); const auto& C=StationConfigs[FilterRepairCursor++];
-  if(!IsValid(C.Station) || !C.Resource || C.ExternalFilter || StationResourceMatches(C)) continue;
+  auto* B=Building(C.Station);
+  if(!IsValid(B) || B->IsBuildableInsideBlueprintDesigner() || !C.Resource || C.ExternalFilter || StationResourceMatches(C)) continue;
   if(ValidateStationSlots(C) && ApplyStationFilter(C)) {
    const FString Pending=FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName());
    const FString Prefix=FString::Printf(TEXT("Filter preflight %s:"),*GetNameSafe(C.Station.Get()));
@@ -308,7 +316,7 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
  for(const auto& C:Configs) {
   auto* B=Building(C.Station); auto* I=IsValid(B)?B->GetInventory():nullptr;
   const auto Fail=[&](const TCHAR* Why) { const FString Detail=FString::Printf(TEXT("Filter preflight %s: %s"),*GetNameSafe(C.Station.Get()),Why); if(!RegistryDiagnostics.Contains(Detail)) { RegistryDiagnostics.Add(Detail); UE_LOG(LogFILN,Error,TEXT("FILN_FILTER_PREFLIGHT %s"),*Detail); } return false; };
-  if(C.ExternalFilter || !IsValid(I) || !C.Resource || Seen.Contains(I) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096 ||
+  if(C.ExternalFilter || !IsValid(I) || B->IsBuildableInsideBlueprintDesigner() || !C.Resource || Seen.Contains(I) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096 ||
      I->GetSizeLinear()!=C.OriginalFilters.Num() || (Restore && B->GetDockedActor())) return Fail(TEXT("external/invalid/duplicate inventory, slot count mismatch or occupied restore"));
   Seen.Add(I);
   if(!Restore) {
@@ -415,7 +423,7 @@ bool ALogisticsSubsystem::IsDepot(AFGDockingStationIdentifier* Station) const {
  return IsAuthoredDepot(Station) || HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station)) || DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Station));
 }
 void ALogisticsSubsystem::TrackDepot(AFGDockingStationIdentifier* Station) {
- if(!IsValid(Station)) return;
+ if(!IsValid(Station) || !IsValid(Building(Station)) || Building(Station)->IsBuildableInsideBlueprintDesigner()) return;
  const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(Station);
  if(!DepotIndex.Contains(Ref)) { StationId(Station); DepotIndex.Add(Ref); DepotStations.Add(Station); }
  if(auto* B=Building(Station); IsValid(B) && !B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
@@ -445,7 +453,7 @@ bool ALogisticsSubsystem::SetDepot(AFGDockingStationIdentifier* Station,bool Rem
 }
 bool ALogisticsSubsystem::ValidHome(AFGDockingStationIdentifier* Home) const {
  auto* B=Building(Home);
- if(!IsValid(B) || !B->GetDockingPathNode() || !B->GetIsInLoadMode() || !B->GetInventory() || !B->GetInventory()->IsEmpty()) return false;
+ if(!IsValid(B) || B->IsBuildableInsideBlueprintDesigner() || !B->GetDockingPathNode() || !B->GetIsInLoadMode() || !B->GetInventory() || !B->GetInventory()->IsEmpty()) return false;
  // Port identities are native reflected components, not connector names.
  TSet<const UFGFactoryConnectionComponent*> FuelPorts;
  const auto* FuelProperty=FindFProperty<FArrayProperty>(B->GetClass(),TEXT("mFuelConnections"));

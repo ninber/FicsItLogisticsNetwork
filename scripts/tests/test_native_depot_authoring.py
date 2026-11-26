@@ -75,6 +75,40 @@ class NativeDepotAuthoringTests(unittest.TestCase):
         self.namespace["package"] = package
         return self.namespace["author"](suffix, label, (self.recipe_parent, self.desc_parent, self.actor))
 
+    def test_existing_station_asset_upgrades_and_reload_checks_savegame_property(self):
+        calls = []
+        bp = object()
+        parent = self.actor
+        registry_data = object()
+        saved = []
+        self.namespace["unreal"].EditorAssetLibrary = SimpleNamespace(
+            does_asset_exist=lambda _: True, load_asset=lambda _: bp,
+            load_blueprint_class=lambda _: parent, find_asset_data=lambda _: registry_data,
+            save_loaded_asset=lambda obj, **kwargs: saved.append(obj) or True)
+        self.namespace["unreal"].AssetRegistryHelpers = SimpleNamespace(get_tag_value=lambda *_: parent.get_path_name())
+        self.namespace["unreal"].FILNBlueprintSettings = SimpleNamespace(
+            ensure_station_resource_property=lambda obj, validate: calls.append((obj, validate)) or True)
+        package = self.namespace["package"]
+        for name in ("Build_FILNStation", "Build_FILNFluidStation"):
+            self.namespace["VALIDATE_ONLY"] = False
+            package(name, parent, lambda _: None, lambda _: None)
+            self.namespace["VALIDATE_ONLY"] = True
+            package(name, parent, lambda _: None, lambda _: None)
+        self.assertEqual(calls, [(bp, False), (bp, True)] * 2)
+        self.assertEqual(saved, [bp, bp])
+        self.namespace["unreal"].FILNBlueprintSettings.ensure_station_resource_property = lambda *_: False
+        with self.assertRaisesRegex(RuntimeError, "FILNResource SaveGame"):
+            package("Build_FILNStation", parent, lambda _: None, lambda _: None)
+
+    def test_depots_do_not_get_logistics_resource_property(self):
+        bp = object()
+        self.namespace["unreal"].EditorAssetLibrary = SimpleNamespace(
+            does_asset_exist=lambda _: True, load_asset=lambda _: bp,
+            load_blueprint_class=lambda _: self.actor, find_asset_data=lambda _: object())
+        self.namespace["unreal"].AssetRegistryHelpers = SimpleNamespace(get_tag_value=lambda *_: self.actor.get_path_name())
+        self.namespace["VALIDATE_ONLY"] = True
+        self.namespace["package"]("Build_FILNDepot", self.actor, lambda _: None, lambda _: None)
+
     def test_all_four_buildings_without_override_property(self):
         for suffix, label in (("FILNDepot", "FILN Depot"),
                               ("FILNFluidDepot", "FILN Fluid Depot"),

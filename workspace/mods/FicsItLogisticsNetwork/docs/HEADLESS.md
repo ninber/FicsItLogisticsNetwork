@@ -73,3 +73,6 @@ Runtime commands are developer-only; see the [native README](../README.md). Old 
 Local Codex reports native Linux editor compilation/linkage after unpublished unity-build fixes; depot authoring and fresh reload failed. Reconcile local work before changing C++. SML native root registration is proposed, not verified. Development prerequisites and package verifier now require the FILN SML-only descriptor; no other gameplay mod source/assets required. Sync canonical source; remove stale third-party project enablement separately in a clean development checkout, not the running game.
 
 Current evidence: [consistency audit](../../../specs/014-native-completion/consistency-audit.md).
+
+## Station blueprint settings (R17)
+After syncing source, build the editor module, run `headless.sh author-depot` (adds and verifies the SaveGame `FILNResource` property on the existing solid/fluid logistics actor Blueprints, including fresh editor reload), then package. A DLL-only replacement is insufficient. Old authored class paths remain unchanged. In-game acceptance: configure both modes and media inside the designer, save/reopen, place twice, independently change/clear and save/reload; inspect dispatch and inventory. No designer station may enroll in the active network. Previously saved blueprints which never contained the resource cannot recover it from this change alone.

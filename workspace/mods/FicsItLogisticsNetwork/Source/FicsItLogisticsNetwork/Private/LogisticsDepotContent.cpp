@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
+#include "FILNBlueprintSettings.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
 #include "FGRecipe.h"
@@ -71,6 +72,11 @@ void ALogisticsSubsystem::EnsureDepotRecipe() {
     TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNStation.Build_FILNStation_C");
   if(!BuildClass || !BuildClass->IsChildOf(AFGBuildableDockingStation::StaticClass()) || BuildClass->GetPathName()!=ExpectedActor) {
    Reject(Path,FString::Printf(TEXT("Expected buildable '%s'; runtime descriptor builds '%s'"),ExpectedActor,BuildClass?*BuildClass->GetPathName():TEXT("<null>"))); continue;
+  }
+  if(Path==FILNSolidStationPath || Path==FILNFluidStationPath) {
+   if(!FFILNStationSettings::HasProperty(Cast<AFGBuildableDockingStation>(BuildClass->GetDefaultObject()))) {
+    Reject(Path,TEXT("Cooked station missing FILNResource SaveGame class property; reauthor assets and repackage")); continue;
+   }
   }
   const FString RecipeName=UFGRecipe::GetRecipeName(Recipe).ToString();
   const FString ItemName=UFGItemDescriptor::GetItemName(Products[0].ItemClass).ToString();

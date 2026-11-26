@@ -581,6 +581,14 @@
       "implementation": "FILNNetworkPaint.cpp",
       "verification_method": "Select unused swatch in disposable world, initialize taxi palette, edit in native Customizer; observe vehicles and stations; disable/leave network and inspect prior paint.",
       "actual_result": "No cooked game evidence."
+    },
+    {
+      "id": "native-blueprint-resource-persistence",
+      "status": "not-verified",
+      "reason": "Actor-local SaveGame property and bounded placed-station registration implemented in source; requires authoring and cooked game blueprint roundtrip.",
+      "implementation": "R17 / FILNBlueprintSettings.cpp, author-native-depot.py, FILNStationControls.cpp",
+      "verification_method": "For solid/fluid LOAD/UNLOAD stations select a resource inside designer; save, clear designer, reopen file, place two copies, verify selected resource and native mode; change/clear one copy independently, resave and reopen, save/reload world. Check designer never enrolls in dispatcher and placed station has separate identifier and actual filter enforcement. Inspect binary SBP for FILNResource and verify real cooked classes have SaveGame flag. No cargo/slot writes.",
+      "actual_result": "Not run against matching editor or cooked game."
     }
   ]
 }

@@ -238,3 +238,5 @@ The latest player requirements supersede older home-only enrollment assumptions 
 - [ ] T137 Dedicated FILN taxi swatch, native Customizer edit and shared reference on both vehicles and stations, no external dependency/slot collision, persist and replicate palette. Verify actual recoloring and ordinary objects unaffected; no fallback masquerading as dedicated swatch.
 
 - [ ] T138 Optional existing regular swatch binding (explicit player choice only), taxi palette initializer, native Customizer live edits, previous paint restoration on opt-out, no automatic global palette edit. Separately verify, does not complete T137.
+
+- [ ] R17/P0: Execute author/reload and cooked designer save/load/placement tests for independent FILNResource persistence in both station media and modes. Verify clear/change, independent copy identities, no designer dispatch, no inventory mutation. Do not claim completed until evidence exists.
