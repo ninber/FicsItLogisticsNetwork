@@ -185,7 +185,7 @@ void ALogisticsSubsystem::Rebuild() {
   }
   ConfigActors.Add(C.Station); StationId(C.Station);
   if(FFILNStationSettings::HasProperty(B) && !C.ExternalFilter) {
-   if(const auto Saved=FFILNStationSettings::Read(B)) C.Resource=Saved;
+   if(const auto SavedResource=FFILNStationSettings::Read(B)) C.Resource=SavedResource;
    else if(C.Resource) FFILNStationSettings::Write(B,C.Resource);
   }
   if(!C.ExternalFilter && C.Resource && ValidateStationSlots(C)) {

@@ -69,7 +69,7 @@ void ALogisticsSubsystem::DiscoverDepots() {
   UpdateNetworkPaint(ID,ID->GetStation(),Network);
   if(IsAuthoredDepot(ID) && !DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(ID))) {
    TrackDepot(ID);
-   if(auto* B=ID->GetStation(); IsValid(B)) UE_LOG(LogFILN,Log,TEXT("FILN_DEPOT_DISCOVERED node=%s actor=%s class=%s valid_home=%d"),*ID->GetPathNodeGUID().ToString(),*B->GetPathName(),*B->GetClass()->GetPathName(),ValidHome(ID));
+   UE_LOG(LogFILN,Log,TEXT("FILN_DEPOT_DISCOVERED node=%s actor=%s class=%s valid_home=%d"),*ID->GetPathNodeGUID().ToString(),*B->GetPathName(),*B->GetClass()->GetPathName(),ValidHome(ID));
   }
  }
 }
