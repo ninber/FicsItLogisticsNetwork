@@ -216,6 +216,11 @@ private:
  bool CommitOffer(int32 VehicleIndex,int32 RequesterIndex,int32 ProviderIndex);
  void ResetScan();
  void Rebuild();
+ void RequestRegistryRepair();
+ void RetireJobToParking(FFILNRegistration& R,const FString& Why);
+ bool RepairStationSlots(const FFILNStationConfig& C);
+ void RetryStationFilters();
+ int32 FilterRepairCursor=0;
  bool ConfigureStation(AFGDockingStationIdentifier* Station, TSubclassOf<UFGItemDescriptor> Resource);
  bool PrepareStationsForUninstall();
  bool RestoreStationFilters(const TArray<int32>& Indices);

@@ -169,7 +169,7 @@ void ALogisticsSubsystem::AuditIdleFleet() {
     const bool BeforeAP=V->IsAutopilotEnabled();
     if(V->GetVehicleRoute()!=Route) V->SetVehicleRoute(Route);
     if(V->GetVehicleRoute()!=Route || V->IsAutopilotEnabled()!=BeforeAP || O->GetDriver()) {
-     R.Diagnostic=TEXT("Depot parking completion readback failed"); bDispatchBlocked=true; continue;
+     R.Diagnostic=TEXT("Depot parking completion readback failed"); R.NavigationRetry.Attempt(Now); continue;
     }
     R.IdleRoute=Route; R.Relocating=false; R.AwaitingHomeIntent=false; R.Held=BeforeAP; R.NavigationRetry.Reset(); R.TravelProgress.Reset();
     R.Diagnostic=TEXT("FILN home parking confirmed"); ResetScan(); continue;
@@ -211,12 +211,12 @@ void ALogisticsSubsystem::AuditIdleFleet() {
    const TArray<FGuid> Parking={Home,Anchor};
    V->SetVehicleRoute(Parking);
    if(V->GetVehicleRoute()!=Parking || !V->IsAutopilotEnabled() || O->GetDriver()) {
-    R.Diagnostic=TEXT("Native parking route write failed"); bDispatchBlocked=true; continue;
+    R.Diagnostic=TEXT("Native parking route write failed"); R.NavigationRetry.Attempt(Now); continue;
    }
    R.IdleRoute=Parking; R.AwaitingHomeIntent=false;
    V->SetCurrentTargetWaypoint(0);
    if(V->GetCurrentTargetWaypointIndex()!=0 || V->GetVehicleRoute()!=Parking || !V->IsAutopilotEnabled() || O->GetDriver()) {
-    R.Diagnostic=TEXT("Native parking waypoint write failed"); bDispatchBlocked=true; continue;
+    R.Diagnostic=TEXT("Native parking waypoint write failed"); R.NavigationRetry.Attempt(Now); continue;
    }
    R.NavigationRetry.Attempt(Now); R.TravelProgress.Reset(); R.Diagnostic=TEXT("Registered: native route to home committed, awaiting parking"); ResetScan(); continue;
   }
@@ -290,13 +290,13 @@ bool ALogisticsSubsystem::RehomeParkedVehicle(int32 Index,AFGDockingStationIdent
  V->SetVehicleRoute(Intent);
  if(V->GetVehicleRoute()!=Intent || V->IsAutopilotEnabled() || O->GetDriver() || H->GetDockedActor()!=O) {
   if(!V->IsAutopilotEnabled() && !O->GetDriver() && V->GetVehicleRoute()==Intent) V->SetVehicleRoute(Before);
-  if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()) bDispatchBlocked=true;
+  if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()) RequestRegistryRepair();
   R.Diagnostic=TEXT("Explicit rehome route readback failed; original ownership and leases retained");
   return false;
  }
  if(!Ownership.Move(Truck,OldBay,NewBay)) {
   V->SetVehicleRoute(Before);
-  if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()) bDispatchBlocked=true;
+  if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()) RequestRegistryRepair();
   return false;
  }
  if(IsValid(R.Home)) HomeStations.Remove(TWeakObjectPtr<AFGDockingStationIdentifier>(R.Home.Get()));

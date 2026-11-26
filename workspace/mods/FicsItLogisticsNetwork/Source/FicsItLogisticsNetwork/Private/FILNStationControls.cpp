@@ -169,7 +169,7 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
  }
  const auto Current=[&]() { return S->StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;}); };
  const auto* Before=Current();
- const bool Editable=!Target->GetIsInLoadMode() && !S->IsDepot(ID) && (!Before || S->StationResourceMatches(*Before));
+ const bool Editable=!Target->GetIsInLoadMode() && !S->IsDepot(ID) && (!Before || !Before->ExternalFilter);
  bool Accepted=!Mutate && Editable;
  FText Message=Editable?NSLOCTEXT("FILN","SelectorReady","Select one resource; changes are applied immediately"):
   NSLOCTEXT("FILN","SelectorNotEditable","Only a valid ordinary UNLOAD station can be configured");
@@ -186,7 +186,7 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
     const auto* After=Current();
     Accepted=filn::selector::Confirmed(Changed,!Resource,After!=nullptr,After && S->StationResourceMatches(*After),After && After->Resource==Resource);
     if(Changed && !Accepted) {
-     S->bDispatchBlocked=true; S->bAutoDispatchEnabled=false;
+     S->RegistryDiagnostics.AddUnique(FString::Printf(TEXT("Selector readback failed: %s"),*Target->GetPathName()));
      UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_READBACK_FAILED %s"),*Target->GetPathName());
     }
     Message=Accepted?NSLOCTEXT("FILN","SelectorApplied","Resource selection confirmed by native inventory"):
@@ -196,7 +196,7 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
  }
  const auto* After=Current();
  const bool Verified=!After || S->StationResourceMatches(*After);
- const bool CanEdit=Editable && Verified && !S->bDispatchBlocked;
+ const bool CanEdit=Editable && !S->bPreparingUninstall;
  if(!Verified) { Accepted=false; Message=NSLOCTEXT("FILN","SelectorReadback","Native filter readback failed; configuration is not verified"); }
  if(Mutate) UE_LOG(LogFILN,Log,TEXT("FILN_SELECTOR_%s station=%s resource=%s"),Accepted?TEXT("CONFIRMED"):TEXT("REJECTED"),*Target->GetPathName(),*GetPathNameSafe(Resource.Get()));
  ResourceReply(Target,RequestId,Accepted,CanEdit,After?After->Resource:TSubclassOf<UFGItemDescriptor>(),Message);

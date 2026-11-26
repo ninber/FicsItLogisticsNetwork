@@ -56,3 +56,5 @@ All game acceptance uses isolated copies and requires authorization before affec
 running session. No graphical editor is needed for C++, UHT or command-line packaging.
 
 The external legacy migration workflow is not a native release criterion. It remains unverified; scope exclusion is not a passing migration test.
+
+R14 (2026-11-26, user correction): No persistent/global dispatcher lock on station, job, lease, route or saved-registry errors. Reconcile known live identities and ownership independently; retire invalid jobs to automatic parking without discarding cargo/fuel or overriding player AP, retry individual failed operations, preserve unrelated dispatch. Repair old FILN per-slot restrictions using saved original layout and resource, verify native readback, preserve real cargo and capacity. Existing converted worlds must recover without manual remigration; FILTERS must actually be visible and usable on solid and fluid stations. Do not declare migration complete on conversion alone.

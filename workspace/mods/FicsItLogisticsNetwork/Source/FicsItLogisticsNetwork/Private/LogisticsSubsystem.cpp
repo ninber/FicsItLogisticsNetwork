@@ -114,60 +114,79 @@ void ALogisticsSubsystem::Rebuild() {
  HomeStations.Empty(); DepotIndex.Empty();
  ByVehicle.Empty(); StationIds.Empty(); StationIdentityIndex.Empty(); Active.Empty(); Cursor=0;
  RoadCache.Clear(); ResetScan();
- bDispatchBlocked=SchemaVersion!=1;
- const auto RegistryIssue=[this](const FString& Why) { RegistryDiagnostics.Add(Why); UE_LOG(LogFILN,Error,TEXT("FILN_REGISTRY_DETAIL %s"),*Why); };
- if(bDispatchBlocked) RegistryIssue(FString::Printf(TEXT("Unsupported saved schema: %d"),SchemaVersion));
- TSet<FGuid> TruckIdentities, BayIdentities;
- TSet<AFGDockingStationIdentifier*> HomeActors, ConfigActors;
- // First pass is metadata-only. In particular, never stop an ambiguous vehicle
- // or reapply native inventory filters before the entire registry is validated.
- for(const auto& E:Stations) {
+ // Reconcile independent records; no station/job error can disable the network.
+ bDispatchBlocked=false;
+ RegistryDiagnostics.Reset();
+ const auto RegistryIssue=[this](const FString& Why) { RegistryDiagnostics.AddUnique(Why); UE_LOG(LogFILN,Warning,TEXT("FILN_REGISTRY_DETAIL %s"),*Why); };
+ if(SchemaVersion!=1) { RegistryIssue(FString::Printf(TEXT("Rebuilding known fields from saved schema %d"),SchemaVersion)); SchemaVersion=1; }
+ // Reconstruct the live station identity index, retaining unique tombstone IDs.
+ TArray<FFILNStation> CleanStations;
+ for(auto E:Stations) {
+  const bool Live=IsValid(E.Station) && E.Station->GetWorld()==GetWorld();
+  if(!Live) E.Station=nullptr;
   const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(E.Station.Get());
-  if(!E.InstanceId.IsValid() || StationIdentityIndex.Contains(E.InstanceId) ||
-     (IsValid(E.Station) && (E.Station->GetWorld()!=GetWorld() || StationIds.Contains(Ref)))) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Station identity invalid or duplicate: %s (%s)"),*E.InstanceId.ToString(),*GetNameSafe(E.Station.Get()))); continue; }
-  StationIdentityIndex.Add(E.InstanceId);
-  if(IsValid(E.Station)) StationIds.Add(Ref,E.InstanceId);
- }
- for(const auto& Depot:DepotStations) if(IsValid(Depot)) {
-  const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(Depot.Get());
-  if(DepotIndex.Contains(Ref) || !StationIds.Contains(Ref)) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Depot identity missing or duplicate: %s"),*GetNameSafe(Depot.Get()))); }
-  DepotIndex.Add(Ref);
- }
- for(int32 I=0;I<Registrations.Num();++I) {
-  auto& R=Registrations[I];
-  const bool LiveHome=IsValid(R.Home);
-  const auto* HomeId=LiveHome?StationIds.Find(TWeakObjectPtr<AFGDockingStationIdentifier>(R.Home.Get())):nullptr;
-  if(!R.TruckId.IsValid() || !R.BayId.IsValid() || TruckIdentities.Contains(R.TruckId) || BayIdentities.Contains(R.BayId) ||
-     !filn::registry::LeaseReference(StationIdentityIndex.Contains(R.BayId),LiveHome,HomeId && *HomeId==R.BayId) ||
-     (LiveHome && HomeActors.Contains(R.Home)) || !filn::registry::StateAndJob(R.State,R.JobId.IsValid())) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Truck/home/state identity conflict: truck=%s bay=%s state=%d job=%s"),*R.TruckId.ToString(),*R.BayId.ToString(),R.State,*R.JobId.ToString())); }
-  TruckIdentities.Add(R.TruckId); BayIdentities.Add(R.BayId);
-  if(LiveHome) { HomeActors.Add(R.Home); HomeStations.Add(R.Home.Get()); }
-  if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Duplicate ownership: truck=%s bay=%s"),*R.TruckId.ToString(),*R.BayId.ToString())); }
-  if(IsValid(R.Vehicle)) {
-   if(R.Vehicle->GetWorld()!=GetWorld() || ByVehicle.Contains(R.Vehicle)) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Duplicate or foreign vehicle: %s"),*GetNameSafe(R.Vehicle.Get()))); }
-   else ByVehicle.Add(R.Vehicle,I);
+  if(Live && StationIds.Contains(Ref)) continue;
+  if(!E.InstanceId.IsValid() || StationIdentityIndex.Contains(E.InstanceId)) {
+   if(!Live) continue;
+   E.InstanceId=FGuid::NewGuid();
   }
-  if(StateOf(R)!=S::Idle && !RestoreJobReservation(R)) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Cannot restore job lease: truck=%s job=%s provider=%s requester=%s"),*R.TruckId.ToString(),*R.JobId.ToString(),*R.ProviderLease.ToString(),*R.RequesterLease.ToString())); }
+  StationIdentityIndex.Add(E.InstanceId);
+  if(Live) StationIds.Add(Ref,E.InstanceId);
+  CleanStations.Add(E);
  }
- for(const auto& C:StationConfigs) if(IsValid(C.Station)) {
-  if(ConfigActors.Contains(C.Station) || IsDepot(C.Station) || !StationIds.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(C.Station.Get())) || !C.Resource) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Invalid station configuration identity: %s"),*GetNameSafe(C.Station.Get()))); }
-  ConfigActors.Add(C.Station);
-  if(C.ExternalFilter) UE_LOG(LogFILN,Warning,TEXT("Retired unowned filter record is ineligible; explicit safe removal/reconfiguration required"));
+ Stations=MoveTemp(CleanStations);
+ TArray<TObjectPtr<AFGDockingStationIdentifier>> CleanDepots;
+ for(const auto& D:DepotStations) if(IsValid(D) && D->GetWorld()==GetWorld()) {
+  const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(D.Get());
+  if(DepotIndex.Contains(Ref)) continue;
+  StationId(D); DepotIndex.Add(Ref); CleanDepots.Add(D);
  }
- if(bDispatchBlocked) {
-  bAutoDispatchEnabled=false;
-  UE_LOG(LogFILN,Error,TEXT("Saved FILN registry conflict: no native route/filter writes performed; inspect saved identities and reservations"));
-  return;
+ DepotStations=MoveTemp(CleanDepots);
+ // First accepted owner per exclusive live bay. Duplicate records of the same
+ // actor are discarded as metadata only; competing vehicles return to discovery.
+ TArray<FFILNRegistration> Saved=MoveTemp(Registrations);
+ Registrations.Reset();
+ TSet<FGuid> TruckIds;
+ for(auto& R:Saved) {
+  auto* V=R.Vehicle.Get(); auto* H=R.Home.Get();
+  if(!IsValid(V) || V->GetWorld()!=GetWorld()) { RegistryIssue(TEXT("Removed stale vehicle registration; no actor mutation")); continue; }
+  if(ByVehicle.Contains(V)) { RegistryIssue(FString::Printf(TEXT("Duplicate saved vehicle record removed: %s"),*V->GetPathName())); continue; }
+  if(!IsValid(H) || H->GetWorld()!=GetWorld() || HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(H))) {
+   PendingDepotMembership.AddUnique(V); PendingHomeReason.Add(V,TEXT("Saved home unavailable or already owned; rediscovery pending"));
+   RegistryIssue(FString::Printf(TEXT("Home claim requires rediscovery: %s"),*V->GetPathName())); continue;
+  }
+  if(!R.TruckId.IsValid() || TruckIds.Contains(R.TruckId)) R.TruckId=FGuid::NewGuid();
+  R.BayId=StationId(H);
+  if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) { PendingDepotMembership.AddUnique(V); continue; }
+  TruckIds.Add(R.TruckId); HomeStations.Add(H); TrackDepot(H);
+  ByVehicle.Add(V,Registrations.Add(R));
  }
- // Apply only validated native configuration. A filter conflict is not a
- // successful restore; do not resume automatic control until it is resolved.
- TArray<FFILNStationConfig> LiveConfigs;
- for(const auto& C:StationConfigs) if(IsValid(C.Station) && !C.ExternalFilter) LiveConfigs.Add(C);
- if(!ChangeStationFilters(LiveConfigs,false)) {
-  bDispatchBlocked=true; bAutoDispatchEnabled=false;
-  RegistryIssue(TEXT("Saved station filters failed preflight; see FILN_FILTER_PREFLIGHT entries"));
-  UE_LOG(LogFILN,Error,TEXT("Saved FILN filter conflict: native job reconciliation withheld"));
-  return;
+ // Keep the configured resource independent of slot layout. Restore each
+ // station separately, retry incomplete native readback in the watchdog.
+ TSet<AFGDockingStationIdentifier*> ConfigActors;
+ for(int32 I=0;I<StationConfigs.Num();) {
+  auto& C=StationConfigs[I];
+  if(!IsValid(C.Station) || C.Station->GetWorld()!=GetWorld() || IsDepot(C.Station)) {
+   RegistryIssue(TEXT("Removed stale or depot cargo configuration")); StationConfigs.RemoveAt(I); continue;
+  }
+  if(ConfigActors.Contains(C.Station)) {
+   RegistryIssue(FString::Printf(TEXT("Duplicate station config removed: %s"),*C.Station->GetPathName())); StationConfigs.RemoveAt(I); continue;
+  }
+  ConfigActors.Add(C.Station); StationId(C.Station);
+  if(!C.ExternalFilter && C.Resource && RepairStationSlots(C)) ApplyStationFilter(C);
+  else RegistryIssue(FString::Printf(TEXT("Station filter repair pending: %s"),*C.Station->GetPathName()));
+  ++I;
+ }
+ FilterRepairCursor=0;
+ // Recreate reservations only for jobs with consistent current actor identity.
+ // Invalid jobs are retired to native parking with their real cargo intact.
+ for(auto& R:Registrations) {
+  if(StateOf(R)==S::Idle && !R.JobId.IsValid()) continue;
+  if(IsValid(R.Provider)) R.ProviderLease=StationId(R.Provider);
+  if(IsValid(R.Requester)) R.RequesterLease=StationId(R.Requester);
+  if(!filn::registry::StateAndJob(R.State,R.JobId.IsValid()) || !RestoreJobReservation(R)) {
+   RetireJobToParking(R,TEXT("Saved job could not be restored; returning with actual cargo"));
+  }
  }
  bRegistryValidated=true;
  UE_LOG(LogFILN,Log,TEXT("FILN_REGISTRY_REBUILT identities=%d configs=%d depots=%d vehicles=%d"),Stations.Num(),StationConfigs.Num(),DepotStations.Num(),Registrations.Num());
@@ -219,7 +238,67 @@ void ALogisticsSubsystem::Rebuild() {
   const bool Resume=Observed && R.Automatic && R.Resource && R.ExpectedCargo>0 && R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning) &&
     IsValid(O) && !O->GetDriver() && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home) && (R.AbortReturn || EndpointConfigurationValid(R));
   if(Resume && (R.AbortReturn || ArmDockReceipts(R))) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
-  else Recover(R,TEXT("Saved journey cannot safely resume; inspect and return home before reset"));
+  else RetireJobToParking(R,TEXT("Saved journey cannot resume; parking with actual cargo"));
+ }
+}
+void ALogisticsSubsystem::RequestRegistryRepair() {
+ if(!HasAuthority() || !GetWorld() || GetWorld()->bIsTearingDown) return;
+ // A damaged runtime index is rebuilt on the next game-thread tick, never latched.
+ if(!GetWorldTimerManager().IsTimerActive(DeferredRebuild))
+  DeferredRebuild=GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateUObject(this,&ALogisticsSubsystem::Rebuild));
+}
+void ALogisticsSubsystem::RetireJobToParking(FFILNRegistration& R,const FString& Why) {
+ if(R.JobId.IsValid() && Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) {
+  DisarmDockReceipts(R.JobId); Reservations.Release(Key(R.JobId));
+ }
+ auto* V=R.Vehicle.Get();
+ const bool OwnedRoute=IsValid(V) && V->GetVehicleRoute()==R.RouteIntent;
+ R.IdleRoute=IsValid(V)?V->GetVehicleRoute():TArray<FGuid>();
+ R.AwaitingHomeIntent=OwnedRoute && IsValid(R.Home) && !R.IdleRoute.Contains(R.Home->GetPathNodeGUID());
+ R.RouteIntent.Reset(); R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr;
+ R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate();
+ R.State=static_cast<uint8>(S::Idle); R.Held=false; R.Relocating=true;
+ R.RetainedCargo=false; R.AbortReturn=false; R.DepartedHome=false;
+ R.CargoOriginKnown=false; R.CargoOriginStorage=false;
+ R.NavigationRetry.Reset(); R.TravelProgress.Reset(); R.ReceiptMismatchSince=-1;
+ R.Diagnostic=Why;
+ UE_LOG(LogFILN,Warning,TEXT("FILN_JOB_RETIRED truck=%s %s"),*R.TruckId.ToString(),*Why);
+ ResetScan();
+}
+bool ALogisticsSubsystem::RepairStationSlots(const FFILNStationConfig& C) {
+ auto* B=Building(C.Station); auto* I=IsValid(B)?B->GetInventory():nullptr;
+ if(!IsValid(I) || !C.Resource || C.ExternalFilter || I->GetSizeLinear()!=C.OriginalFilters.Num() ||
+    I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
+ // Only remove the identifiable restriction written by older FILN migration:
+ // original unrestricted slot, current restriction exactly the saved resource.
+ // Never overwrite an unrelated native restriction or manufacture/delete items.
+ TArray<int32> Repair;
+ for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) {
+  const auto Actual=I->GetAllowedItemOnIndex(Slot);
+  if(Actual==C.OriginalFilters[Slot]) continue;
+  if(C.OriginalFilters[Slot] || Actual!=C.Resource) return false;
+  Repair.Add(Slot);
+ }
+ if(Repair.IsEmpty()) return true;
+ if(B->GetDockedActor()) return false; // retry after native docking completes
+ for(const auto Slot:Repair) {
+  FInventoryStack Before,After;
+  if(!I->GetStackFromIndex(Slot,Before)) return false;
+  I->SetAllowedItemOnIndex(Slot,nullptr);
+  if(I->GetAllowedItemOnIndex(Slot) || !I->GetStackFromIndex(Slot,After) ||
+     Before.NumItems!=After.NumItems || Before.Item.GetItemClass()!=After.Item.GetItemClass()) {
+   UE_LOG(LogFILN,Error,TEXT("FILN_SLOT_REPAIR_READBACK station=%s slot=%d"),*B->GetPathName(),Slot); return false;
+  }
+ }
+ UE_LOG(LogFILN,Log,TEXT("FILN_LEGACY_SLOT_REPAIRED station=%s slots=%d"),*B->GetPathName(),Repair.Num());
+ return true;
+}
+void ALogisticsSubsystem::RetryStationFilters() {
+ if(bChangingFilters || bPreparingUninstall || bUninstallPrepared) return;
+ for(int32 Work=0;Work<FMath::Min(4,StationConfigs.Num());++Work) {
+  FilterRepairCursor%=StationConfigs.Num(); const auto& C=StationConfigs[FilterRepairCursor++];
+  if(!IsValid(C.Station) || !C.Resource || C.ExternalFilter || StationResourceMatches(C)) continue;
+  if(RepairStationSlots(C) && ApplyStationFilter(C)) ResetScan();
  }
 }
 bool ALogisticsSubsystem::ApplyStationFilter(const FFILNStationConfig& C,TSubclassOf<UFGItemDescriptor> PriorResource) {
@@ -232,14 +311,14 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
  TSet<UFGInventoryComponent*> Seen;
  for(const auto& C:Configs) {
   auto* B=Building(C.Station); auto* I=IsValid(B)?B->GetInventory():nullptr;
-  const auto Fail=[&](const TCHAR* Why) { const FString Detail=FString::Printf(TEXT("Filter preflight %s: %s"),*GetNameSafe(C.Station.Get()),Why); RegistryDiagnostics.AddUnique(Detail); UE_LOG(LogFILN,Error,TEXT("FILN_FILTER_PREFLIGHT %s"),*Detail); return false; };
+  const auto Fail=[&](const TCHAR* Why) { const FString Detail=FString::Printf(TEXT("Filter preflight %s: %s"),*GetNameSafe(C.Station.Get()),Why); if(!RegistryDiagnostics.Contains(Detail)) { RegistryDiagnostics.Add(Detail); UE_LOG(LogFILN,Error,TEXT("FILN_FILTER_PREFLIGHT %s"),*Detail); } return false; };
   if(C.ExternalFilter || !IsValid(I) || !C.Resource || Seen.Contains(I) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096 ||
      I->GetSizeLinear()!=C.OriginalFilters.Num() || (Restore && B->GetDockedActor())) return Fail(TEXT("external/invalid/duplicate inventory, slot count mismatch or occupied restore"));
   Seen.Add(I);
   if(!Restore) {
    if(!StationAcceptsResource(B,C.Resource)) return Fail(TEXT("native resource form or fluid descriptor mismatch"));
-   TArray<FInventoryStack> Contents; I->GetInventoryStacks(Contents);
-   for(const auto& Stack:Contents) if(Stack.NumItems<0 || (Stack.NumItems>0 && Stack.Item.GetItemClass()!=C.Resource)) return Fail(TEXT("actual cargo conflicts with saved resource"));
+   // Existing cargo is not a filter-setting failure. It remains untouched;
+   // scheduler eligibility separately checks actual stock.
   }
   // Legacy per-slot writes are not silently undone: the saved cargo may
   // already have been rearranged by the engine. Start from the original save.
@@ -390,13 +469,7 @@ bool ALogisticsSubsystem::Parked(const FFILNRegistration& R) const {
   Home->GetDockedActor()==R.Vehicle->GetOwnerVehicle() && !R.Vehicle->IsAutopilotEnabled();
 }
 void ALogisticsSubsystem::Recover(FFILNRegistration& R,const FString& Why) {
- DisarmDockReceipts(R.JobId); R.ReceiptMismatchSince=-1;
- SetState(R,S::Recovery); R.Held=false; R.Diagnostic=Why; R.NavigationRetry.Reset();
- // Do not disable a player-owned or externally changed route.
- if(bRegistryValidated && R.JobId.IsValid() && Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId)) &&
-    IsValid(R.Vehicle) && IsValid(R.Vehicle->GetOwnerVehicle()) && !R.Vehicle->GetOwnerVehicle()->GetDriver() &&
-    !R.RouteIntent.IsEmpty() && R.Vehicle->GetVehicleRoute()==R.RouteIntent && R.Vehicle->IsAutopilotEnabled()) R.Vehicle->SetAutopilotEnabled(false);
- UE_LOG(LogFILN,Warning,TEXT("job=%s RECOVERY: %s (reservations retained)"),*R.JobId.ToString(),*Why);
+ RetireJobToParking(R,Why);
 }
 bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationIdentifier* H) {
  using namespace filn::enrollment;
@@ -454,15 +527,15 @@ bool ALogisticsSubsystem::Pair(AFGWheeledVehicleIdentifier* V,AFGDockingStationI
  const auto Rollback=[&]() {
   if(Verdict!=Decision::AssignHome) return;
   if(VehicleActor->GetDriver() || V->GetVehicleRoute()!=Intended) {
-   bDispatchBlocked=true;
-   UE_LOG(LogFILN,Error,TEXT("Enrollment rollback conflict; dispatch locked; inspect vehicle route manually"));
+   RequestRegistryRepair();
+   UE_LOG(LogFILN,Error,TEXT("Enrollment rollback conflict; rediscovering vehicle"));
    return;
   }
   V->SetAutopilotEnabled(BeforeAP);
   V->SetVehicleRoute(Before);
   if(V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()!=BeforeAP) {
-   bDispatchBlocked=true;
-   UE_LOG(LogFILN,Error,TEXT("Enrollment rollback readback failed; dispatch locked"));
+   RequestRegistryRepair();
+   UE_LOG(LogFILN,Error,TEXT("Enrollment rollback readback failed; rediscovering vehicle"));
   }
  };
  if(VehicleActor->GetDriver() || V->GetVehicleRoute()!=Before || V->IsAutopilotEnabled()!=BeforeAP ||
@@ -507,6 +580,7 @@ void ALogisticsSubsystem::Observe() {
  check(IsInGameThread());
  if(!HasAuthority() || !bRegistryValidated || bPreparingUninstall || bChangingFilters) return;
  ConsumeDockReceipts();
+ RetryStationFilters();
  EnsureDepotRecipe();
  AuditLostRegistrations();
  DiscoverHomeVehicles();
@@ -516,7 +590,7 @@ void ALogisticsSubsystem::Observe() {
  const int32 Budget=FMath::Min(16,Active.Num());
  for(int32 Count=0;Count<Budget && Active.Num()>0;++Count) {
   Cursor%=Active.Num(); const int32 Index=Active[Cursor];
-  if(!Registrations.IsValidIndex(Index)) { bRegistryValidated=false; bDispatchBlocked=true; bAutoDispatchEnabled=false; UE_LOG(LogFILN,Error,TEXT("Invalid active registry index; reconciliation withheld")); return; }
+  if(!Registrations.IsValidIndex(Index)) { Active.RemoveAtSwap(Cursor); RequestRegistryRepair(); continue; }
   auto& R=Registrations[Index];
   if(StateOf(R)==S::Recovery || StateOf(R)==S::Idle) { Active.RemoveAtSwap(Cursor); continue; }
   const double Now=GetWorld()->GetTimeSeconds();
@@ -605,7 +679,7 @@ void ALogisticsSubsystem::Observe() {
    SetState(R,Next);
    UE_LOG(LogFILN,Log,TEXT("job=%s state=%d planned=%d loaded=%d delivered=%d cargo=%d"),*R.JobId.ToString(),R.State,R.ExpectedCargo,R.LoadedCargo,R.DeliveredCargo,R.LastCargo);
    if(Next==S::Completed) {
-    if(!Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { Recover(R,TEXT("Completion lease ownership mismatch")); bDispatchBlocked=true; ++Cursor; continue; }
+    if(!Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { RetireJobToParking(R,TEXT("Completion lease ownership mismatch; retry parking")); RequestRegistryRepair(); ++Cursor; continue; }
     DisarmDockReceipts(R.JobId); Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");
     if(R.AbortReturn) R.Diagnostic=FString::Printf(TEXT("Aborted shipment returned home; delivered=%d retained=%d; no delivery success inferred"),R.DeliveredCargo,R.LastCargo);
     R.JobId.Invalidate(); R.Provider=nullptr; R.Requester=nullptr; R.RouteIntent.Empty(); R.AbortReturn=false; R.DepartedHome=false; R.RouteActivationDeadline=0;
@@ -666,8 +740,8 @@ bool ALogisticsSubsystem::UnpairParkedVehicle(int32 Index,AFGDockingStationIdent
 bool ALogisticsSubsystem::RemoveRegistrationAt(int32 Index) {
  if(!Registrations.IsValidIndex(Index)) return false;
  auto& R=Registrations[Index];
- if(R.JobId.IsValid() && !Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { bDispatchBlocked=true; return false; }
- if(!Ownership.Unpair(Key(R.TruckId),Key(R.BayId))) { bDispatchBlocked=true; return false; }
+ if(R.JobId.IsValid() && !Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { RetireJobToParking(R,TEXT("Job lease mismatch during removal")); RequestRegistryRepair(); return false; }
+ if(!Ownership.Unpair(Key(R.TruckId),Key(R.BayId))) { RequestRegistryRepair(); return false; }
  DisarmDockReceipts(R.JobId);
  if(R.JobId.IsValid()) Reservations.Release(Key(R.JobId));
  if(IsValid(R.Home)) HomeStations.Remove(TWeakObjectPtr<AFGDockingStationIdentifier>(R.Home.Get()));

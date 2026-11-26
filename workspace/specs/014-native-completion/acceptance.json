@@ -529,6 +529,22 @@
       "implementation": "FILNOrganizer.cpp + LogisticsTelemetry.cpp",
       "verification_method": "Compare web and native snapshots, blocked registry, demand lifetime, reload and authorized remote access.",
       "actual_result": "No cooked game evidence."
+    },
+    {
+      "id": "self-healing-dispatch",
+      "status": "failed",
+      "reason": "User screenshot proves global dispatcher blocked by one legacy slot conflict; independent recovery source requires runtime verification.",
+      "implementation": "LogisticsSubsystem.cpp / FILNStationControls.cpp",
+      "verification_method": "Load existing converted autosave; verify real cargo and slot layout, filter tab and unrelated automatic deliveries",
+      "actual_result": "User screenshot proves global dispatcher blocked by one legacy slot conflict; independent recovery source requires runtime verification."
+    },
+    {
+      "id": "existing-save-slot-repair",
+      "status": "failed",
+      "reason": "User reports individual slots still restricted and Filters tab absent; native repair and selector must be tested on current autosave.",
+      "implementation": "LogisticsSubsystem.cpp / FILNStationControls.cpp",
+      "verification_method": "Load existing converted autosave; verify real cargo and slot layout, filter tab and unrelated automatic deliveries",
+      "actual_result": "User reports individual slots still restricted and Filters tab absent; native repair and selector must be tested on current autosave."
     }
   ]
 }

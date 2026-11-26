@@ -32,3 +32,6 @@ has executable evidence, rather than relying on untested class redirects.
 3. Compact Vehicles rows with all cargo types including idle, actual route/current target; Stations grouped by resource identity and provider/requester columns; Diagnostics last, precise failed registry preflight and vehicle reasons.
 4. Use game item names and icons, native interaction stack, cohesive custom style if verified game UI style assets cannot be reused. Check actual 1080p and 4K screenshots, long names/routes, scroll and focus. No placeholder acceptance.
 5. Validate runtime performance, lifecycle, blocked state, no dispatcher mutation, web compatibility. Remote multiplayer clients require bounded authorized transport; explicitly report unavailable until implemented.
+
+## Recovery correction (R14)
+Replace fail-all rebuild with independent station/vehicle reconciliation and bounded retries. Verify old per-slot restrictions against saved original filters before clearing; use native setter only for recognizable FILN-written restrictions, never delete real cargo. Keep station-local failures visible. Repair selector without relying on exact fragile Blueprint contracts. Test actual last autosave and fresh solid/fluid stations, prove dispatch continues with one bad station/job.

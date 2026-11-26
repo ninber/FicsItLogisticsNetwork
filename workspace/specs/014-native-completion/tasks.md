@@ -225,3 +225,9 @@ The latest player requirements supersede older home-only enrollment assumptions 
 - [ ] T128 Diagnostics last: exact registry, station and vehicle errors without weakening validation.
 - [ ] T129 Visual acceptance: game names/icons, cohesive compact game-compatible style, 1080p/4K screenshots, long routes, scrolling, keyboard and mouse/focus. Exactly three tabs; no controls that mutate logistics.
 - [ ] T130 Cooked host/single-player and remote multiplayer read-only transport, world transitions, no background scan when closed, shared web data. Remote access explicitly unavailable before authorized transport is implemented.
+
+## P0 — Self-healing dispatcher and station migration (R14)
+- [ ] T131 Replace global dispatch lock with per-record recovery and retry; preserve other valid jobs, cargo, player intent and exclusive ownership.
+- [ ] T132 Repair old per-slot FILN restrictions automatically on existing converted saves, verify actual per-slot cargo, capacity and resource readback; do not remove real singleton cargo by guesswork.
+- [ ] T133 Make FILTERS visible and usable in actual native station UI, both solid and fluid, with correct server readback; no fragile reflected tab dependency.
+- [ ] T134 Test existing autosave, occupied stations, one bad station/job, automatic resumed dispatch and actual filter UI in cooked game. No manual reset/re-migration required.
