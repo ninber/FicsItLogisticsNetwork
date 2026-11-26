@@ -12,7 +12,7 @@ FILN is an experimental native truck logistics mod intended to automate resource
 
 ## Important
 - Back up your saves and test on a disposable copy. Existing save migration, dispatch, fluid handling, station controls, multiplayer, and safe removal still require documented acceptance.
-- Target game build CL 520140 and SML >=3.12.1 <3.13.0 as declared in the plugin. Compatibility with newer game builds is not established.
+- Target game build CL 520140 and SML 3.12.1 (exact version; other SML versions have not been validated) as declared in the plugin. Compatibility with newer game builds is not established.
 - Only the freshly built, verified Alpakit archive for this exact version may be attached. Windows client is the current packaging target; Proton, dedicated servers and other platforms must not be claimed compatible without evidence.
 - The optional local read-only web dashboard currently requires a separately started companion on the host; it is not automatically installed by SMM. No externally hosted item icons. Native local icon cache requires runtime evidence.
 - Report bugs with game and SML version, mod version, reproduction steps, and relevant redacted logs: https://github.com/ninber/FicsItLogisticsNetwork/issues
