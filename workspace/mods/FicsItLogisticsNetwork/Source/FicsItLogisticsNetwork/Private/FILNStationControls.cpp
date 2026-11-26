@@ -32,6 +32,7 @@
 #include "HAL/PlatformTime.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
+#include "TimerManager.h"
 
 namespace {
 ALogisticsSubsystem* FILNSelectorSubsystem(UWorld* World) {
@@ -176,6 +177,13 @@ bool UFILNResourceSelector::BuildControls() {
  Root->AddChildToVerticalBox(Bar);
  Parts=WidgetTree->ConstructWidget<UComboBoxString>();
  Parts->SetMaxListHeight(360.f);
+ FComboBoxStyle Combo=Parts->GetWidgetStyle();
+ FComboButtonStyle ComboButton=Combo.ComboButtonStyle;
+ FButtonStyle Button=ComboButton.ButtonStyle;
+ Button.SetNormal(FSlateColorBrush(FILNFilterColor(TEXT("32383D"))));
+ Button.SetHovered(FSlateColorBrush(FILNFilterColor(TEXT("46515A"))));
+ Button.SetPressed(FSlateColorBrush(FILNFilterColor(TEXT("BD772E"))));
+ ComboButton.SetButtonStyle(Button); Combo.SetComboButtonStyle(ComboButton); Parts->SetWidgetStyle(Combo);
  Parts->OnSelectionChanged.AddDynamic(this,&UFILNResourceSelector::NativeListChanged);
  Parts->OnGenerateWidgetEvent.BindDynamic(this,&UFILNResourceSelector::GenerateChoice);
  Feedback=FILNFilterLabel(WidgetTree, FText::GetEmpty(),13); Feedback->SetAutoWrapText(true);
@@ -326,9 +334,20 @@ void FILNAttachSelector(UFGInteractWidget* Widget,UObject* Object) {
 }
 void UFILNResourceSelector::InstallHook() {
  if(WITH_EDITOR) return;
- SUBSCRIBE_METHOD_AFTER(AFGHUD::RequestInteractWidget,[](UFGInteractWidget* Widget,AFGHUD*,TSubclassOf<UFGInteractWidget>,UObject* Object) {
+ SUBSCRIBE_METHOD_AFTER(AFGHUD::RequestInteractWidget,([](UFGInteractWidget* Widget,AFGHUD*,TSubclassOf<UFGInteractWidget>,UObject* Object) {
   FILNAttachSelector(Widget,Object);
- });
+  // RequestInteractWidget can run before the BP has built/pushed its tree.
+  // Retry once after native UI initialization, only on the same active station.
+  if(IsValid(Widget) && FILNSelectorStation(Object) && Widget->GetWorld()) {
+   const TWeakObjectPtr<UFGInteractWidget> Weak(Widget);
+   const TWeakObjectPtr<AFGBuildableDockingStation> Target(FILNSelectorStation(Object));
+   Widget->GetWorld()->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateLambda([Weak,Target]() {
+    auto* W=Weak.Get(); auto* PC=IsValid(W)?W->GetOwningPlayer():nullptr;
+    auto* HUD=PC?Cast<AFGHUD>(PC->GetHUD()):nullptr; auto* UI=HUD?HUD->GetGameUI():nullptr;
+    if(IsValid(UI) && UI->GetInteractWidgetStack().Contains(W) && Target.IsValid()) FILNAttachSelector(W,Target.Get());
+   }));
+  }
+ }));
  SUBSCRIBE_METHOD_AFTER(UFGInteractWidget::Native_Init,[](UFGInteractWidget* Widget) {
   if(IsValid(Widget)) FILNAttachSelector(Widget,Widget->mInteractObject.Get());
  });

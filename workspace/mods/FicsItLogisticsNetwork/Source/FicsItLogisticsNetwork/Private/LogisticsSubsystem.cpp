@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
+#include "FILNRepairPolicy.h"
 #include "FILNDispatchPolicy.h"
 #include "FILNEnrollment.h"
 #include "FILNDepotPolicy.h"
@@ -173,8 +174,9 @@ void ALogisticsSubsystem::Rebuild() {
    RegistryIssue(FString::Printf(TEXT("Duplicate station config removed: %s"),*C.Station->GetPathName())); StationConfigs.RemoveAt(I); continue;
   }
   ConfigActors.Add(C.Station); StationId(C.Station);
-  if(!C.ExternalFilter && C.Resource && RepairStationSlots(C)) ApplyStationFilter(C);
-  else RegistryIssue(FString::Printf(TEXT("Station filter repair pending: %s"),*C.Station->GetPathName()));
+  if(!C.ExternalFilter && C.Resource && RepairStationSlots(C)) {
+   if(!ApplyStationFilter(C)) RegistryIssue(FString::Printf(TEXT("Station filter repair pending: %s"),*C.Station->GetPathName()));
+  } else RegistryIssue(FString::Printf(TEXT("Station filter repair pending: %s"),*C.Station->GetPathName()));
   ++I;
  }
  FilterRepairCursor=0;
@@ -235,8 +237,8 @@ void ALogisticsSubsystem::Rebuild() {
    R.Diagnostic=TEXT("Obsolete provider-less saved job retired; returning with actual cargo");
    UE_LOG(LogFILN,Log,TEXT("FILN_OBSOLETE_DIRECT_JOB_RETIRED truck=%s"),*R.TruckId.ToString()); continue;
   }
-  const bool Resume=Observed && R.Automatic && R.Resource && R.ExpectedCargo>0 && R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning) &&
-    IsValid(O) && !O->GetDriver() && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home) && (R.AbortReturn || EndpointConfigurationValid(R));
+  const bool Resume=Observed && R.Automatic && R.Resource && R.ExpectedCargo>0 && IsValid(O) && !O->GetDriver() && V->IsAutopilotEnabled() && IsValid(R.Home) &&
+    filn::repair::CanRestoreJob(R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning),Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId)),V->GetVehicleRoute()==R.RouteIntent,R.AbortReturn || EndpointConfigurationValid(R));
   if(Resume && (R.AbortReturn || ArmDockReceipts(R))) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
   else RetireJobToParking(R,TEXT("Saved journey cannot resume; parking with actual cargo"));
  }
@@ -275,9 +277,11 @@ bool ALogisticsSubsystem::RepairStationSlots(const FFILNStationConfig& C) {
  TArray<int32> Repair;
  for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) {
   const auto Actual=I->GetAllowedItemOnIndex(Slot);
-  if(Actual==C.OriginalFilters[Slot]) continue;
-  if(C.OriginalFilters[Slot] || Actual!=C.Resource) return false;
-  Repair.Add(Slot);
+  switch(filn::repair::Slot(C.OriginalFilters[Slot].Get(),Actual.Get(),C.Resource.Get())) {
+   case filn::repair::SlotAction::Keep: break;
+   case filn::repair::SlotAction::RemoveLegacyRestriction: Repair.Add(Slot); break;
+   case filn::repair::SlotAction::Retry: return false;
+  }
  }
  if(Repair.IsEmpty()) return true;
  if(B->GetDockedActor()) return false; // retry after native docking completes
@@ -286,7 +290,7 @@ bool ALogisticsSubsystem::RepairStationSlots(const FFILNStationConfig& C) {
   if(!I->GetStackFromIndex(Slot,Before)) return false;
   I->SetAllowedItemOnIndex(Slot,nullptr);
   if(I->GetAllowedItemOnIndex(Slot) || !I->GetStackFromIndex(Slot,After) ||
-     Before.NumItems!=After.NumItems || Before.Item.GetItemClass()!=After.Item.GetItemClass()) {
+     !filn::repair::CargoUnchanged(Before.NumItems,After.NumItems,Before.Item.GetItemClass()==After.Item.GetItemClass())) {
    UE_LOG(LogFILN,Error,TEXT("FILN_SLOT_REPAIR_READBACK station=%s slot=%d"),*B->GetPathName(),Slot); return false;
   }
  }
@@ -298,7 +302,12 @@ void ALogisticsSubsystem::RetryStationFilters() {
  for(int32 Work=0;Work<FMath::Min(4,StationConfigs.Num());++Work) {
   FilterRepairCursor%=StationConfigs.Num(); const auto& C=StationConfigs[FilterRepairCursor++];
   if(!IsValid(C.Station) || !C.Resource || C.ExternalFilter || StationResourceMatches(C)) continue;
-  if(RepairStationSlots(C) && ApplyStationFilter(C)) ResetScan();
+  if(RepairStationSlots(C) && ApplyStationFilter(C)) {
+   const FString Pending=FString::Printf(TEXT("Station filter repair pending: %s"),*C.Station->GetPathName());
+   const FString Prefix=FString::Printf(TEXT("Filter preflight %s:"),*GetNameSafe(C.Station.Get()));
+   RegistryDiagnostics.RemoveAll([&](const FString& D){return D==Pending || D.StartsWith(Prefix);});
+   ResetScan();
+  }
  }
 }
 bool ALogisticsSubsystem::ApplyStationFilter(const FFILNStationConfig& C,TSubclassOf<UFGItemDescriptor> PriorResource) {
@@ -339,7 +348,7 @@ bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,
  // descriptors remain untouched; only the docking filter is published.
  FFILNStationConfig* Existing=StationConfigs.FindByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
  if(Existing) {
-  if(Existing->ExternalFilter) return false;
+  if(Existing->ExternalFilter || !RepairStationSlots(*Existing)) return false;
   // Preserve native slot restrictions and publish only the new docking selection.
   for(const auto& Original:Existing->OriginalFilters) if(Original && Original!=Resource) return false;
   ResetScan();

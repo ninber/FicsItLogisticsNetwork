@@ -34,6 +34,21 @@ static bool InventoryAcceptance(FAutomationTestBase& Test,bool Fluid) {
     Passed&=Test.TestEqual(TEXT("Add one real item"),Inventory->AddStack(FInventoryStack(1,Resource),true),1);
     int64 OccupiedCapacity=0;
     Passed&=Test.TestTrue(TEXT("Occupied and empty slots retain full native capacity"),filn::inventory::TryCapacity(Inventory,Resource,OccupiedCapacity) && OccupiedCapacity==EmptyCapacity);
+    if(!Fluid && !Original[0]) {
+     // Exercise the actual native setter on an occupied slot; no simulated cargo.
+     const int32 Slot=Inventory->FindFirstIndexWithItemType(Resource);
+     if(Test.TestTrue(TEXT("Real occupied slot exists"),Slot>=0 && !Inventory->GetAllowedItemOnIndex(Slot))) {
+      FInventoryStack Before,After;
+      Passed&=Test.TestTrue(TEXT("Read real cargo before legacy restriction"),Inventory->GetStackFromIndex(Slot,Before));
+      Inventory->SetAllowedItemOnIndex(Slot,Resource);
+      Passed&=Test.TestTrue(TEXT("Legacy restriction applied"),Inventory->GetAllowedItemOnIndex(Slot)==Resource);
+      Inventory->SetAllowedItemOnIndex(Slot,nullptr);
+      Passed&=Test.TestTrue(TEXT("Legacy restriction cleared"),!Inventory->GetAllowedItemOnIndex(Slot));
+      Passed&=Test.TestTrue(TEXT("Read real cargo after repair"),Inventory->GetStackFromIndex(Slot,After));
+      Passed&=Test.TestTrue(TEXT("Same real cargo in slot after repair"),Before.NumItems==After.NumItems && Before.Item.GetItemClass()==After.Item.GetItemClass());
+      Passed&=Test.TestEqual(TEXT("Total real cargo unchanged"),Inventory->GetNumItems(Resource),1);
+     } else Passed=false;
+    }
     Inventory->Remove(Resource,1);
    }
    if(!Fluid && Passed) {

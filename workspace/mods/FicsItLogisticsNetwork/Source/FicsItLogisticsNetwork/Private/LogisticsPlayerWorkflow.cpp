@@ -97,7 +97,7 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
    if(!Registrations.IsValidIndex(*Index)) { RequestRegistryRepair(); continue; }
    auto& R=Registrations[*Index];
    const bool OptOut=filn::player::RemovedDepot(HasDepot,R.AwaitingHomeIntent,Route==R.IdleRoute);
-   const bool Reassigned=HasDepot && IsValid(R.Home) && !Route.Contains(R.Home->GetPathNodeGUID()) && !R.AwaitingHomeIntent;
+   const bool Reassigned=HasDepot && (!IsValid(R.Home) || (!Route.Contains(R.Home->GetPathNodeGUID()) && !R.AwaitingHomeIntent));
    if(OptOut || Reassigned) {
     const FGuid Truck=R.TruckId;
     if(RemoveRegistrationAt(*Index)) {
