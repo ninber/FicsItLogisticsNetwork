@@ -260,8 +260,8 @@
     },
     {
       "id": "lua-to-native-migration",
-      "status": "failed",
-      "reason": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated.",
+      "status": "out-of-scope",
+      "reason": "User requires only a one-time externally repaired private City save, not a migration feature or permanent release gate. Private save repair remains incomplete; this exclusion is not a pass.",
       "history": [
         {
           "date": "2026-11-24",
@@ -274,10 +274,14 @@
         {
           "date": "2026-11-26",
           "previous_reason": "External migration is required but failed: legacy depot identity lost; explicit resource configurations were exported but not restored. Native importer remains outside scope; external migration itself is failed."
+        },
+        {
+          "date": "2026-11-26",
+          "previous_reason": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated."
         }
       ],
-      "implementation": "External tools only",
-      "verification_method": "Separate operator-owned migration workflow",
+      "implementation": "None in native mod or CI",
+      "verification_method": "Not a native release criterion",
       "actual_result": "User runtime test of City_FILN_Native_Migrated_TEST failed: formerly programmable requester stations appear ordinary/unfiltered; many singleton stacks and new inventory scrollbar after load; trucks still follow residual routes. Offline comparison of all 233 cargo inventories found only mAllowedItemDescriptors modified for 117; serialized mInventoryStacks and mArbitrarySlotSizes identical. Legacy Smarter Trucks filters docking unload, not inventory slots. Cause of runtime stack display/actual contents and registry load still needs shipping evidence; per-slot migration must not be repeated."
     },
     {
