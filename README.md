@@ -1,6 +1,10 @@
 # FicsIt\* Logistics Network (FILN)
 
+![A pioneer overlooking a road-connected industrial city in Satisfactory](filn-city.jpg)
+
 **Build a logistics network, not a collection of fixed truck routes.**
+
+*An in-game view of an industrial city — the scale of factory logistics FILN is designed to support.*
 
 `0.01b · Early Beta` • `0.0.1-beta.1` • `Native C++ / SML 3.12.1`
 
