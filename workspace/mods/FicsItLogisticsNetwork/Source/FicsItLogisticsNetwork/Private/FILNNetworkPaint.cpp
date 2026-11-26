@@ -12,10 +12,21 @@
 #include "Buildables/FGBuildableDockingStation.h"
 #include "UObject/UnrealType.h"
 #include "Engine/World.h"
-#include "Misc/LexFromString.h"
 
 namespace {
 using FILNSwatch=TSubclassOf<UFGFactoryCustomizationDescriptor_Swatch>;
+// Strict unsigned decimal slot parser: no dependency on an engine-version
+// specific LexFromString header, no overflow, sign or partial parse.
+bool FILNParseSwatchSlot(const FString& Text,int32& Slot) {
+ if(Text.IsEmpty() || Text.Len()>3) return false;
+ int32 Value=0;
+ for(const TCHAR Ch:Text) {
+  if(Ch<TEXT('0') || Ch>TEXT('9')) return false;
+  Value=Value*10+(Ch-TEXT('0'));
+ }
+ if(Value>=255) return false;
+ Slot=Value; return true;
+}
 int32 FILNPaletteSize(UObject* Object,const TCHAR* Property) {
  if(!IsValid(Object)) return 0;
  const auto* Array=FindFProperty<FArrayProperty>(Object->GetClass(),Property);
@@ -106,7 +117,7 @@ void ALogisticsSubsystem::ExecuteNetworkSwatch(const TArray<FString>& Args) {
   return;
  }
  int32 Slot=-1;
- if(Args.Num()>2 || !LexTryParseString(Slot,*Args[0]) || Slot<0 || Slot>=255 || (Args.Num()==2 && Args[1]!=TEXT("taxi"))) return;
+ if(Args.Num()>2 || !FILNParseSwatchSlot(Args[0],Slot) || Slot<0 || Slot>=255 || (Args.Num()==2 && Args[1]!=TEXT("taxi"))) return;
  FILNSwatch Chosen;
  for(const auto& Swatch:Choices) if(Swatch.GetDefaultObject()->ID==Slot) {
   if(Chosen && Chosen!=Swatch) { UE_LOG(LogFILN,Warning,TEXT("Ambiguous native slot; no change")); return; }
