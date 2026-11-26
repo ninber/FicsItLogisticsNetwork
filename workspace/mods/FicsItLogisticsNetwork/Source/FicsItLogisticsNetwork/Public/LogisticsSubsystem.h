@@ -110,6 +110,7 @@ private:
  UPROPERTY(SaveGame) TArray<FFILNRegistration> Registrations;
  // Membership can precede a valid exclusive bay. These records hold no job leases.
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGWheeledVehicleIdentifier>> PendingDepotMembership;
+ UPROPERTY(SaveGame) TArray<TObjectPtr<AFGWheeledVehicleIdentifier>> PendingDepotRouteMembership;
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGWheeledVehicleIdentifier>> DepotArrivalSuppressed;
  friend class UFILNTransferObserver;
  friend class UFILNResourceRemote;

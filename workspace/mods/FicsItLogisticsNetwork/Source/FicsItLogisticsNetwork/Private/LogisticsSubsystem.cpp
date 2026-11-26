@@ -197,6 +197,22 @@ void ALogisticsSubsystem::Rebuild() {
    }
    continue;
   }
+  // Earlier builds could persist a provider-less retained-cargo job. Do not
+  // resume that obsolete delivery or delete its cargo. Convert the owned
+  // native route to a parking transition; transition-node exclusion protects
+  // its old endpoints until the truck leaves that route.
+  if(R.RetainedCargo && R.JobId.IsValid() && IsValid(O) && IsValid(V) && IsValid(R.Home) &&
+     V->GetVehicleRoute()==R.RouteIntent && Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) {
+   DisarmDockReceipts(R.JobId); Reservations.Release(Key(R.JobId));
+   R.IdleRoute=V->GetVehicleRoute(); R.RouteIntent.Empty(); R.JobId.Invalidate();
+   R.Provider=nullptr; R.Requester=nullptr; R.ProviderLease.Invalidate(); R.RequesterLease.Invalidate();
+   R.RetainedCargo=false; R.AbortReturn=false; R.DepartedHome=false; R.Held=false; R.Relocating=true;
+   R.AwaitingHomeIntent=!R.IdleRoute.Contains(R.Home->GetPathNodeGUID()); R.State=static_cast<uint8>(S::Idle);
+   if(!Observed) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; }
+   R.NavigationRetry.Reset(); R.TravelProgress.Reset();
+   R.Diagnostic=TEXT("Obsolete provider-less saved job retired; returning with actual cargo");
+   UE_LOG(LogFILN,Log,TEXT("FILN_OBSOLETE_DIRECT_JOB_RETIRED truck=%s"),*R.TruckId.ToString()); continue;
+  }
   const bool Resume=Observed && R.Automatic && R.Resource && R.ExpectedCargo>0 && R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning) &&
     IsValid(O) && !O->GetDriver() && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.RouteIntent && IsValid(R.Home) && (R.AbortReturn || EndpointConfigurationValid(R));
   if(Resume && (R.AbortReturn || ArmDockReceipts(R))) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
@@ -541,7 +557,7 @@ void ALogisticsSubsystem::Observe() {
     Recover(R,TEXT("Cargo reconciliation disagrees with native docking receipts; no inferred transfer credited")); ++Cursor; continue;
    }
    R.ReceiptMismatchSince=-1; R.LastCargo=Quantity;
-   if((Before==S::Loading && !AtP && (Quantity<=0 || (R.LoadedCargo<=0 && Quantity!=R.ExpectedCargo))) ||
+   if((Before==S::Loading && !AtP && !filn::recovery::ProviderDepartureProven(true,false,R.LoadedCargo,Quantity,R.ExpectedCargo)) ||
       (Before==S::Unloading && !AtQ && R.DeliveredCargo<=0)) {
     Recover(R,TEXT("Station departed without measured matching cargo transfer")); ++Cursor; continue;
    }

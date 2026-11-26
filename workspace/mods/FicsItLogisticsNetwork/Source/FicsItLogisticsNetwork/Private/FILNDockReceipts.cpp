@@ -202,7 +202,7 @@ void ALogisticsSubsystem::ConsumeDockReceipts() {
   const bool TargetValid=IsValid(R.Requester) && Target && R.Requester->GetStation()==Target;
   const bool CanLoad=!B.loaded || (!R.RetainedCargo && (Phase==S::ToProvider || Phase==S::Loading));
   const bool PickupDeparture=Source && O && Source->GetDockedActor()!=O &&
-   (B.loaded>0 || (Phase==S::Loading && R.LastCargo==R.ExpectedCargo && R.LastCargo>0) || filn::recovery::CanBridgePickupDeparture(Phase==S::Loading,false,R.LoadedCargo,R.LastCargo));
+   (B.loaded>0 || filn::recovery::ProviderDepartureProven(Phase==S::Loading,false,R.LoadedCargo,R.LastCargo,R.ExpectedCargo));
   const bool CanUnload=!B.unloaded || Phase==S::ToRequester || Phase==S::Unloading || PickupDeparture;
   if(B.invalid || !SourceValid || !TargetValid || !CanLoad || !CanUnload || R.AbortReturn ||
      !IsValid(O) || !IsValid(Cargo) || V->GetOwnerVehicle()!=O || O->GetStorageInventory()!=Cargo ||

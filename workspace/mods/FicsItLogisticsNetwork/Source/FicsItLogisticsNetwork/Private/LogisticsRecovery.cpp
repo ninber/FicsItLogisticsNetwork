@@ -163,16 +163,18 @@ void ALogisticsSubsystem::AuditIdleFleet() {
   if(R.Relocating) {
    R.Held=false;
    if(!Home.IsValid() || V->GetVehicleRoute()!=R.IdleRoute || !ValidHome(R.Home)) { R.Diagnostic=TEXT("Registered: home or route changed; awaiting reconciliation"); continue; }
-   if(O->GetDriver() || !V->IsAutopilotEnabled()) { R.Diagnostic=TEXT("Registered: waiting for player to enable native autopilot"); continue; }
+   if(O->GetDriver()) { R.Diagnostic=TEXT("Registered: player driving; parking paused"); continue; }
    const bool Docked=H->GetDockedActor()==O && Near && FMath::Abs(O->GetForwardSpeed())<=1.f;
    if(Docked) {
-    V->SetVehicleRoute(Route);
-    if(V->GetVehicleRoute()!=Route || !V->IsAutopilotEnabled() || O->GetDriver()) {
+    const bool BeforeAP=V->IsAutopilotEnabled();
+    if(V->GetVehicleRoute()!=Route) V->SetVehicleRoute(Route);
+    if(V->GetVehicleRoute()!=Route || V->IsAutopilotEnabled()!=BeforeAP || O->GetDriver()) {
      R.Diagnostic=TEXT("Depot parking completion readback failed"); bDispatchBlocked=true; continue;
     }
-    R.IdleRoute=Route; R.Relocating=false; R.AwaitingHomeIntent=false; R.Held=true; R.NavigationRetry.Reset(); R.TravelProgress.Reset();
+    R.IdleRoute=Route; R.Relocating=false; R.AwaitingHomeIntent=false; R.Held=BeforeAP; R.NavigationRetry.Reset(); R.TravelProgress.Reset();
     R.Diagnostic=TEXT("FILN home parking confirmed"); ResetScan(); continue;
    }
+   if(!V->IsAutopilotEnabled()) { R.Diagnostic=TEXT("Registered: awaiting native autopilot; no AP override"); continue; }
    if(!H->HasPower() || H->IsProductionPaused()) { R.Diagnostic=TEXT("Registered: assigned depot unpowered or standby"); continue; }
    if(H->GetDockedActor() && H->GetDockedActor()!=O) { R.Diagnostic=TEXT("Registered: assigned depot occupied"); continue; }
    if(V->IsCurrentlyDocking() || !O->HasFuel()) { R.Diagnostic=TEXT("Registered: waiting for native docking or fuel"); continue; }

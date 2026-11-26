@@ -38,6 +38,11 @@ inline bool ActivationGrace(bool tooFewStations,double now,double deadline) {
 }
 // Transfer events from the exact reserved requester can bridge a missed
 // polling transition only after a measured pickup and actual source departure.
+// A full arriving truck needs zero additional loading, but the provider
+// docking phase still must have been observed. No provider-less delivery.
+inline bool ProviderDepartureProven(bool loading,bool sourceDocked,int loaded,int cargo,int expected) {
+ return loading && !sourceDocked && cargo>0 && (loaded>0 || (loaded==0 && expected>0 && cargo==expected));
+}
 inline bool CanBridgePickupDeparture(bool loading,bool sourceDocked,int loaded,int cargo) {
  return loading && !sourceDocked && loaded>0 && cargo>0;
 }

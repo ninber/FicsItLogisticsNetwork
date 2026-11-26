@@ -61,7 +61,7 @@ void ALogisticsSubsystem::DiscoverDepots() {
  }
 }
 void ALogisticsSubsystem::DiscoverHomeVehicles() {
- if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters) return;
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bUninstallPrepared || bChangingFilters) return;
  const double Now=GetWorld()->GetTimeSeconds();
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
  if(PlayerVehicleCursor>=PlayerVehicleScan.Num()) {
@@ -70,6 +70,7 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
   for(auto It=OverflowCursor.CreateIterator();It;++It) if(!It.Key().IsValid()) It.RemoveCurrent();
   for(auto It=PendingHomeReason.CreateIterator();It;++It) if(!It.Key().IsValid()) It.RemoveCurrent();
   PendingDepotMembership.RemoveAll([](const auto& V){return !IsValid(V);});
+  PendingDepotRouteMembership.RemoveAll([](const auto& V){return !IsValid(V);});
   DepotArrivalSuppressed.RemoveAll([](const auto& V){return !IsValid(V);});
   PlayerVehicleCursor=0; NextPlayerVehicleScan=Now+5.;
  }
@@ -100,23 +101,33 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
    if(OptOut || Reassigned) {
     const FGuid Truck=R.TruckId;
     if(RemoveRegistrationAt(*Index)) {
-     PendingDepotMembership.Remove(V); PendingHomeReason.Remove(V); OverflowCursor.Remove(V);
+     PendingDepotMembership.Remove(V); PendingDepotRouteMembership.Remove(V); PendingHomeReason.Remove(V); OverflowCursor.Remove(V);
      if(!HasDepot && Arrived) DepotArrivalSuppressed.AddUnique(V);
      UE_LOG(LogFILN,Log,TEXT("FILN_ROUTE_UNREGISTER truck=%s; native route, AP and cargo unchanged"),*Truck.ToString());
     }
+   } else if(!R.JobId.IsValid() && R.State==static_cast<uint8>(filn::State::Idle) && HasDepot && Route!=R.IdleRoute) {
+    // The player kept this home but changed the idle route. Reconcile it
+    // rather than leaving a permanently stuck registered vehicle.
+    R.IdleRoute=Route; R.Held=false; R.Relocating=true; R.AwaitingHomeIntent=false;
+    R.NavigationRetry.Reset(); R.TravelProgress.Reset(); ResetScan();
    }
    continue;
+  }
+  if(!HasDepot && PendingDepotRouteMembership.Contains(V)) {
+   PendingDepotMembership.Remove(V); PendingDepotRouteMembership.Remove(V);
+   if(Arrived) DepotArrivalSuppressed.AddUnique(V);
   }
   if(!Arrived || HasDepot) DepotArrivalSuppressed.Remove(V);
   if(!filn::player::Membership(true,HasDepot,Arrived!=nullptr,DepotArrivalSuppressed.Contains(V))) {
    PendingDepotMembership.Remove(V); PendingHomeReason.Remove(V); OverflowCursor.Remove(V); continue;
   }
   PendingDepotMembership.AddUnique(V);
+  if(HasDepot) PendingDepotRouteMembership.AddUnique(V);
   if(ArrivalAmbiguous || (Ambiguous && (!Arrived || !Route.Contains(Arrived->GetPathNodeGUID())))) {
    PendingHomeReason.Add(V,TEXT("Multiple FILN depots in route; no unique arrived home")); continue;
   }
   if(Arrived && (!HasDepot || Route.Contains(Arrived->GetPathNodeGUID()))) Requested=Arrived;
-  if(Requested && AdoptPlayerHome(V,Requested)) PendingDepotMembership.Remove(V);
+  if(Requested && AdoptPlayerHome(V,Requested)) { PendingDepotMembership.Remove(V); PendingDepotRouteMembership.Remove(V); }
  }
 }
 bool ALogisticsSubsystem::TransitionUsesNode(const FGuid& Node) const {

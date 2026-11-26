@@ -6,6 +6,12 @@ using namespace filn::recovery;
 #define CHECK(x) do { ++checks; if(!(x)) { std::cerr<<__LINE__<<": "<<#x<<'\n'; return EXIT_FAILURE; } } while(false)
 int main() {
  int checks=0;
+ CHECK(ProviderDepartureProven(true,false,0,48,48)); // full cargo, real provider visit
+ CHECK(!ProviderDepartureProven(false,false,0,48,48)); // no provider visit
+ CHECK(!ProviderDepartureProven(true,true,0,48,48)); // still docked
+ CHECK(!ProviderDepartureProven(true,false,0,12,48)); // missing required top-up
+ CHECK(ProviderDepartureProven(true,false,36,48,48));
+ CHECK(!ProviderDepartureProven(true,false,0,0,48));
  RetryClock r;
  Snapshot s{true,false,true,true,false,true,false,true};
  CHECK(Decide(s,r,0)==Action::FuelWait);
