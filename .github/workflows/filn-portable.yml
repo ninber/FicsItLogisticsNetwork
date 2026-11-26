@@ -12,6 +12,10 @@ on:
       - 'scripts/author-native-depot.py'
       - 'scripts/tests/test_native_depot_authoring.py'
       - 'scripts/filn-dashboard.py'
+      - 'scripts/check-release-compliance.py'
+      - 'scripts/prepare-filn-release.py'
+      - 'workspace/PUBLICATION.md'
+      - 'workspace/experiments/FILNLua/dashboard/**'
       - 'scripts/filn_dashboard_lifecycle.py'
       - 'scripts/tests/test_filn_dashboard_lifecycle.py'
       - 'scripts/install-filn-dashboard-service.sh'
@@ -33,6 +37,10 @@ on:
       - 'scripts/author-native-depot.py'
       - 'scripts/tests/test_native_depot_authoring.py'
       - 'scripts/filn-dashboard.py'
+      - 'scripts/check-release-compliance.py'
+      - 'scripts/prepare-filn-release.py'
+      - 'workspace/PUBLICATION.md'
+      - 'workspace/experiments/FILNLua/dashboard/**'
       - 'scripts/filn_dashboard_lifecycle.py'
       - 'scripts/tests/test_filn_dashboard_lifecycle.py'
       - 'scripts/install-filn-dashboard-service.sh'
@@ -58,6 +66,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: "$CXX --version"
       - run: bash scripts/test-filn.sh
+      - run: python3 scripts/check-release-compliance.py
+      - run: python3 scripts/prepare-filn-release.py
 
       - run: python3 -m unittest discover -s scripts/tests -p 'test_filn_dashboard.py'
       - run: python3 -m unittest discover -s scripts/tests -p 'test_filn_dashboard_lifecycle.py'

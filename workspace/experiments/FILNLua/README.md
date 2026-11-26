@@ -223,8 +223,7 @@ Removing the loader does not restore routes already changed in the game: restore
 - Game-thread execution: https://docs.ue4ss.com/dev/lua-api/global-functions/executeingamethread.html
 - UFunction/out-parameter implementation inspected: https://github.com/UE4SS-RE/RE-UE4SS/blob/main/UE4SS/src/LuaType/LuaUObject.cpp
 
-New experiment code is GPL-3.0-only, matching the native project. UE4SS binaries/configuration
-retain their own upstream license, included with the downloads.
+No new general-purpose license is granted for FILN-owned code in this revision. Earlier grants remain effective. UE4SS binaries/configuration retain their own upstream license, included with the downloads. See [publication compliance](../../PUBLICATION.md).
 
 ## Next fixture: parking bays
 
@@ -426,9 +425,7 @@ Fleet, Bottlenecks and Inventories remain available. The read-only monitor canno
 The backend recognizes retained-cargo availability only when telemetry advertises the new runtime
 capability; an older installed mod is never assumed to support it.
 
-Item artwork is bundled locally from a pinned SatisfactoryTools revision; provenance is recorded
-in `dashboard/icons/manifest.json`. Unknown items use a local placeholder. No external browser
-requests or game browser-opening calls are added. Navigate manually to
+Extracted artwork is no longer bundled. The historical Lua monitor uses the original neutral placeholder; the native runtime generates its own local cache from the installed base game. No external browser requests or game browser-opening calls are added. Navigate manually to
 `http://filn.localhost:8765/` in Steam's overlay browser.
 
 Feature 008 and the preceding feature 007 recovery candidate are installed after explicit

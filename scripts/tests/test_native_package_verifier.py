@@ -30,6 +30,11 @@ class NativePackageVerifierTests(unittest.TestCase):
                 result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(meta)})
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('SML-only dependency', result.stderr)
+    def test_runtime_cache_and_extracted_icons_are_rejected(self):
+        for name in ('cache/icons/build/item.png','dashboard/icons/extracted.png'):
+            result = self.probe({name:b'PNG'})
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('Runtime-only icon in release',result.stderr)
     def test_path_traversal_is_rejected(self):
         self.assertNotEqual(self.probe({'../outside':'bad'}).returncode, 0)
     def test_fake_dll_is_rejected(self):

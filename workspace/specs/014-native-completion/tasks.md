@@ -240,3 +240,9 @@ The latest player requirements supersede older home-only enrollment assumptions 
 - [ ] T138 Optional existing regular swatch binding (explicit player choice only), taxi palette initializer, native Customizer live edits, previous paint restoration on opt-out, no automatic global palette edit. Separately verify, does not complete T137.
 
 - [ ] R17/P0: Execute author/reload and cooked designer save/load/placement tests for independent FILNResource persistence in both station media and modes. Verify clear/change, independent copy identities, no designer dispatch, no inventory mutation. Do not claim completed until evidence exists.
+
+## P0 — SMR release compliance and offline icon cache
+- [x] Remove extracted PNGs and manifest from current source, exclude from source handoff, add archive rejection and publication disclosures; retain original neutral placeholder and existing UI, with requested footer.
+- [x] Add source implementation for demand-driven, version-namespaced native icon cache and loopback-only serving; no outbound icon requests.
+- [ ] Shipping compile and game acceptance: correct PNG color/alpha, persistent cache reuse, no readback on cache hit, frame-time measurement, offline operation, missing asset/headless fallback, game build invalidation. Cold-cache synchronous readback is a performance risk until measured; if it fails, replace with asynchronous GPU readback.
+- [ ] Verify third-party code provenance, contributor rights, actual cooked imports and contents, and public SMM dashboard installation/lifecycle. Previous public history and forks may still contain removed artwork; coordinate any history rewrite separately. Do not publish until verified.

@@ -51,4 +51,4 @@ Use exact object paths from list. Explicit dispatch uses the same eligibility an
 
 Disable automatic dispatch, finish jobs and refueling, park all registered vehicles. Administrator preparation stops owned parked AP-on trucks without changing their routes, restores station filters and clears native registry state. If preparation fails after stopping trucks, those trucks remain AP-off. Save after success, then independently verify a disposable load with FILN absent. That verification is still pending.
 
-License: GPL-3.0-only; upstream engine/game assets retain their ownership.
+No new general-purpose license is granted for FILN-owned code in this revision; prior grants and upstream ownership remain unaffected. See [publication compliance](../../PUBLICATION.md).

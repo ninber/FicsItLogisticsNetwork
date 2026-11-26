@@ -247,6 +247,33 @@ class StoragePairTests(unittest.TestCase):
         self.assertEqual(analyze(s,100)['requests'][0]['code'],'split_stock')
 
 class NativeDashboardTests(unittest.TestCase):
+    def test_native_icon_cache_serves_only_local_bounded_pngs(self):
+        import base64
+        png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=')
+        with tempfile.TemporaryDirectory() as directory:
+            d=Path(directory); revision='a'*40; key='b'*40
+            cache=d/'cache'/'icons'/revision; cache.mkdir(parents=True)
+            image=cache/(key+'.png'); image.write_bytes(png)
+            route='/icons/'+revision+'/'+key+'.png'
+            server=server_module.make_server(d,0,native=True)
+            thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+            url=f'http://127.0.0.1:{server.server_port}'
+            try:
+                with urllib.request.urlopen(url+route) as response:
+                    self.assertEqual(response.read(),png)
+                    self.assertEqual(response.headers['Content-Type'],'image/png')
+                for bad in ('/icons/'+'c'*40+'/'+key+'.png','/icons/'+revision+'/../'+key+'.png','/icons/'+revision+'/not-an-icon.png'):
+                    with self.assertRaises(urllib.error.HTTPError) as error:urllib.request.urlopen(url+bad)
+                    self.assertEqual(error.exception.code,404)
+                image.write_bytes(b'invalid')
+                with self.assertRaises(urllib.error.HTTPError) as error:urllib.request.urlopen(url+route)
+                self.assertEqual(error.exception.code,404)
+                image.unlink(); outside=d/'outside.png';outside.write_bytes(png);image.symlink_to(outside)
+                with self.assertRaises(urllib.error.HTTPError) as error:urllib.request.urlopen(url+route)
+                self.assertEqual(error.exception.code,404)
+            finally:
+                server.shutdown();server.server_close();thread.join()
+
     def test_native_never_queues_registration(self):
         with tempfile.TemporaryDirectory() as directory:
             d=Path(directory)

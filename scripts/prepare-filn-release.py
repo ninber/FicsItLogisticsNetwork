@@ -4,11 +4,14 @@ import hashlib
 import json
 from pathlib import Path
 import zipfile
+import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    subprocess.run([sys.executable, str(ROOT/'scripts/check-release-compliance.py')], check=True)
     native = ROOT / 'workspace/mods/FicsItLogisticsNetwork'
     lua = ROOT / 'workspace/experiments/FILNLua'
     files = {}
@@ -37,6 +40,7 @@ def main():
             'Local editor compile/link reported with unpublished unity fixes; current standalone build and Win64 package not verified.',
             'Native third-party dependency removed; fluid station/depot source exists, but independent selector, actual authoring/reload and solid/fluid gameplay remain unverified.',
             'Runtime acceptance and dependency compatibility remain pending.',
+            'Local icon export, offline dashboard installation and final publication compliance require shipping evidence.',
         ],
         'local_css_engine_present': (ROOT / 'toolchains/UnrealEngineCSS/Engine/Build/BatchFiles/Linux/Build.sh').is_file(),
         'sha256': {name: hashlib.sha256(data).hexdigest() for name, data in sorted(files.items())},
