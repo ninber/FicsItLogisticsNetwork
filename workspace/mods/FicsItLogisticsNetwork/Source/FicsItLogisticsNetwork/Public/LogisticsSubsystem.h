@@ -4,6 +4,7 @@
 #include "Async/Future.h"
 #include "Subsystem/ModSubsystem.h"
 #include "FGSaveInterface.h"
+#include "FGFactoryColoringTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "FILNCore.h"
 #include "FILNRoadCache.h"
@@ -87,6 +88,14 @@ struct FFILNRegistration {
  int32 FuelBefore=0;
  double FuelStarted=0, FuelRetryAt=0;
 };
+USTRUCT()
+struct FFILNNetworkPaint {
+ GENERATED_BODY()
+ UPROPERTY(SaveGame) TObjectPtr<AActor> Identifier;
+ UPROPERTY(SaveGame) TSubclassOf<UFGFactoryCustomizationDescriptor_Swatch> Original;
+ UPROPERTY(SaveGame) FFactoryCustomizationColorSlot OriginalOverride;
+ UPROPERTY(SaveGame) TSubclassOf<UFGFactoryCustomizationDescriptor_Swatch> Applied;
+};
 /** Native server-only prototype. Dedicated empty vanilla LOAD station is the home bay fallback. */
 UCLASS()
 class FICSITLOGISTICSNETWORK_API ALogisticsSubsystem : public AModSubsystem, public IFGSaveInterface {
@@ -125,6 +134,12 @@ private:
  bool IsNetworkStation(AFGDockingStationIdentifier* Station) const;
  FString AllocateNetworkName(const FString& Prefix);
  void PruneNetworkIdentity();
+ // Explicitly opted-in native regular swatch; never seize a player slot.
+ UPROPERTY(SaveGame) TSubclassOf<UFGFactoryCustomizationDescriptor_Swatch> NetworkSwatch;
+ UPROPERTY(SaveGame) TArray<FFILNNetworkPaint> NetworkPaint;
+ void UpdateNetworkPaint(AActor* Identifier,AActor* Target,bool Member);
+ void ExecuteNetworkSwatch(const TArray<FString>& Args);
+ bool RestoreAllNetworkPaint();
  friend class UFILNTransferObserver;
  friend class UFILNResourceRemote;
  UPROPERTY() TArray<TObjectPtr<UFILNTransferObserver>> TransferObservers;

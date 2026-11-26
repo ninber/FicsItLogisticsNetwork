@@ -7,7 +7,6 @@
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "Resources/FGItemDescriptor.h"
-#include "FGRecipe.h"
 #include "UObject/UnrealType.h"
 #include "Engine/World.h"
 
@@ -45,6 +44,7 @@ void ALogisticsSubsystem::PruneNetworkIdentity() {
  NamedNetworkStations.RemoveAll([](const auto& ID){return !IsValid(ID);});
  NamedNetworkVehicles.RemoveAll([](const auto& V){return !IsValid(V);});
  KnownNetworkProviders.RemoveAll([](const auto& ID){return !IsValid(ID);});
+ NetworkPaint.RemoveAll([](const FFILNNetworkPaint& P){return !IsValid(P.Identifier);});
 }
 FString ALogisticsSubsystem::AllocateNetworkName(const FString& Prefix) {
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return FString();

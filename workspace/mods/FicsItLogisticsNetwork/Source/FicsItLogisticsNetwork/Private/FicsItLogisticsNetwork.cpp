@@ -37,7 +37,7 @@ public:
   ALogisticsSubsystem::InstallParkingHook();
   ALogisticsSubsystem::InstallDepotWarningHook();
   ALogisticsSubsystem::InstallDockReceiptObserver();
-  for(const FString& Verb:TArray<FString>{TEXT("list"),TEXT("pair"),TEXT("unpair"),TEXT("dispatch"),TEXT("reset"),TEXT("rehome"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("depot"),TEXT("removeStation")}) {
+  for(const FString& Verb:TArray<FString>{TEXT("swatch"),TEXT("list"),TEXT("pair"),TEXT("unpair"),TEXT("dispatch"),TEXT("reset"),TEXT("rehome"),TEXT("status"),TEXT("station"),TEXT("prepareUninstall"),TEXT("enable"),TEXT("depot"),TEXT("removeStation")}) {
    Commands.Add(IConsoleManager::Get().RegisterConsoleCommand(
     *(TEXT("filn.")+Verb),TEXT("FILN server prototype; see README for exact object-path arguments"),
     FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([Verb](const TArray<FString>& Args,UWorld* World) {

@@ -39,7 +39,7 @@ bool ALogisticsSubsystem::ShouldSave_Implementation() const {
  // A prepared, empty subsystem has no state to serialize into vanilla saves.
  // Keep invalid/conflicted metadata for diagnosis instead of dropping it.
  return SchemaVersion!=1 || bDispatchBlocked || (!bUninstallPrepared && bAutoDispatchEnabled) || !Registrations.IsEmpty() ||
-  !StationConfigs.IsEmpty() || !DepotStations.IsEmpty() || !Stations.IsEmpty() || (!bUninstallPrepared && (!NetworkNameCounters.IsEmpty() || !PendingDepotMembership.IsEmpty()));
+  !StationConfigs.IsEmpty() || !DepotStations.IsEmpty() || !Stations.IsEmpty() || (!bUninstallPrepared && (!NetworkNameCounters.IsEmpty() || !PendingDepotMembership.IsEmpty() || NetworkSwatch || !NetworkPaint.IsEmpty()));
 }
 bool ALogisticsSubsystem::SetDispatchEnabled(bool Enabled) {
  if(!HasAuthority() || (Enabled && (!bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters))) return false;
@@ -239,7 +239,7 @@ void ALogisticsSubsystem::Rebuild() {
   }
   const bool Resume=Observed && R.Automatic && R.Resource && R.ExpectedCargo>0 && IsValid(O) && !O->GetDriver() && V->IsAutopilotEnabled() && IsValid(R.Home) &&
     filn::repair::CanRestoreJob(R.State>=static_cast<uint8>(S::ToProvider) && R.State<=static_cast<uint8>(S::Returning),Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId)),V->GetVehicleRoute()==R.RouteIntent,R.AbortReturn || EndpointConfigurationValid(R));
-  if(Resume && (R.AbortReturn || ArmDockReceipts(R))) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); }
+  if(Resume && (R.AbortReturn || ArmDockReceipts(R))) { Active.Add(I); R.LastObserved=GetWorld()->GetTimeSeconds(); if(!R.AbortReturn && IsValid(R.Provider)) KnownNetworkProviders.AddUnique(R.Provider); }
   else RetireJobToParking(R,TEXT("Saved journey cannot resume; parking with actual cargo"));
  }
 }
@@ -412,6 +412,8 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
  for(const auto& Depot:DepotStations) if(auto* B=Building(Depot); IsValid(B)) {
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
+ if(!RestoreAllNetworkPaint()) return false;
+ NetworkSwatch=nullptr;
  StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty();
  NamedNetworkStations.Empty(); NamedNetworkVehicles.Empty(); KnownNetworkProviders.Empty(); NetworkNameCounters.Empty();
  bUninstallPrepared=true; Rebuild();
@@ -772,6 +774,7 @@ bool ALogisticsSubsystem::RemoveRegistrationAt(int32 Index) {
 void ALogisticsSubsystem::Execute(const FString& Command,const TArray<FString>& Args) {
  check(IsInGameThread()); if(!HasAuthority()) return;
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
+ if(Command==TEXT("swatch")) { ExecuteNetworkSwatch(Args); return; }
  if(Command==TEXT("list")) {
   for(auto* V:VS->GetAllVehicles()) if(IsValid(V)) UE_LOG(LogFILN,Log,TEXT("vehicle %s name=%s"),*V->GetPathName(),*V->GetVehicleName().ToString());
   for(auto* H:VS->GetDockingStations()) if(IsValid(H)) UE_LOG(LogFILN,Log,TEXT("station %s name=%s node=%s"),*H->GetPathName(),*H->GetStationName().ToString(),*H->GetPathNodeGUID().ToString());

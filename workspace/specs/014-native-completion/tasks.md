@@ -236,3 +236,5 @@ The latest player requirements supersede older home-only enrollment assumptions 
 
 - [ ] T136 Native automatic name allocation and persistence, preserve all custom labels and ordinary objects, test in cooked game including migrated depot class/default localization, user rename and deletion.
 - [ ] T137 Dedicated FILN taxi swatch, native Customizer edit and shared reference on both vehicles and stations, no external dependency/slot collision, persist and replicate palette. Verify actual recoloring and ordinary objects unaffected; no fallback masquerading as dedicated swatch.
+
+- [ ] T138 Optional existing regular swatch binding (explicit player choice only), taxi palette initializer, native Customizer live edits, previous paint restoration on opt-out, no automatic global palette edit. Separately verify, does not complete T137.

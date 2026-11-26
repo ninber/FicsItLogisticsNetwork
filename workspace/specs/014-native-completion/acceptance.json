@@ -569,6 +569,14 @@
       "implementation": "R15 / T137",
       "verification_method": "Dedicated slot visible in Customizer; changing it recolors all FILN members only, survives reload and replication.",
       "actual_result": "Not implemented."
+    },
+    {
+      "id": "native-existing-swatch-opt-in",
+      "status": "not-verified",
+      "reason": "Source implementation; no cooked native color assignment, update or restoration proof.",
+      "implementation": "FILNNetworkPaint.cpp",
+      "verification_method": "Select unused swatch in disposable world, initialize taxi palette, edit in native Customizer; observe vehicles and stations; disable/leave network and inspect prior paint.",
+      "actual_result": "No cooked game evidence."
     }
   ]
 }
