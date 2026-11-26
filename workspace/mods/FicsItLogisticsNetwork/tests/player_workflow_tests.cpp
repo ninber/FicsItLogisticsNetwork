@@ -12,6 +12,14 @@ int main() {
  assert(!Compatible(M::Unknown,M::Fluid));
  DepotFacts free{true,true,true,false,false,false,true,false};
  assert(Free(free));
+ assert(VacantBay(true,true,false,false));
+ assert(!VacantBay(true,true,true,false));
+ assert(!VacantBay(true,true,false,true));
+ assert(!VacantBay(false,true,false,false));
+ assert(!VacantBay(true,false,false,false));
+ // Power loss does not consume physical bay capacity.
+ auto unpowered=free; unpowered.powered=false;
+ assert(!Free(unpowered) && VacantBay(true,unpowered.valid,unpowered.claimed,unpowered.occupied));
  auto d=free; d.claimed=true; assert(!Free(d));
  d=free; d.occupied=true; assert(!Free(d));
  d=free; d.reserved=true; assert(!Free(d));

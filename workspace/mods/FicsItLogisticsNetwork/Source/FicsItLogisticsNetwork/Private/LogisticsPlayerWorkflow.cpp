@@ -159,8 +159,8 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  bool HasVacantBay=false;
  for(const auto& D:DepotStations) {
   auto* B=IsValid(D)?D->GetStation():nullptr;
-  if(!IsValid(B) || !VehicleStationCompatible(O,B) || !ValidHome(D)) continue;
-  if(!HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(D.Get())) && (!B->GetDockedActor() || B->GetDockedActor()==O)) { HasVacantBay=true; break; }
+  if(!IsValid(B)) continue;
+  if(filn::player::VacantBay(VehicleStationCompatible(O,B),ValidHome(D),HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(D.Get())),B->GetDockedActor() && B->GetDockedActor()!=O)) { HasVacantBay=true; break; }
  }
  SetDepotCapacityWarning(V,!HasVacantBay);
  if(!HasVacantBay) { Pending(TEXT("No free compatible depot; build or free a bay. Automatic retry active.")); return false; }

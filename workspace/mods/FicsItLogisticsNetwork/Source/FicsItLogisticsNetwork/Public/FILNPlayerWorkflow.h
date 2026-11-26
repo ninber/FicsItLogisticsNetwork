@@ -10,6 +10,11 @@ inline bool Compatible(CargoMedium first,CargoMedium second) {
 struct DepotFacts {
  bool designated=false, valid=false, powered=false, claimed=false, occupied=false, reserved=false, uniqueNode=false, foreignRoute=false;
 };
+// Physical capacity is not departure readiness. Power, routing and temporary
+// reservations do not mean the player needs to build another depot.
+inline bool VacantBay(bool compatible,bool valid,bool claimed,bool occupiedByOther) {
+ return compatible && valid && !claimed && !occupiedByOther;
+}
 inline bool Free(const DepotFacts& d) {
  return d.designated && d.valid && d.powered && !d.claimed && !d.occupied && !d.reserved && d.uniqueNode && !d.foreignRoute;
 }

@@ -35,7 +35,7 @@ void ALogisticsSubsystem::InstallDepotWarningHook() {
  if(WITH_EDITOR) return;
  SUBSCRIBE_METHOD_VIRTUAL(FFILNVehicleWarningAccess::IsWarningIndicatorVisible,GetDefault<UFGWheeledVehicleRepresentation>(),
   ([](auto& Scope,const UFGWheeledVehicleRepresentation* Rep,AActor* Actor,FLinearColor& Color) {
-   const bool Native=Scope(Rep,Actor,Color);
+   Scope(Rep,Actor,Color);
    if(!IsInGameThread() || !IsValid(Actor) || !Actor->HasAuthority()) return;
    auto* V=Cast<AFGWheeledVehicleIdentifier>(Actor);
    if(!V) if(auto* Owner=Cast<AFGWheeledVehicle>(Actor)) V=Owner->GetVehicleIdentifier();
@@ -44,6 +44,6 @@ void ALogisticsSubsystem::InstallDepotWarningHook() {
    auto* S=Manager?Manager->GetSubsystemActor<ALogisticsSubsystem>():nullptr;
    if(S && S->HasDepotCapacityWarning(V)) {
     Color=FLinearColor(1.f,0.05f,0.025f,1.f); Scope.Override(true);
-   } else Scope.Override(Native);
+   }
   }));
 }
