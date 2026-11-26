@@ -84,4 +84,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: node --test scripts/save-tools/native-station-conversion.test.cjs scripts/save-tools/legacy-unlock-cleanup.test.cjs
+      - run: node --test scripts/save-tools/native-station-conversion.test.cjs scripts/save-tools/legacy-unlock-cleanup.test.cjs scripts/save-tools/recover-native-stations.test.cjs
