@@ -84,7 +84,13 @@ const TCHAR* Phase(const FFILNRegistration& R) {
 }
 FString TelemetryDirectory() { return FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("FILN"))); }
 }
+TSharedPtr<const FJsonObject> ALogisticsSubsystem::OrganizerSnapshot() {
+ check(IsInGameThread());
+ OrganizerDemandUntil=FPlatformTime::Seconds()+2.;
+ return LatestOrganizerSnapshot;
+}
 void ALogisticsSubsystem::ResetTelemetry() {
+ LatestOrganizerSnapshot.Reset(); OrganizerDemandUntil=0;
  TelemetryDemand.Interrupted(bTelemetryCollecting);
  bTelemetryCollecting=false;
  NextTelemetryDemandCheck=0; NextTelemetryStart=0;
@@ -157,7 +163,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
  // Only gate the start of a scan. Never discard accepted work when the
  // demand file ages out, including during a long scan or a paused world.
  if(!bTelemetryCollecting) {
-  if(!TelemetryDemand.ShouldStart(bTelemetryPublished)) return;
+  if(!TelemetryDemand.ShouldStart(bTelemetryPublished) && Now>=OrganizerDemandUntil) return;
   if(Now<NextTelemetryStart || (TelemetryWrite.IsValid() && !TelemetryWrite.IsReady())) return;
   auto* VS=AFGVehicleSubsystem::Get(GetWorld());
   if(!VS) {
@@ -190,7 +196,8 @@ void ALogisticsSubsystem::SampleTelemetry() {
    TSubclassOf<UFGItemDescriptor> Selected;
    if(Config && StationResourceMatches(*Config)) Selected=Config->Resource;
    else if(Config) Error(Guid(S),TEXT("Saved FILN resource configuration failed native filter readback"));
-   const auto Stock=InspectStock(B->GetInventory(),Selected);
+   const auto Saved=Config?Config->Resource:TSubclassOf<UFGItemDescriptor>();
+   const auto Stock=InspectStock(B->GetInventory(),Saved?Saved:Selected);
    const FString Medium=FILNTelemetryMedium(B->GetDockingStationResourceForm());
    const bool Explicit=Selected && StationAcceptsResource(B,Selected);
    const bool Supply=Load && Stock.Valid && Stock.Kinds==1 && Stock.Total>0 && StationAcceptsResource(B,Stock.Item) && (!Config || Explicit);
@@ -207,7 +214,13 @@ void ALogisticsSubsystem::SampleTelemetry() {
    O->SetStringField(TEXT("built_with_recipe"),BuiltWith?BuiltWith->GetPathName():FString());
    O->SetStringField(TEXT("medium"),Medium); O->SetStringField(TEXT("quantity_unit"),Medium==TEXT("fluid")?TEXT("native fluid units"):TEXT("items"));
    O->SetStringField(TEXT("role"),Load?TEXT("provider"):TEXT("requester")); O->SetBoolField(TEXT("explicit_filter"),Explicit); O->SetBoolField(TEXT("configured"),Configured); O->SetBoolField(TEXT("is_depot"),Depot);
-   O->SetStringField(TEXT("item"),Configured?FILNTelemetryDescriptorPath(Stock.Item):FString()); O->SetNumberField(TEXT("amount"),static_cast<double>(Stock.Total));
+   O->SetStringField(TEXT("item"),Configured?FILNTelemetryDescriptorPath(Stock.Item):FString());
+   O->SetStringField(TEXT("saved_item"),FILNTelemetryDescriptorPath(Saved));
+   O->SetStringField(TEXT("observed_item"),!Saved && Stock.Kinds==1?FILNTelemetryDescriptorPath(Stock.Item):FString());
+   O->SetBoolField(TEXT("filter_valid"),!Config || Explicit);
+   O->SetBoolField(TEXT("stock_valid"),Stock.Valid);
+   O->SetNumberField(TEXT("display_amount"),static_cast<double>(Stock.Amount));
+   O->SetNumberField(TEXT("display_capacity"),Stock.Valid?static_cast<double>(Stock.Capacity):0.); O->SetNumberField(TEXT("amount"),static_cast<double>(Stock.Total));
    O->SetNumberField(TEXT("capacity"),Configured?static_cast<double>(Stock.Capacity):0.); O->SetArrayField(TEXT("contents"),Stock.Contents);
    O->SetBoolField(TEXT("powered"),B->HasPower()); O->SetBoolField(TEXT("standby"),B->IsProductionPaused()); O->SetBoolField(TEXT("occupied"),B->GetDockedActor()!=nullptr);
    O->SetObjectField(TEXT("position"),Position(B->GetActorLocation())); O->SetObjectField(TEXT("fuel"),InspectStock(B->GetFuelInventory()).Json);
@@ -236,6 +249,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
    O->SetBoolField(TEXT("held"),R && R->Held); O->SetStringField(TEXT("medium"),Medium);
    O->SetStringField(TEXT("quantity_unit"),Medium==TEXT("fluid")?TEXT("native fluid units"):TEXT("items"));
    O->SetNumberField(TEXT("native_error"),static_cast<int32>(V->GetAutopilotErrorStatus())); O->SetNumberField(TEXT("target"),V->GetCurrentTargetWaypointIndex());
+   Cargo.Json->SetBoolField(TEXT("valid"),Cargo.Valid);
    O->SetObjectField(TEXT("cargo"),Cargo.Json); O->SetObjectField(TEXT("fuel"),Fuel.Json);
    FVector Location; FRotator Rotation; VehicleOwner->GetVehicleLocationAndRotation(Location,Rotation);
    O->SetObjectField(TEXT("position"),Position(Location));
@@ -296,6 +310,9 @@ void ALogisticsSubsystem::SampleTelemetry() {
   // as in Lua telemetry. Unknown values stay absent rather than estimated.
   Snapshot->SetArrayField(TEXT("capacity_samples"),TelemetryCapacityRows);
   Snapshot->SetObjectField(TEXT("dispatcher"),Dispatcher);
+  TArray<Value> RegistryIssues; for(const auto& Issue:RegistryDiagnostics) RegistryIssues.Add(MakeShared<FJsonValueString>(Issue));
+  Snapshot->SetArrayField(TEXT("registry_errors"),RegistryIssues);
+  LatestOrganizerSnapshot=Snapshot; // immutable; same input to async web export
   const FString Directory=TelemetryDirectory();
   const FString Temp=FPaths::Combine(Directory,FGuid::NewGuid().ToString()+TEXT(".tmp"));
   const FString Destination=FPaths::Combine(Directory,TEXT("telemetry.json"));

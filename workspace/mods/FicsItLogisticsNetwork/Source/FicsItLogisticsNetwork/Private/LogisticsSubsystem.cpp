@@ -60,7 +60,7 @@ void ALogisticsSubsystem::EndPlay(const EEndPlayReason::Type Reason) {
  GetWorldTimerManager().ClearTimer(Watchdog);
  GetWorldTimerManager().ClearTimer(DispatchTimer);
  GetWorldTimerManager().ClearTimer(TelemetryTimer);
- GetWorldTimerManager().ClearTimer(DeferredRebuild); bRegistryValidated=false; DestroyedVehicles.Empty();
+ GetWorldTimerManager().ClearTimer(DeferredRebuild); bRegistryValidated=false; RegistryDiagnostics.Reset(); DestroyedVehicles.Empty();
  StopNativeDashboardHeartbeat();
  ResetTelemetry();
  for(const auto& Observer:TransferObservers) if(Observer) Observer->Unbind();
@@ -115,6 +115,8 @@ void ALogisticsSubsystem::Rebuild() {
  ByVehicle.Empty(); StationIds.Empty(); StationIdentityIndex.Empty(); Active.Empty(); Cursor=0;
  RoadCache.Clear(); ResetScan();
  bDispatchBlocked=SchemaVersion!=1;
+ const auto RegistryIssue=[this](const FString& Why) { RegistryDiagnostics.Add(Why); UE_LOG(LogFILN,Error,TEXT("FILN_REGISTRY_DETAIL %s"),*Why); };
+ if(bDispatchBlocked) RegistryIssue(FString::Printf(TEXT("Unsupported saved schema: %d"),SchemaVersion));
  TSet<FGuid> TruckIdentities, BayIdentities;
  TSet<AFGDockingStationIdentifier*> HomeActors, ConfigActors;
  // First pass is metadata-only. In particular, never stop an ambiguous vehicle
@@ -122,13 +124,13 @@ void ALogisticsSubsystem::Rebuild() {
  for(const auto& E:Stations) {
   const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(E.Station.Get());
   if(!E.InstanceId.IsValid() || StationIdentityIndex.Contains(E.InstanceId) ||
-     (IsValid(E.Station) && (E.Station->GetWorld()!=GetWorld() || StationIds.Contains(Ref)))) { bDispatchBlocked=true; continue; }
+     (IsValid(E.Station) && (E.Station->GetWorld()!=GetWorld() || StationIds.Contains(Ref)))) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Station identity invalid or duplicate: %s (%s)"),*E.InstanceId.ToString(),*GetNameSafe(E.Station.Get()))); continue; }
   StationIdentityIndex.Add(E.InstanceId);
   if(IsValid(E.Station)) StationIds.Add(Ref,E.InstanceId);
  }
  for(const auto& Depot:DepotStations) if(IsValid(Depot)) {
   const TWeakObjectPtr<AFGDockingStationIdentifier> Ref(Depot.Get());
-  if(DepotIndex.Contains(Ref) || !StationIds.Contains(Ref)) bDispatchBlocked=true;
+  if(DepotIndex.Contains(Ref) || !StationIds.Contains(Ref)) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Depot identity missing or duplicate: %s"),*GetNameSafe(Depot.Get()))); }
   DepotIndex.Add(Ref);
  }
  for(int32 I=0;I<Registrations.Num();++I) {
@@ -137,18 +139,18 @@ void ALogisticsSubsystem::Rebuild() {
   const auto* HomeId=LiveHome?StationIds.Find(TWeakObjectPtr<AFGDockingStationIdentifier>(R.Home.Get())):nullptr;
   if(!R.TruckId.IsValid() || !R.BayId.IsValid() || TruckIdentities.Contains(R.TruckId) || BayIdentities.Contains(R.BayId) ||
      !filn::registry::LeaseReference(StationIdentityIndex.Contains(R.BayId),LiveHome,HomeId && *HomeId==R.BayId) ||
-     (LiveHome && HomeActors.Contains(R.Home)) || !filn::registry::StateAndJob(R.State,R.JobId.IsValid())) bDispatchBlocked=true;
+     (LiveHome && HomeActors.Contains(R.Home)) || !filn::registry::StateAndJob(R.State,R.JobId.IsValid())) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Truck/home/state identity conflict: truck=%s bay=%s state=%d job=%s"),*R.TruckId.ToString(),*R.BayId.ToString(),R.State,*R.JobId.ToString())); }
   TruckIdentities.Add(R.TruckId); BayIdentities.Add(R.BayId);
   if(LiveHome) { HomeActors.Add(R.Home); HomeStations.Add(R.Home.Get()); }
-  if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) bDispatchBlocked=true;
+  if(!Ownership.Pair(Key(R.TruckId),Key(R.BayId))) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Duplicate ownership: truck=%s bay=%s"),*R.TruckId.ToString(),*R.BayId.ToString())); }
   if(IsValid(R.Vehicle)) {
-   if(R.Vehicle->GetWorld()!=GetWorld() || ByVehicle.Contains(R.Vehicle)) bDispatchBlocked=true;
+   if(R.Vehicle->GetWorld()!=GetWorld() || ByVehicle.Contains(R.Vehicle)) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Duplicate or foreign vehicle: %s"),*GetNameSafe(R.Vehicle.Get()))); }
    else ByVehicle.Add(R.Vehicle,I);
   }
-  if(StateOf(R)!=S::Idle && !RestoreJobReservation(R)) bDispatchBlocked=true;
+  if(StateOf(R)!=S::Idle && !RestoreJobReservation(R)) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Cannot restore job lease: truck=%s job=%s provider=%s requester=%s"),*R.TruckId.ToString(),*R.JobId.ToString(),*R.ProviderLease.ToString(),*R.RequesterLease.ToString())); }
  }
  for(const auto& C:StationConfigs) if(IsValid(C.Station)) {
-  if(ConfigActors.Contains(C.Station) || IsDepot(C.Station) || !StationIds.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(C.Station.Get())) || !C.Resource) bDispatchBlocked=true;
+  if(ConfigActors.Contains(C.Station) || IsDepot(C.Station) || !StationIds.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(C.Station.Get())) || !C.Resource) { bDispatchBlocked=true; RegistryIssue(FString::Printf(TEXT("Invalid station configuration identity: %s"),*GetNameSafe(C.Station.Get()))); }
   ConfigActors.Add(C.Station);
   if(C.ExternalFilter) UE_LOG(LogFILN,Warning,TEXT("Retired unowned filter record is ineligible; explicit safe removal/reconfiguration required"));
  }
@@ -163,6 +165,7 @@ void ALogisticsSubsystem::Rebuild() {
  for(const auto& C:StationConfigs) if(IsValid(C.Station) && !C.ExternalFilter) LiveConfigs.Add(C);
  if(!ChangeStationFilters(LiveConfigs,false)) {
   bDispatchBlocked=true; bAutoDispatchEnabled=false;
+  RegistryIssue(TEXT("Saved station filters failed preflight; see FILN_FILTER_PREFLIGHT entries"));
   UE_LOG(LogFILN,Error,TEXT("Saved FILN filter conflict: native job reconciliation withheld"));
   return;
  }
@@ -229,20 +232,21 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
  TSet<UFGInventoryComponent*> Seen;
  for(const auto& C:Configs) {
   auto* B=Building(C.Station); auto* I=IsValid(B)?B->GetInventory():nullptr;
+  const auto Fail=[&](const TCHAR* Why) { const FString Detail=FString::Printf(TEXT("Filter preflight %s: %s"),*GetNameSafe(C.Station.Get()),Why); RegistryDiagnostics.AddUnique(Detail); UE_LOG(LogFILN,Error,TEXT("FILN_FILTER_PREFLIGHT %s"),*Detail); return false; };
   if(C.ExternalFilter || !IsValid(I) || !C.Resource || Seen.Contains(I) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096 ||
-     I->GetSizeLinear()!=C.OriginalFilters.Num() || (Restore && B->GetDockedActor())) return false;
+     I->GetSizeLinear()!=C.OriginalFilters.Num() || (Restore && B->GetDockedActor())) return Fail(TEXT("external/invalid/duplicate inventory, slot count mismatch or occupied restore"));
   Seen.Add(I);
   if(!Restore) {
-   if(!StationAcceptsResource(B,C.Resource)) return false;
+   if(!StationAcceptsResource(B,C.Resource)) return Fail(TEXT("native resource form or fluid descriptor mismatch"));
    TArray<FInventoryStack> Contents; I->GetInventoryStacks(Contents);
-   for(const auto& Stack:Contents) if(Stack.NumItems<0 || (Stack.NumItems>0 && Stack.Item.GetItemClass()!=C.Resource)) return false;
+   for(const auto& Stack:Contents) if(Stack.NumItems<0 || (Stack.NumItems>0 && Stack.Item.GetItemClass()!=C.Resource)) return Fail(TEXT("actual cargo conflicts with saved resource"));
   }
   // Legacy per-slot writes are not silently undone: the saved cargo may
   // already have been rearranged by the engine. Start from the original save.
   for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) {
    if(I->GetAllowedItemOnIndex(Slot)!=C.OriginalFilters[Slot]) {
     UE_LOG(LogFILN,Error,TEXT("FILN_SLOT_LAYOUT_CONFLICT station=%s slot=%d; no inventory mutation"),*B->GetPathName(),Slot);
-    return false;
+    return Fail(TEXT("native slot restriction differs from original saved layout"));
    }
   }
  }

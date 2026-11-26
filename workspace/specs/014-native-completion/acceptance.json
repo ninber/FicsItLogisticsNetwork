@@ -513,6 +513,22 @@
           "previous_reason": "Fluid descriptor/recipe authoring, native root registration, matching vanilla unlock and medium-aware depot discovery implemented in source. No editor-generated or cooked assets in remote tree."
         }
       ]
+    },
+    {
+      "id": "organizer-ui",
+      "status": "not-verified",
+      "reason": "Native interaction window and visual/input behavior require cooked game evidence.",
+      "implementation": "FILNOrganizer.cpp + LogisticsTelemetry.cpp",
+      "verification_method": "Open and close, three tabs at 1080p and 4K, long routes, mixed and idle cargo, native focus and key rebinding.",
+      "actual_result": "No cooked game evidence."
+    },
+    {
+      "id": "organizer-snapshot",
+      "status": "not-verified",
+      "reason": "Shared snapshot source requires game validation; remote transport not implemented.",
+      "implementation": "FILNOrganizer.cpp + LogisticsTelemetry.cpp",
+      "verification_method": "Compare web and native snapshots, blocked registry, demand lifetime, reload and authorized remote access.",
+      "actual_result": "No cooked game evidence."
     }
   ]
 }

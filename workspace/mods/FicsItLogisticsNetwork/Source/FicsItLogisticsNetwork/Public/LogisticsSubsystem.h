@@ -102,6 +102,7 @@ public:
  bool HoldVehicle(AFGWheeledVehicleIdentifier* Vehicle);
  static void InstallParkingHook();
  static void InstallDockReceiptObserver();
+ TSharedPtr<const FJsonObject> OrganizerSnapshot();
 private:
  UPROPERTY(SaveGame) int32 SchemaVersion = 1;
  UPROPERTY(SaveGame) TArray<FFILNStation> Stations;
@@ -190,6 +191,9 @@ private:
  TSet<FString> TelemetryTypeKeys;
  int32 TelemetryTypeCursor=0, TelemetryResourceCursor=0;
  TFuture<bool> TelemetryWrite;
+ TSharedPtr<const FJsonObject> LatestOrganizerSnapshot;
+ double OrganizerDemandUntil=0;
+ TArray<FString> RegistryDiagnostics;
  void DiscoverDepots();
  void EnsureDepotRecipe();
  static bool IsAuthoredDepot(const AFGDockingStationIdentifier* Station);
