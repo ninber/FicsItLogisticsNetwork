@@ -146,8 +146,9 @@ class HTTPTests(unittest.TestCase):
         for path in ['/../Config.lua','/api/dispatch','/api/save']:
             with self.assertRaises(urllib.error.HTTPError) as e:self.get(path)
             self.assertEqual(e.exception.code,404)
-    def test_icons_are_local_and_only_manifest_assets_are_served(self):
-        self.assertTrue(self.get('/icons/desc-oreiron-c_64.png').startswith(b'\x89PNG'))
+    def test_icons_are_local_and_no_extracted_assets_are_shipped(self):
+        with self.assertRaises(urllib.error.HTTPError) as e:self.get('/icons/desc-oreiron-c_64.png')
+        self.assertEqual(e.exception.code,404)
         self.assertIn(b'<svg',self.get('/icons/unknown.svg'))
         for path in ['/icons/manifest.json','/icons/../app.js','/icons/not-an-item.png']:
             with self.assertRaises(urllib.error.HTTPError) as e:self.get(path)
@@ -219,7 +220,10 @@ class ItemBoardTests(unittest.TestCase):
     def test_icon_id_is_local_and_cannot_be_a_path(self):
         s=fixture();item='/Game/FactoryGame/Resource/RawResources/OreIron/Desc_OreIron.Desc_OreIron_C'
         for station in s['stations']:station['item']=item
-        self.assertEqual(analyze(s,100)['item_groups'][0]['icon'],'/icons/desc-oreiron-c_64.png')
+        import hashlib
+        self.assertEqual(analyze(s,100)['item_groups'][0]['icon'],'/icons/unknown.svg')
+        s.update(runtime='native',icon_cache_revision='a'*40)
+        self.assertEqual(analyze(s,100)['item_groups'][0]['icon'],'/icons/'+'a'*40+'/'+hashlib.sha1(item.encode()).hexdigest()+'.png')
         s['stations'][0]['item']='../../not-an-icon'
         self.assertEqual(next(g for g in analyze(s,100)['item_groups'] if g['item']=='../../not-an-icon')['icon'],'/icons/unknown.svg')
 

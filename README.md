@@ -23,4 +23,4 @@ The acceptance report must fail while requirements remain unresolved. Host tests
 
 Game saves, runtime state, logs, local credentials, downloaded toolchains, upstream StarterProject and generated archives are excluded. Historical evidence may refer to local-only files. Never interrupt the running game, automate its UI, or migrate the original City save.
 
-New FILN code is GPL-3.0-only; see [LICENSE](LICENSE). Game/engine content retains upstream ownership. Item icon provenance is in `workspace/experiments/FILNLua/dashboard/icons/manifest.json`. Smarter Truck Stations is a technical reference only; no redistribution license was identified.
+No new general-purpose license is granted for FILN-owned code in this revision; earlier grants and third-party rights remain unaffected. Game/engine content retains upstream ownership. Dashboard icons are generated locally from the installed game, not distributed. See [publication compliance](workspace/PUBLICATION.md). Smarter Truck Stations is a technical reference only; no redistribution license was identified.

@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
 #include "FILNInventoryCapacity.h"
 #include "FILNOrganizerPolicy.h"
@@ -21,6 +20,15 @@
 #include "Misc/Paths.h"
 #include "Misc/DateTime.h"
 #include "Engine/World.h"
+#include "Engine/Texture2D.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "CanvasItem.h"
+#include "CanvasTypes.h"
+#include "ImageUtils.h"
+#include "Misc/App.h"
+#include "Misc/EngineVersion.h"
+#include "Misc/SecureHash.h"
+#include "UObject/StrongObjectPtr.h"
 
 namespace {
 using Object=TSharedPtr<FJsonObject>;
@@ -84,6 +92,61 @@ const TCHAR* Phase(const FFILNRegistration& R) {
  }
 }
 FString TelemetryDirectory() { return FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("FILN"))); }
+
+// Only local base-game artwork. Cache identity uses the exact UTF-8 descriptor
+// path and a build/schema namespace; Python derives the same file name.
+FString FILNIconHash(const FString& Text) {
+ FTCHARToUTF8 Bytes(*Text); uint8 Digest[20];
+ FSHA1::HashBuffer(Bytes.Get(),Bytes.Length(),Digest);
+ return BytesToHex(Digest,20).ToLower();
+}
+FString FILNIconRevision() {
+ static const FString Revision=FILNIconHash(FString(TEXT("filn-icon-v1-64|"))+FApp::GetBuildVersion()+TEXT("|")+FEngineVersion::Current().ToString());
+ return Revision;
+}
+// Cold-cache work is deliberately limited to one attempted icon per complete
+// dashboard scan. No synchronous work on cache hits, no rendering on servers.
+// Pixel readback is currently synchronous: shipping frame-time acceptance is
+// mandatory. The PNG encoder/writer never touches a UObject.
+template<typename Resources>
+void FILNCacheDashboardIcon(UWorld* World,const Resources& Items) {
+ if(!World || World->GetNetMode()==NM_DedicatedServer || !FApp::CanEverRender() || Items.IsEmpty()) return;
+ const FString Directory=FPaths::Combine(TelemetryDirectory(),TEXT("cache/icons"),FILNIconRevision());
+ static int32 Cursor=0;
+ static TFuture<void> Pending;
+ if(Pending.IsValid() && !Pending.IsReady()) return;
+ for(int32 Attempt=0;Attempt<FMath::Min(Items.Num(),32);++Attempt) {
+  Cursor%=Items.Num(); auto* Class=Items[Cursor++].Get();
+  if(!IsValid(Class) || !Class->IsChildOf(UFGItemDescriptor::StaticClass())) continue;
+  const FString Path=Class->GetPathName();
+  if(!Path.StartsWith(TEXT("/Game/FactoryGame/"))) continue;
+  const FString File=FPaths::Combine(Directory,FILNIconHash(Path)+TEXT(".png"));
+  if(IFileManager::Get().FileSize(*File)>8) continue;
+  auto* Icon=UFGItemDescriptor::GetSmallIcon(TSubclassOf<UFGItemDescriptor>(Class));
+  if(!IsValid(Icon) || !Icon->GetResource()) return;
+  constexpr int32 Side=64;
+  TStrongObjectPtr<UTextureRenderTarget2D> Target(NewObject<UTextureRenderTarget2D>(GetTransientPackage()));
+  Target->ClearColor=FLinearColor::Transparent;
+  Target->InitCustomFormat(Side,Side,PF_B8G8R8A8,false);
+  Target->UpdateResourceImmediate(true);
+  auto* Resource=Target->GameThread_GetRenderTargetResource();
+  if(!Resource) return;
+  FCanvas Canvas(Resource,nullptr,World,World->GetFeatureLevel());
+  FCanvasTileItem Tile(FVector2D::ZeroVector,Icon->GetResource(),FVector2D(Side,Side),FLinearColor::White);
+  Tile.BlendMode=SE_BLEND_Opaque;
+  Canvas.DrawItem(Tile); Canvas.Flush_GameThread();
+  TArray<FColor> Pixels;
+  if(!Resource->ReadPixels(Pixels) || Pixels.Num()!=Side*Side) return;
+  Pending=Async(EAsyncExecution::ThreadPool,[Directory,File,Pixels=MoveTemp(Pixels)]() {
+   TArray<uint8> Png; FImageUtils::CompressImageArray(64,64,Pixels,Png);
+   if(Png.IsEmpty() || Png.Num()>65536) return;
+   IFileManager::Get().MakeDirectory(*Directory,true);
+   const FString Temp=File+TEXT(".")+FGuid::NewGuid().ToString()+TEXT(".tmp");
+   if(!FFileHelper::SaveArrayToFile(Png,*Temp) || !IFileManager::Get().Move(*File,*Temp,true,true)) IFileManager::Get().Delete(*Temp,false,true);
+  });
+  return;
+ }
+}
 }
 TSharedPtr<const FJsonObject> ALogisticsSubsystem::OrganizerSnapshot() {
  check(IsInGameThread());
@@ -291,6 +354,9 @@ void ALogisticsSubsystem::SampleTelemetry() {
    // One exact capacity calculation per scheduler callback; no matrix spike.
    break;
   }
+  // Icon work only while a local dashboard has requested fresh telemetry.
+  const double IconDemandAge=(FDateTime::UtcNow()-IFileManager::Get().GetTimeStamp(*FPaths::Combine(TelemetryDirectory(),TEXT("dashboard-demand.txt")))).GetTotalSeconds();
+  if(IconDemandAge>=-5. && IconDemandAge<=30.) FILNCacheDashboardIcon(GetWorld(),TelemetryResources);
   // Keep previous complete snapshot until the next one has been written.
   auto Snapshot=Obj(); auto Dispatcher=Obj(); auto Leases=Obj(); auto Stats=Obj();
   for(const auto& R:Registrations) if(R.JobId.IsValid()) {
@@ -304,6 +370,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
    Dispatcher->SetNumberField(TEXT("configured_station_count"),StationConfigs.Num()); Dispatcher->SetNumberField(TEXT("registered_vehicle_count"),Registrations.Num()); Dispatcher->SetNumberField(TEXT("pending_membership_count"),PendingDepotMembership.Num()); Dispatcher->SetNumberField(TEXT("tracked_depot_count"),DepotStations.Num()); Dispatcher->SetBoolField(TEXT("depot_recipe_ready"),bDepotRecipeReady);
   Dispatcher->SetObjectField(TEXT("reservations"),Leases);
   Stats->SetNumberField(TEXT("graph_hits"),static_cast<double>(RoadCache.Hits)); Stats->SetNumberField(TEXT("graph_builds"),static_cast<double>(RoadCache.Misses)); Stats->SetNumberField(TEXT("rank_invalidations"),static_cast<double>(RoadCache.Invalidations)); Stats->SetNumberField(TEXT("graph_work"),static_cast<double>(RoadCache.Work)); Dispatcher->SetObjectField(TEXT("stats"),Stats);
+  Snapshot->SetStringField(TEXT("icon_cache_revision"),FILNIconRevision());
   Snapshot->SetNumberField(TEXT("schema_version"),1); Snapshot->SetStringField(TEXT("runtime"),TEXT("native")); Snapshot->SetStringField(TEXT("world"),TelemetryWorld);
   Snapshot->SetNumberField(TEXT("sequence"),static_cast<double>(++TelemetrySequence)); Snapshot->SetNumberField(TEXT("exported_at"),static_cast<double>(Stamp()));
   Snapshot->SetNumberField(TEXT("collection_seconds"),static_cast<double>(Stamp()-TelemetryStarted)); Snapshot->SetNumberField(TEXT("collection_started_at"),static_cast<double>(TelemetryStarted));

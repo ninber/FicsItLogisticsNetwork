@@ -17,3 +17,7 @@ Canonical native implementation: `mods/FicsItLogisticsNetwork`. Historical Lua e
 Run portable and Python tests, then `python3 scripts/report-native-acceptance.py` (must fail while unresolved). `python3 scripts/prepare-filn-release.py` creates only a source handoff. The package verifier enforces versioned SML-only metadata; older dependency-based archives must fail. This is necessary, not sufficient, for acceptance.
 
 Official packaging: https://docs.ficsit.app/satisfactory-modding/latest/Development/BeginnersGuide/ReleaseMod.html
+
+## Publication compliance
+
+See [PUBLICATION.md](PUBLICATION.md). Run `python3 scripts/check-release-compliance.py` before assembling any handoff. The local icon exporter requires shipping build, pixel/transparency, cache reuse and cold-cache frame-time evidence. A successful source check does not authorize release. Do not distribute runtime cache, extracted artwork or historical Lua executables. Verify the actual cooked contents and third-party provenance. Dashboard installation for ordinary SMM users still needs a verified distribution/lifecycle design.

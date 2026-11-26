@@ -19,6 +19,8 @@ try:
             p = PurePosixPath(name)
             if p.is_absolute() or '..' in p.parts or '\\' in name or ':' in name:
                 raise ValueError('Unsafe archive path: ' + name)
+            if any(part.lower() in {'cache', 'icons'} for part in p.parts) and p.suffix.lower() in {'.png','.jpg','.jpeg','.webp'}:
+                raise ValueError('Runtime-only icon in release: ' + name)
             if any(part.lower() in {'source', 'intermediate', 'tests', '.git', 'node_modules'} for part in p.parts) or p.suffix.lower() in {'.lua', '.py', '.cpp', '.h'}:
                 raise ValueError('Development/legacy dependency file: ' + name)
         descriptors = [name for name in names if name.endswith('/FicsItLogisticsNetwork.uplugin') or name == 'FicsItLogisticsNetwork.uplugin']

@@ -3,6 +3,7 @@
 import argparse
 import json
 import math
+import re
 import secrets
 import threading
 import time
@@ -75,8 +76,7 @@ class State:
 
 def make_server(scripts, port=8765, native=False, native_lifetime=None):
     state = State(scripts,native,native_lifetime)
-    manifest = json.loads((ASSETS/'icons/manifest.json').read_text())
-    icons = set(manifest['assets']) | {'unknown.svg'}
+    icon_root = Path(scripts)/'cache'/'icons'
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
             if state.native:
@@ -108,9 +108,22 @@ def make_server(scripts, port=8765, native=False, native_lifetime=None):
                     content_type = 'application/json; charset=utf-8'
                 except (OSError, ValueError, TypeError, KeyError) as exc:
                     self.send_error(503, str(exc)); return
-            elif path.startswith('/icons/') and path[7:] in icons:
-                body = (ASSETS/'icons'/path[7:]).read_bytes()
-                content_type = 'image/svg+xml' if path.endswith('.svg') else 'image/png'
+            elif path == '/icons/unknown.svg':
+                body = (ASSETS/'icons'/'unknown.svg').read_bytes()
+                content_type = 'image/svg+xml'
+            elif native and re.fullmatch(r'/icons/[0-9a-f]{40}/[0-9a-f]{40}\.png', path):
+                revision, filename = path.split('/')[2:]
+                image = icon_root/revision/filename
+                try:
+                    # Never follow a symlink out of the runtime-only cache.
+                    if any(p.is_symlink() for p in (icon_root.parent, icon_root, image.parent, image)) or not image.is_file() or image.stat().st_size > 65536:
+                        raise OSError('Icon unavailable')
+                    body = image.read_bytes()
+                    if not body.startswith(b'\x89PNG\r\n\x1a\n'):
+                        raise OSError('Invalid icon')
+                except OSError:
+                    self.send_error(404); return
+                content_type = 'image/png'
             elif path == '/health':
                 body, content_type = json.dumps({'service':'filn-dashboard','version':1,'runtime':'native' if state.native else 'lua'}).encode(), 'application/json'
             elif path in ('/', '/app.js', '/style.css'):
@@ -121,7 +134,7 @@ def make_server(scripts, port=8765, native=False, native_lifetime=None):
                 self.send_error(404); return
             self.send_response(200)
             self.send_header('Content-Type', content_type)
-            self.send_header('Cache-Control','no-store')
+            self.send_header('Cache-Control','private, max-age=86400, immutable' if content_type=='image/png' else 'no-store')
             self.send_header('X-Content-Type-Options','nosniff')
             self.send_header('Content-Security-Policy',"default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'")
             self.send_header('Content-Length',str(len(body)))

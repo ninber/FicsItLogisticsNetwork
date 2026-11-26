@@ -25,7 +25,7 @@ class InstallTimestampTests(unittest.TestCase):
             target = project / 'Mods/FicsItLogisticsNetwork'
             for folder in ('Source', 'Config', 'tests', 'docs'):
                 (source / folder).mkdir(parents=True)
-            for name in ('FicsItLogisticsNetwork.uplugin', 'README.md', 'LICENSE.txt', '.gitignore'):
+            for name in ('FicsItLogisticsNetwork.uplugin', 'README.md', '.gitignore'):
                 (source / name).write_text('original')
             project.mkdir(parents=True)
             (project / 'FactoryGame.uproject').write_text('{}')

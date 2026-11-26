@@ -7,7 +7,7 @@ target="$root/workspace/StarterProject/Mods/FicsItLogisticsNetwork"
 mkdir -p "$target"
 # Remove only retired canonical filenames from the generated StarterProject
 # copy. Never remove arbitrary user-authored Content or editor assets.
-for retired in Source/FicsItLogisticsNetwork/Private/FILNStationControls.cpp Source/FicsItLogisticsNetwork/Private/LogisticsMigration.cpp Source/FicsItLogisticsNetwork/Public/FILNLegacy.h tests/legacy_tests.cpp; do
+for retired in LICENSE.txt Source/FicsItLogisticsNetwork/Private/FILNStationControls.cpp Source/FicsItLogisticsNetwork/Private/LogisticsMigration.cpp Source/FicsItLogisticsNetwork/Public/FILNLegacy.h tests/legacy_tests.cpp; do
   if [[ ! -e "$source_dir/$retired" && -f "$target/$retired" ]]; then
     rm -- "$target/$retired"
     printf 'Removed retired generated source: %s\n' "$retired"
@@ -26,7 +26,7 @@ copy_changed() {
   mkdir -p -- "$(dirname -- "$destination")"
   cp -a --no-preserve=timestamps -- "$file" "$destination"
 }
-for entry in FicsItLogisticsNetwork.uplugin Source Config tests docs README.md LICENSE.txt .gitignore; do
+for entry in FicsItLogisticsNetwork.uplugin Source Config tests docs README.md .gitignore; do
   if [[ -d "$source_dir/$entry" ]]; then
     find "$source_dir/$entry" \( -type f -o -type l \) -print0 |
       while IFS= read -r -d '' file; do copy_changed "$file"; done

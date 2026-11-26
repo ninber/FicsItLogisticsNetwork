@@ -18,3 +18,7 @@ Saved/
 commands.txt
 dispatch-journal*.json
 dashboard-mod.txt
+
+# Runtime-only icon cache and retired extracted artwork
+cache/icons/
+workspace/experiments/FILNLua/dashboard/icons/*.png

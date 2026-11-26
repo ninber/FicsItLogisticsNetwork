@@ -20,14 +20,14 @@ def main():
                     files[f'{prefix}/{path.relative_to(base).as_posix()}'] = path.read_bytes()
 
     include(native, 'native/FicsItLogisticsNetwork', [
-        '*.uplugin', 'LICENSE.txt', 'README.md', 'Source/**/*.h',
+        '*.uplugin', 'README.md', 'Source/**/*.h',
         'Source/**/*.cpp', 'Source/**/*.cs', 'Config/*.ini', 'docs/*.md', 'tests/*.cpp'])
     include(lua, 'lua-experiment', [
         'Scripts/*.lua', 'DataForge/*.yml', 'FILNStations/*.yml',
         '*assets.json', 'kdataforge-asset.json', 'dashboard/**/*.html',
-        'dashboard/**/*.css', 'dashboard/**/*.js', 'dashboard/icons/*.png',
-        'dashboard/icons/manifest.json'])
+        'dashboard/**/*.css', 'dashboard/**/*.js', 'dashboard/icons/unknown.svg'])
     files['RELEASE.md'] = (ROOT / 'workspace/RELEASE.md').read_bytes()
+    files['PUBLICATION.md'] = (ROOT / 'workspace/PUBLICATION.md').read_bytes()
     descriptor = json.loads((native / 'FicsItLogisticsNetwork.uplugin').read_text())
     report = {
         'kind': 'source-handoff', 'smm_ready': False,

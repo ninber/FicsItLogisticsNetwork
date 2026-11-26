@@ -19,3 +19,7 @@ The exporter now samples actual allowed-slot capacity for one representative man
 ## Fluid telemetry follow-up
 
 The prior solid-only exporter is superseded. Native samples carry medium and quantity_unit; representative capacities use matching vehicle class/slot count/medium and native slot capacities only. Browser model filters providers and vehicles by medium and reports raw native fluid units, not liters or m3. Legacy snapshot with solid_supported=false and no medium remains excluded. Actual fluid quantity semantics and dashboard/game performance still require verification.
+
+## Publication: local icon cache
+
+No shipped PNG artwork or remote image requests. Native snapshots expose a build/schema hash; browser URLs use the full descriptor UTF-8 SHA-1 and revision. The HTTP server serves only bounded PNGs in Saved/FILN/cache/icons plus original neutral SVG. Existing icons bypass rendering; one missing base-game icon is attempted per completed demanded scan, PNG write runs on worker. Cold readback currently synchronizes the renderer and must pass shipping performance/alpha tests; dedicated servers, legacy Lua and unavailable textures use the neutral icon. No third-party artwork is exported. This does not change dispatcher logic or layout.

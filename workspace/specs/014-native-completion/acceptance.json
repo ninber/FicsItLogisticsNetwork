@@ -589,6 +589,22 @@
       "implementation": "R17 / FILNBlueprintSettings.cpp, author-native-depot.py, FILNStationControls.cpp",
       "verification_method": "For solid/fluid LOAD/UNLOAD stations select a resource inside designer; save, clear designer, reopen file, place two copies, verify selected resource and native mode; change/clear one copy independently, resave and reopen, save/reload world. Check designer never enrolls in dispatcher and placed station has separate identifier and actual filter enforcement. Inspect binary SBP for FILNResource and verify real cooked classes have SaveGame flag. No cargo/slot writes.",
       "actual_result": "Not run against matching editor or cooked game."
+    },
+    {
+      "id": "local-dashboard-icon-cache",
+      "status": "not-verified",
+      "reason": "Native source uses one cold-cache readback per demanded completed scan, async PNG write, build-version namespace and no distributed artwork; shipping rendering/alpha/frame-time and cache reuse are unverified.",
+      "implementation": "LogisticsTelemetry.cpp, filn-dashboard.py, filn_dashboard_model.py",
+      "verification_method": "Actual shipping game: cold cache with multiple configured resources, inspect 64x64 transparent PNGs; close browser, reopen, restart game, verify no repeated readback; compare frame times and dispatch; validate cache invalidation on game build change, missing texture, headless server, offline mode and no cache files in distribution.",
+      "actual_result": "Not compiled or exercised in shipping game."
+    },
+    {
+      "id": "publication-compliance",
+      "status": "not-verified",
+      "reason": "Source cleaning is not proof of redistribution rights, no copied code or cooked package contents; prior public Git history still contains removed assets.",
+      "implementation": "workspace/PUBLICATION.md and scripts/check-release-compliance.py",
+      "verification_method": "Review source provenance including Smarter Truck Stations; inspect release PAK and archive; review SMR disclosure and rights; confirm actual dashboard packaging and no unintended outbound requests.",
+      "actual_result": "Pending final source/package and rights review."
     }
   ]
 }

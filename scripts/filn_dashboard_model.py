@@ -1,5 +1,6 @@
 """Read-only explanation of observed FILN state; never controls dispatch."""
 import re
+import hashlib
 
 
 def item_name(path):
@@ -212,13 +213,13 @@ def analyze(snapshot, now, history=None):
     requests.sort(key=lambda r: (-r['priority'], -(r['observed_empty_seconds'] or 0), r['name']))
     if fresh:
         history['last_at'] = snapshot['exported_at']
-    return dict(item_groups=group_items(inventory,requests,fleet,reservations),requests=requests,fleet=fleet,inventories=inventory,errors=errors,stale=stale,
+    return dict(item_groups=group_items(inventory,requests,fleet,reservations,snapshot.get('icon_cache_revision') if snapshot.get('runtime')=='native' else None),requests=requests,fleet=fleet,inventories=inventory,errors=errors,stale=stale,
                 exported_at=snapshot['exported_at'],collection_seconds=snapshot.get('collection_seconds'),sequence=snapshot.get('sequence'),
                 dispatcher=dispatch,counts=dict(stations=len(stations),vehicles=len(vehicles),active=len(active),available=len(available),working=len(working),untracked_routes=sum(v['status'].startswith('Untracked FILN route') for v in fleet),cargo_blocked=sum(v['status']=='Blocked: cargo remains' for v in fleet),
                 retained_ready=sum(v['status']=='Matching cargo / waiting for requester' for v in fleet),empty_requests=sum(r['inventory']==0 for r in requests),blocked=sum(r['priority']>=60 for r in requests)))
 
 
-def group_items(inventory, requests, fleet, reservations):
+def group_items(inventory, requests, fleet, reservations, icon_revision=None):
     """Group observed roles without inferring an UNLOAD station's filter from stock."""
     groups = {}
     request_by = {r['guid']: r for r in requests}
@@ -249,6 +250,10 @@ def group_items(inventory, requests, fleet, reservations):
         g['provided'] = sum(s.get('amount',0) for s in g['providers'])
         g['requested'] = sum(s.get('amount',0)==0 for s in g['requesters'])
         g['retained_vehicles'] = [dict(id=v['id'],amount=v['cargo']['amount'],status=v['status']) for v in fleet if g['item'] and v.get('cargo',{}).get('item')==g['item'] and v.get('cargo',{}).get('amount',0)>0]
-        raw = (g['item'] or '').rsplit('.',1)[-1].lower().replace('_','-')
-        g['icon'] = '/icons/'+raw+'_64.png' if re.fullmatch(r'desc-[a-z0-9-]+-c',raw) else '/icons/unknown.svg'
+        item = g['item'] or ''
+        if isinstance(icon_revision,str) and re.fullmatch(r'[0-9a-f]{40}',icon_revision) and item.startswith('/Game/FactoryGame/'):
+            key = hashlib.sha1(item.encode('utf-8')).hexdigest()
+            g['icon'] = f'/icons/{icon_revision}/{key}.png'
+        else:
+            g['icon'] = '/icons/unknown.svg'
     return sorted(groups.values(),key=lambda g:(g['item'] is None,g['item_name'].casefold()))
