@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 local M={}
 function M.array(t)return setmetatable(t or {},{__json_array=true})end
 local function quote(s)

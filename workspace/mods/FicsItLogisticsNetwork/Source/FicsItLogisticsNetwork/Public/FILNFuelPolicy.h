@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 namespace filn::fuel {
 enum class Action { Reject, Ready, Wait, RequestDock, Observe };

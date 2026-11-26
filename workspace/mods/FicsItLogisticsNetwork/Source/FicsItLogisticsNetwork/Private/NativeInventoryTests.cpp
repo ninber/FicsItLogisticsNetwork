@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #include "Misc/AutomationTest.h"
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Engine/World.h"

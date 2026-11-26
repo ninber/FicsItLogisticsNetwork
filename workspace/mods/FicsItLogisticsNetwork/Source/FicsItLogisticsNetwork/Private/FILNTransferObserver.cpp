@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #include "FILNTransferObserver.h"
 #include "LogisticsSubsystem.h"
 #include "FILNTransferLedger.h"

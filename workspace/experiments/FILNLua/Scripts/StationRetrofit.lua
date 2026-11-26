@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- A configuration retrofit: never replaces actors or rewrites road identities.
 local Audit=require('CargoAudit')
 local Bridge=require('Bridge')

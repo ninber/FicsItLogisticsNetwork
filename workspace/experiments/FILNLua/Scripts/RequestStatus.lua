@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Read-only view of the scheduler's last completed stock scan; no extra world search.
 local M={}
 function M.rows(catalog,jobs,reservations,capacity)

@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 local Core = require('Core')
 local Config = require('Config')
 local Bridge = require('Bridge')

@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Called only by prepared, autosave-disabled disposable route-bridge tests.
 local B=require('Bridge');local C=require('Core');local Orphans=require('OrphanRoutes')
 local M={}

@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Native OpenWebURL is disabled following the manual-test freeze/crash.
 -- A pcall cannot recover a hung native engine call. Keep this path free of engine calls.
 local M={}

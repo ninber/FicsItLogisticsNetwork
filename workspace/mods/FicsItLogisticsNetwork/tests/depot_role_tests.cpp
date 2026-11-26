@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #include "FILNDepotPolicy.h"
 #include <cstdlib>
 #include <iostream>

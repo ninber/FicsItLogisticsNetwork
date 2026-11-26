@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 namespace filn::depot {
 struct Snapshot {

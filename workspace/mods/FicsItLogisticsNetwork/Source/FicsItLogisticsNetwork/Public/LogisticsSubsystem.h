@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 #include "CoreMinimal.h"
 #include "Async/Future.h"

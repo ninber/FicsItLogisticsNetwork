@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Test-only traffic pause. Never changes routes, cargo, actors or player possession.
 local Core=require('Core')
 local Bridge=require('Bridge')

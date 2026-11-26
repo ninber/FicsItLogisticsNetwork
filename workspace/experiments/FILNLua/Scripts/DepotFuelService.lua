@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Stationary native fuel service. Never changes routes, inventories or possession.
 local Bridge=require('Bridge')
 local Core=require('Core')

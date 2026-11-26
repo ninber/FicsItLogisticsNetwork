@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
 #include "FGColorInterface.h"
 #include "Resources/FGItemDescriptor.h"

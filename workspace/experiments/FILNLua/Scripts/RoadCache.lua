@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Networks are recreated on topology changes; traversability has a native revision.
 local Graph=require('RoadGraph')
 local M={}

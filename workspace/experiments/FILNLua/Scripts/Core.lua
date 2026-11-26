@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- No engine dependencies: shared with host tests.
 local M = {}
 function M.guid(value)

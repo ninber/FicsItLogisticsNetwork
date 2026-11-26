@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Recovery is observed forever; retries are bounded in frequency, never discarded.
 local M={}
 function M.new(now)

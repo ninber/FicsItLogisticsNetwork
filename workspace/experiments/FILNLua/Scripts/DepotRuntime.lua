@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 local Core=require('Core')
 local Bridge=require('Bridge')
 local RestStop=require('RestStop')

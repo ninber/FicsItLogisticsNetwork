@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 namespace filn::identity {
 // A non-default player name (including semantic [S] tags) is never edited.

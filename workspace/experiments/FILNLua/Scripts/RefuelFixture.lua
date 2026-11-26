@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Move existing manually supplied coal into each truck's own depot fuel slot.
 -- One coal remains in each truck; no items are created or cargo inventories used.
 local M={}

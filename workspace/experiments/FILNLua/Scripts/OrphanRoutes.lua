@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Recover only exact FILN-shaped native schedules. One candidate per game-thread pass.
 local C=require('Core');local B=require('Bridge');local Audit=require('CargoAudit')
 local M={}

@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Data-only write-ahead home/route intent; never evaluate persistence as Lua code.
 local Core=require('Core')
 local Bridge=require('Bridge')

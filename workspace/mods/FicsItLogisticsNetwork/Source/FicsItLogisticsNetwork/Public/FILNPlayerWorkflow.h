@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 namespace filn::player {
 // Resource forms are converted from native enums at the adapter boundary.

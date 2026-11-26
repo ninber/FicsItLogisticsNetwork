@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Category metadata only; blueprint file conversion is performed on backed-up copies offline.
 local Bridge=require('Bridge')
 local M={}

@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- One station sample per pass. Busy trucks do not trigger inventory searches.
 local Core=require('Core')
 local Bridge=require('Bridge')

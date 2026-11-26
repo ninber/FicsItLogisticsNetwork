@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 local Bridge=require('Bridge')
 local M={}
 local function purchased(api,manager)

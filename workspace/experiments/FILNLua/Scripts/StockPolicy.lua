@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 local M={}
 local function integer(n)return type(n)=='number' and n>=0 and n==math.floor(n) and n<math.huge end
 function M.evaluate(settings,role,quantity,capacity,truckload)

@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Verify one migrated station per pass before permitting new automatic assignments.
 local Core=require('Core')
 local Bridge=require('Bridge')

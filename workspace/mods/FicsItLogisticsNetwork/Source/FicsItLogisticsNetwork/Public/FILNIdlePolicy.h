@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 namespace filn::idle {
 enum class Action { Release, Hold, NativeReturn, RetryEmptyReturn };

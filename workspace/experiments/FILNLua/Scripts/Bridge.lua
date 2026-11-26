@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 local Core=require('Core')
 local B={}
 function B.value(value)

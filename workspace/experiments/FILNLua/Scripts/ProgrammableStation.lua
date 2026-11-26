@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Read the operator's in-game Smarter Truck Stations filter; never infer from stock.
 local Bridge=require('Bridge')
 local M={}

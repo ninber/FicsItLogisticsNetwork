@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Demand-driven read-only diagnostics: one station, vehicle or capacity calculation per pass.
 local B=require('Bridge');local C=require('Core');local Audit=require('CargoAudit');local Json=require('Json')
 local M={}

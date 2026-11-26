@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #include "FILNRehomePolicy.h"
 #include "FILNCore.h"
 #include <cstdlib>

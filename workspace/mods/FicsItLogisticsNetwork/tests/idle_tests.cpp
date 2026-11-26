@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #define near // Win32 headers define this legacy keyword macro.
 #include "FILNIdlePolicy.h"
 #undef near

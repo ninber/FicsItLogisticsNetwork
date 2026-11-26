@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Explicit fuel-belt setup: enable only the requested disabled branch, preserve other rules.
 local Bridge=require('Bridge')
 local M={}

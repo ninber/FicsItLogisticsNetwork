@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
 #include "FILNIdentityPolicy.h"
 #include "WheeledVehicles/FGVehicleSubsystem.h"

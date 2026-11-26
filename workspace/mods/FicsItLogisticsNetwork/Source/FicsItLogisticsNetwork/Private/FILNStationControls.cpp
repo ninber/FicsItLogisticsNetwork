@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #include "FILNStationControls.h"
 #include "FILNBlueprintSettings.h"
 #include "FILNSelectorPolicy.h"

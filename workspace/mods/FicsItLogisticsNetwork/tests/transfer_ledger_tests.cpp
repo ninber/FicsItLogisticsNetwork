@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #include "FILNTransferLedger.h"
 #include <iostream>
 #include <cstdlib>

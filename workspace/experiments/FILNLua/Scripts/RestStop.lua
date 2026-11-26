@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Stop/release controller. Building registration and arrival hooks are separate adapters.
 local Core=require('Core')
 local M={}

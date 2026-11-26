@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 local Bridge=require('Bridge')
 local Core=require('Core')
 local Programmable=require('ProgrammableStation')

@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Immutable directed physical-length snapshot; independent of stock and job activity.
 local Bridge=require('Bridge')
 local Core=require('Core')

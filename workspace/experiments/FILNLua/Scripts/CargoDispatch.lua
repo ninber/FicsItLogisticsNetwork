@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 local Audit=require('CargoAudit')
 local Bridge=require('Bridge')
 local Core=require('Core')

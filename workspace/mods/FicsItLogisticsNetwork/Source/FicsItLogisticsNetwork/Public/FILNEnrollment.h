@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 namespace filn::enrollment {
 enum class Route { Empty, HomeOnly, Other };

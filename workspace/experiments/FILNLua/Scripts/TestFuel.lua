@@ -1,4 +1,3 @@
--- SPDX-License-Identifier: GPL-3.0-only
 -- Explicit disposable-fixture preparation; never a production fuel source.
 local M={}
 function M.seed(api,vehicles,coal)
