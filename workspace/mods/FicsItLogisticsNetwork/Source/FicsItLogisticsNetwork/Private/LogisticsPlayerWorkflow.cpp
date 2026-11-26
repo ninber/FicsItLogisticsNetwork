@@ -61,7 +61,7 @@ void ALogisticsSubsystem::DiscoverDepots() {
  }
 }
 void ALogisticsSubsystem::DiscoverHomeVehicles() {
- if(!HasAuthority() || !bRegistryValidated || !bAutoDispatchEnabled || bDispatchBlocked || bPreparingUninstall) return;
+ if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters) return;
  const double Now=GetWorld()->GetTimeSeconds();
  auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
  if(PlayerVehicleCursor>=PlayerVehicleScan.Num()) {
@@ -69,33 +69,63 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
   PlayerVehicleScan.Reset(); for(auto* V:VS->GetAllVehicles()) if(IsValid(V)) PlayerVehicleScan.Add(V);
   for(auto It=OverflowCursor.CreateIterator();It;++It) if(!It.Key().IsValid()) It.RemoveCurrent();
   for(auto It=PendingHomeReason.CreateIterator();It;++It) if(!It.Key().IsValid()) It.RemoveCurrent();
+  PendingDepotMembership.RemoveAll([](const auto& V){return !IsValid(V);});
+  DepotArrivalSuppressed.RemoveAll([](const auto& V){return !IsValid(V);});
   PlayerVehicleCursor=0; NextPlayerVehicleScan=Now+5.;
  }
  for(int32 Work=0;Work<4 && PlayerVehicleCursor<PlayerVehicleScan.Num();++Work) {
   auto* V=PlayerVehicleScan[PlayerVehicleCursor++].Get();
-  if(!IsValid(V) || ByVehicle.Contains(V)) continue;
+  auto* O=IsValid(V)?V->GetOwnerVehicle():nullptr;
+  if(!IsValid(O) || !O->HasAuthority()) continue;
   const auto Route=V->GetVehicleRoute();
-  if(Route.Num()!=1 || !Route[0].IsValid()) {
-   PendingHomeReason.Remove(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V));
-   OverflowCursor.Remove(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V));
-   continue; // multi-stop vanilla routes are intentionally not opted in
-  }
-  AFGDockingStationIdentifier* Requested=nullptr; bool Ambiguous=false;
-  for(const auto& D:DepotStations) if(IsValid(D) && D->GetPathNodeGUID()==Route[0]) {
-   if(Requested) Ambiguous=true; Requested=D.Get();
-  }
-  if(Requested && !Ambiguous) AdoptPlayerHome(V,Requested);
-  else {
-   OverflowCursor.Remove(V);
-   const FString Why=Ambiguous?TEXT("Assigned home node matches multiple FILN depots"):
-    FString::Printf(TEXT("Assigned home node %s is not a tracked FILN depot"),*Route[0].ToString());
-   auto& Previous=PendingHomeReason.FindOrAdd(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V));
-   if(Previous!=Why) {
-    Previous=Why;
-    UE_LOG(LogFILN,Warning,TEXT("AUTO_HOME_PENDING vehicle=%s reason=%s"),*V->GetPathName(),*Why);
+  AFGDockingStationIdentifier* Requested=nullptr; AFGDockingStationIdentifier* Arrived=nullptr;
+  bool Ambiguous=false, ArrivalAmbiguous=false;
+  for(const auto& D:DepotStations) {
+   if(!IsValid(D) || !IsValid(D->GetStation()) || !D->GetPathNodeGUID().IsValid()) continue;
+   if(Route.Contains(D->GetPathNodeGUID())) {
+    if(Requested && Requested!=D.Get()) Ambiguous=true;
+    Requested=D.Get();
+   }
+   if(D->GetStation()->GetDockedActor()==O) {
+    if(Arrived && Arrived!=D.Get()) ArrivalAmbiguous=true;
+    Arrived=D.Get();
    }
   }
+  const bool HasDepot=Requested!=nullptr;
+  if(const auto* Index=ByVehicle.Find(V)) {
+   if(!Registrations.IsValidIndex(*Index)) { bDispatchBlocked=true; return; }
+   auto& R=Registrations[*Index];
+   const bool OptOut=filn::player::RemovedDepot(HasDepot,R.AwaitingHomeIntent,Route==R.IdleRoute);
+   const bool Reassigned=HasDepot && IsValid(R.Home) && !Route.Contains(R.Home->GetPathNodeGUID()) && !R.AwaitingHomeIntent;
+   if(OptOut || Reassigned) {
+    const FGuid Truck=R.TruckId;
+    if(RemoveRegistrationAt(*Index)) {
+     PendingDepotMembership.Remove(V); PendingHomeReason.Remove(V); OverflowCursor.Remove(V);
+     if(!HasDepot && Arrived) DepotArrivalSuppressed.AddUnique(V);
+     UE_LOG(LogFILN,Log,TEXT("FILN_ROUTE_UNREGISTER truck=%s; native route, AP and cargo unchanged"),*Truck.ToString());
+    }
+   }
+   continue;
+  }
+  if(!Arrived || HasDepot) DepotArrivalSuppressed.Remove(V);
+  if(!filn::player::Membership(true,HasDepot,Arrived!=nullptr,DepotArrivalSuppressed.Contains(V))) {
+   PendingDepotMembership.Remove(V); PendingHomeReason.Remove(V); OverflowCursor.Remove(V); continue;
+  }
+  PendingDepotMembership.AddUnique(V);
+  if(ArrivalAmbiguous || (Ambiguous && (!Arrived || !Route.Contains(Arrived->GetPathNodeGUID())))) {
+   PendingHomeReason.Add(V,TEXT("Multiple FILN depots in route; no unique arrived home")); continue;
+  }
+  if(Arrived && (!HasDepot || Route.Contains(Arrived->GetPathNodeGUID()))) Requested=Arrived;
+  if(Requested && AdoptPlayerHome(V,Requested)) PendingDepotMembership.Remove(V);
  }
+}
+bool ALogisticsSubsystem::TransitionUsesNode(const FGuid& Node) const {
+ if(!Node.IsValid()) return false;
+ for(const auto& V:PendingDepotMembership)
+  if(IsValid(V) && V->GetVehicleRoute().Contains(Node)) return true;
+ for(const auto& R:Registrations)
+  if(R.Relocating && IsValid(R.Vehicle) && R.Vehicle->GetVehicleRoute().Contains(Node)) return true;
+ return false;
 }
 bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDockingStationIdentifier* Requested) {
  check(IsInGameThread());
@@ -112,12 +142,13 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  if(!VehicleStationCompatible(O,Requested->GetStation())) { Pending(TEXT("Vehicle and depot cargo media are incompatible")); return false; }
  const auto Before=V->GetVehicleRoute();
  const FGuid Wanted=Requested->GetPathNodeGUID();
- if(!filn::player::OptedIn(O->HasAuthority(),V->IsAutopilotEnabled(),O->GetDriver()!=nullptr,Before.Num()==1 && Before[0]==Wanted,ByVehicle.Contains(V))) { Pending(TEXT("Enrollment requires authority, autopilot enabled, no driver and an exclusive home-only route")); return false; }
+ const bool Arrived=Requested->GetStation()->GetDockedActor()==O;
+ if(!O->HasAuthority() || ByVehicle.Contains(V) || (!Before.Contains(Wanted) && !Arrived)) return false;
  if(!Wanted.IsValid()) { Pending(TEXT("Depot path node invalid")); return false; }
  // A stopped truck actually docked at its requested home can be adopted
  // without route writes; a truck docking elsewhere is never commandeered.
  const bool Docking=V->IsCurrentlyDocking();
- if(Docking && Requested->GetStation()->GetDockedActor()!=O) { Pending(TEXT("Vehicle docking away from requested depot")); return false; }
+ // Membership is independent of docking and motion; park only after a safe transition.
  // Cheap rejection before any roster work. For an enrollment attempt, build
  // route/node indexes once, not once per candidate depot. Game-thread only.
  TMap<FGuid,int32> NodeCounts;
@@ -133,8 +164,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
    for(const auto& N:Route) AllForeignRoutes.Add(N);
    if(!Route.Contains(Wanted)) continue;
    const auto* OtherOwner=Other->GetOwnerVehicle();
-   if(filn::player::ForeignRoute(true,Route.Num()==1 && Route[0]==Wanted,Other->IsAutopilotEnabled(),
-       !IsValid(OtherOwner) || OtherOwner->GetDriver()!=nullptr,ByVehicle.Contains(Other))) BlockingRequestedRoutes.Add(Wanted);
+   if(ByVehicle.Contains(Other) || !IsValid(OtherOwner)) BlockingRequestedRoutes.Add(Wanted);
   }
  };
  auto Free=[&](AFGDockingStationIdentifier* D) {
@@ -142,7 +172,7 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
      HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(D))) return false;
   auto* B=D->GetStation(); const auto Node=D->GetPathNodeGUID();
   if(!Node.IsValid() || (B->GetDockedActor() && B->GetDockedActor()!=O) ||
-     !B->HasPower() || B->IsProductionPaused() || !ValidHome(D) || !VehicleStationCompatible(O,B)) return false;
+     (D!=Requested && (!B->HasPower() || B->IsProductionPaused())) || !ValidHome(D) || !VehicleStationCompatible(O,B)) return false;
   const auto* SavedId=StationIds.Find(TWeakObjectPtr<AFGDockingStationIdentifier>(D));
   if(SavedId && Reservations.StationBusy(FILNPlayerGuidKey(*SavedId))) return false;
   IndexRoster();
@@ -152,11 +182,11 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  AFGDockingStationIdentifier* Destination=nullptr;
  const bool RequestedClaimed=HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(Requested));
  if(Free(Requested)) Destination=Requested;
- else if(RequestedClaimed) {
+ else if(RequestedClaimed || (Requested->GetStation()->GetDockedActor() && Requested->GetStation()->GetDockedActor()!=O)) {
   if(Docking) { Pending(TEXT("Occupied depot: wait until docking finishes before relocation")); return false; }
   // Do not displace the existing owner. A two-node native route is necessary
   // for movement; a home-only route is only the final parked intent.
-  if(!O->HasFuel() || !O->GetStorageInventory()->IsEmpty()) { Pending(TEXT("Occupied depot: overflow needs fuel and empty cargo")); return false; }
+  if(!filn::player::MayMove(true,V->IsAutopilotEnabled(),O->GetDriver()!=nullptr) || !O->HasFuel()) { Pending(TEXT("Occupied depot: waiting for native AP and fuel to reach a free bay")); return false; }
   const auto From=V->GetCurrentToPathNodeGUID(); auto* Preset=O->GetVehiclePathPreset();
   if(!From.IsValid() || !Preset) { Pending(TEXT("Occupied depot: no native road segment or vehicle preset")); return false; }
   int32& DepotSearchCursor=OverflowCursor.FindOrAdd(VehicleKey);
@@ -179,36 +209,23 @@ bool ALogisticsSubsystem::AdoptPlayerHome(AFGWheeledVehicleIdentifier* V,AFGDock
  // Rebuild the small index once immediately before mutation; a native road
  // change or second claimant must not sneak through the earlier search.
  Indexed=false; NodeCounts.Reset(); AllForeignRoutes.Reset(); BlockingRequestedRoutes.Reset();
- if(!Free(Destination) || O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=Before) return false;
+ if(!Free(Destination) || V->GetVehicleRoute()!=Before) return false;
  const auto Node=Destination->GetPathNodeGUID();
- const bool Move=Destination!=Requested;
  auto* H=Destination->GetStation();
  const FVector Delta=O->GetVehicleLocation()-H->GetDockingPathNode()->GetActorLocation();
- const bool AtHome=filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,O->GetForwardSpeed(),H->GetDockedActor() && H->GetDockedActor()!=O);
- // For an unclaimed depot, adopt the same parked home-only route as Lua;
- // do not assert that a single-node route can drive from an arbitrary road.
- if(!Move && !AtHome) { Pending(TEXT("Park at the selected free depot to establish home-only route")); return false; }
+ const bool AtHome=H->GetDockedActor()==O && filn::dispatch::HomePositionReady(Delta.SizeSquared(),Delta.Z,O->GetForwardSpeed(),false);
  FFILNRegistration R; R.Vehicle=V; R.Home=Destination; R.TruckId=FGuid::NewGuid(); R.BayId=StationId(Destination);
- R.IdleRoute=Move?TArray<FGuid>{Node,Wanted}:Before; R.Relocating=Move; R.Held=!Move;
+ R.IdleRoute=Before; R.Relocating=true; R.Held=false;
+ // Arrival-only or overflow membership is valid before a home-containing route is committed.
+ R.AwaitingHomeIntent=!Before.Contains(Node);
  if(!Ownership.Pair(FILNPlayerGuidKey(R.TruckId),FILNPlayerGuidKey(R.BayId))) { Pending(TEXT("Exclusive depot ownership rejected")); return false; }
  if(!WatchTransfers(R)) {
   Ownership.Unpair(FILNPlayerGuidKey(R.TruckId),FILNPlayerGuidKey(R.BayId));
   Pending(TEXT("Native cargo transfer observer unavailable; enrollment rejected")); return false;
  }
- if(Move) {
-  V->SetVehicleRoute(R.IdleRoute);
-  if(V->GetVehicleRoute()==R.IdleRoute && V->IsAutopilotEnabled() && !O->GetDriver()) V->SetCurrentTargetWaypoint(0);
-  if(V->GetVehicleRoute()!=R.IdleRoute || !V->IsAutopilotEnabled() || O->GetDriver() || V->GetCurrentTargetWaypointIndex()!=0) {
-   if(!O->GetDriver() && V->IsAutopilotEnabled() && V->GetVehicleRoute()==R.IdleRoute) V->SetVehicleRoute(Before);
-   if(V->GetVehicleRoute()!=Before || !V->IsAutopilotEnabled()) bDispatchBlocked=true;
-   ForgetTransferObserver(R.TruckId);
-   Ownership.Unpair(FILNPlayerGuidKey(R.TruckId),FILNPlayerGuidKey(R.BayId));
-   Pending(TEXT("Native overflow route or waypoint readback failed")); return false;
-  }
- }
- R.Diagnostic=Move?TEXT("Relocating to unclaimed depot; arrival pending"):TEXT("Automatically adopted player home-only route");
+ R.Diagnostic=AtHome?TEXT("FILN membership recorded; awaiting parked home route"):TEXT("FILN membership recorded; automatic parking pending");
  HomeStations.Add(Destination); TrackDepot(Destination); ByVehicle.Add(V,Registrations.Add(R)); ResetScan();
  OverflowCursor.Remove(VehicleKey); PendingHomeReason.Remove(VehicleKey);
- UE_LOG(LogFILN,Log,TEXT("AUTO_HOME_ADOPT moving=%d truck=%s bay=%s"),Move,*R.TruckId.ToString(),*R.BayId.ToString());
+ UE_LOG(LogFILN,Log,TEXT("AUTO_HOME_ADOPT parked=%d truck=%s bay=%s"),AtHome,*R.TruckId.ToString(),*R.BayId.ToString());
  return true;
 }

@@ -26,10 +26,18 @@ int main() {
  assert(ForeignRoute(true,true,false,false,false));
  assert(ForeignRoute(true,true,true,true,false));
  assert(ForeignRoute(true,true,true,false,true));
- assert(OptedIn(true,true,false,true,false));
- assert(!OptedIn(true,false,false,true,false));
- assert(!OptedIn(true,true,true,true,false));
- assert(!OptedIn(true,true,false,false,false));
- assert(!OptedIn(true,true,false,true,true));
- assert(!OptedIn(false,true,false,true,false));
+ assert(Membership(true,true,false,false)); // any route containing a depot
+ assert(Membership(true,false,true,false)); // actual arrival
+ assert(!Membership(true,false,true,true)); // explicit opt-out, same arrival
+ assert(Membership(true,true,true,true)); // explicit new route overrides suppression
+ assert(!Membership(true,false,false,false));
+ assert(!Membership(false,true,true,false));
+ assert(!RemovedDepot(true,false,false));
+ assert(RemovedDepot(false,false,true));
+ assert(!RemovedDepot(false,true,true)); // arrival-only route not yet written
+ assert(RemovedDepot(false,true,false)); // player changed arrival-only route
+ assert(MayMove(true,true,false));
+ assert(!MayMove(true,false,false));
+ assert(!MayMove(true,true,true));
+ assert(!MayMove(false,true,false));
 }

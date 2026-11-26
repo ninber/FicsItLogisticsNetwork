@@ -19,7 +19,14 @@ inline bool Free(const DepotFacts& d) {
 inline bool ForeignRoute(bool requested,bool homeOnly,bool autopilot,bool driver,bool alreadyOwned) {
  return !requested || !homeOnly || !autopilot || driver || alreadyOwned;
 }
-inline bool OptedIn(bool authority,bool autopilot,bool driver,bool homeOnly,bool knownVehicle) {
- return authority && autopilot && !driver && homeOnly && !knownVehicle;
+inline bool Membership(bool authority,bool routeDepot,bool arrival,bool suppressed) {
+ return authority && (routeDepot || (arrival && !suppressed));
+}
+inline bool RemovedDepot(bool routeDepot,bool awaitingIntent,bool originalRouteUnchanged) {
+ return !routeDepot && !(awaitingIntent && originalRouteUnchanged);
+}
+// Membership does not grant permission to move a manually controlled or AP-off truck.
+inline bool MayMove(bool authority,bool autopilot,bool driver) {
+ return authority && autopilot && !driver;
 }
 }

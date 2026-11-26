@@ -161,30 +161,68 @@ void ALogisticsSubsystem::AuditIdleFleet() {
   const FVector Delta=O->GetVehicleLocation()-H->GetDockingPathNode()->GetActorLocation();
   const bool Near=FMath::Abs(Delta.Z)<=250.f && Delta.SizeSquared()<=FMath::Square(800.f);
   if(R.Relocating) {
-   // Relocation is not a cargo job. Hold only on verified physical arrival;
-   // never release the new exclusive bay merely because AP was disabled.
-   if(!V->IsAutopilotEnabled() || O->GetDriver() || R.IdleRoute.Num()!=2 || R.IdleRoute[0]!=Home || R.IdleRoute[1]==Home || V->GetVehicleRoute()!=R.IdleRoute || !ValidHome(R.Home)) { R.Held=false; continue; }
-   if(H->GetDockedActor()!=O || FMath::Abs(O->GetForwardSpeed())>1.f) {
-    if(V->IsCurrentlyDocking() || !O->HasFuel() || (V->GetAutopilotErrorStatus()==EVehicleAutopilotErrorStatus::None && V->GetCurrentTargetWaypointIndex()==0) || !R.NavigationRetry.Due(Now)) continue;
-    auto* VS=AFGVehicleSubsystem::Get(GetWorld()); auto* Preset=O->GetVehiclePathPreset();
-    const auto From=V->GetCurrentToPathNodeGUID(); double Cost=-1;
-    if(!From.IsValid() || !Preset || !VS) { R.NavigationRetry.Attempt(Now); continue; }
-    if(!RoadCache.Distance(VS,From,Home,Preset,Cost)) continue;
-    R.NavigationRetry.Attempt(Now);
-    if(Cost<0 || O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.IdleRoute || V->IsCurrentlyDocking()) continue;
-    V->SetVehicleRoute(R.IdleRoute);
-    if(V->GetVehicleRoute()!=R.IdleRoute || !V->IsAutopilotEnabled() || O->GetDriver()) { bDispatchBlocked=true; continue; }
-    V->SetCurrentTargetWaypoint(0);
-    if(V->GetCurrentTargetWaypointIndex()!=0 || V->GetVehicleRoute()!=R.IdleRoute || !V->IsAutopilotEnabled() || O->GetDriver()) bDispatchBlocked=true;
-    continue;
+   R.Held=false;
+   if(!Home.IsValid() || V->GetVehicleRoute()!=R.IdleRoute || !ValidHome(R.Home)) { R.Diagnostic=TEXT("Registered: home or route changed; awaiting reconciliation"); continue; }
+   if(O->GetDriver() || !V->IsAutopilotEnabled()) { R.Diagnostic=TEXT("Registered: waiting for player to enable native autopilot"); continue; }
+   const bool Docked=H->GetDockedActor()==O && Near && FMath::Abs(O->GetForwardSpeed())<=1.f;
+   if(Docked) {
+    V->SetVehicleRoute(Route);
+    if(V->GetVehicleRoute()!=Route || !V->IsAutopilotEnabled() || O->GetDriver()) {
+     R.Diagnostic=TEXT("Depot parking completion readback failed"); bDispatchBlocked=true; continue;
+    }
+    R.IdleRoute=Route; R.Relocating=false; R.AwaitingHomeIntent=false; R.Held=true; R.NavigationRetry.Reset(); R.TravelProgress.Reset();
+    R.Diagnostic=TEXT("FILN home parking confirmed"); ResetScan(); continue;
    }
-   V->SetVehicleRoute(Route);
-   if(V->GetVehicleRoute()!=Route || !V->IsAutopilotEnabled() || O->GetDriver()) {
-    bDispatchBlocked=true; R.Held=false; R.Diagnostic=TEXT("Depot relocation completion readback failed"); continue;
+   if(!H->HasPower() || H->IsProductionPaused()) { R.Diagnostic=TEXT("Registered: assigned depot unpowered or standby"); continue; }
+   if(H->GetDockedActor() && H->GetDockedActor()!=O) { R.Diagnostic=TEXT("Registered: assigned depot occupied"); continue; }
+   if(V->IsCurrentlyDocking() || !O->HasFuel()) { R.Diagnostic=TEXT("Registered: waiting for native docking or fuel"); continue; }
+   const FVector Location=O->GetVehicleLocation();
+   const int32 Target=V->GetCurrentTargetWaypointIndex();
+   const bool Moving=!R.TravelProgress.initialized || FVector::DistSquared(Location,R.ProgressLocation)>=FMath::Square(200.f) || Target!=R.ProgressWaypoint;
+   if(Moving) { R.ProgressLocation=Location; R.ProgressWaypoint=Target; }
+   const bool Stalled=R.TravelProgress.Sample(Now,Moving,false);
+   const bool Intent=R.IdleRoute.Num()==2 && R.IdleRoute[0]==Home && R.IdleRoute[1]!=Home;
+   if(Intent && Target==0 && !Stalled && V->GetAutopilotErrorStatus()==EVehicleAutopilotErrorStatus::None) continue;
+   if(!R.NavigationRetry.Due(Now)) continue;
+   auto* VS=AFGVehicleSubsystem::Get(GetWorld()); auto* Preset=O->GetVehiclePathPreset();
+   const auto From=V->GetCurrentToPathNodeGUID();
+   if(!From.IsValid() || !Preset || !VS) { R.NavigationRetry.Attempt(Now); R.Diagnostic=TEXT("Registered: no native road segment for parking"); continue; }
+   double ToHome=-1;
+   if(!RoadCache.Distance(VS,From,Home,Preset,ToHome)) continue;
+   if(ToHome<0) { R.NavigationRetry.Attempt(Now); R.Diagnostic=TEXT("Registered: depot unreachable on native roads"); continue; }
+   // Use a native two-node route, targeting home first. Prefer a non-home
+   // node already present in the old route, otherwise an unclaimed depot.
+   TArray<FGuid> Candidates;
+   for(const auto& N:R.IdleRoute) if(N.IsValid() && N!=Home) Candidates.AddUnique(N);
+   for(const auto& D:DepotStations) if(IsValid(D) && D!=R.Home && !HomeStations.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(D.Get())) && VehicleStationCompatible(O,D->GetStation())) {
+    const auto N=D->GetPathNodeGUID(); if(N.IsValid() && N!=Home) Candidates.AddUnique(N);
    }
-   R.IdleRoute=Route; R.Relocating=false; R.Held=true; R.NavigationRetry.Reset(); R.Diagnostic=TEXT("Relocated to free depot"); ResetScan(); continue;
+   FGuid Anchor; bool Pending=false;
+   for(const auto& N:Candidates) {
+    double A=-1,B=-1;
+    if(!RoadCache.Distance(VS,Home,N,Preset,A) || !RoadCache.Distance(VS,N,Home,Preset,B)) { Pending=true; break; }
+    if(A>=0 && B>=0) { Anchor=N; break; }
+   }
+   if(Pending) continue;
+   if(!Anchor.IsValid()) { R.NavigationRetry.Attempt(Now); R.Diagnostic=TEXT("Registered: no verified two-node parking route"); continue; }
+   if(O->GetDriver() || !V->IsAutopilotEnabled() || V->GetVehicleRoute()!=R.IdleRoute || V->IsCurrentlyDocking()) continue;
+   const TArray<FGuid> Parking={Home,Anchor};
+   V->SetVehicleRoute(Parking);
+   if(V->GetVehicleRoute()!=Parking || !V->IsAutopilotEnabled() || O->GetDriver()) {
+    R.Diagnostic=TEXT("Native parking route write failed"); bDispatchBlocked=true; continue;
+   }
+   R.IdleRoute=Parking; R.AwaitingHomeIntent=false;
+   V->SetCurrentTargetWaypoint(0);
+   if(V->GetCurrentTargetWaypointIndex()!=0 || V->GetVehicleRoute()!=Parking || !V->IsAutopilotEnabled() || O->GetDriver()) {
+    R.Diagnostic=TEXT("Native parking waypoint write failed"); bDispatchBlocked=true; continue;
+   }
+   R.NavigationRetry.Attempt(Now); R.TravelProgress.Reset(); R.Diagnostic=TEXT("Registered: native route to home committed, awaiting parking"); ResetScan(); continue;
   }
   const bool Owned=Home.IsValid() && R.IdleRoute==Route && V->GetVehicleRoute()==Route && !R.JobId.IsValid();
+  if(Owned && (!Near || (!R.Held && H->GetDockedActor()!=O))) {
+   R.Held=false; R.Relocating=true; R.NavigationRetry.Reset(); R.TravelProgress.Reset();
+   R.Diagnostic=TEXT("Registered: parking recovery required"); continue;
+  }
   const bool Docked=H->GetDockedActor()==O;
   const bool HomeValid=ValidHome(R.Home) && (!H->GetDockedActor() || Docked);
   const bool Fault=V->GetAutopilotErrorStatus()!=EVehicleAutopilotErrorStatus::None;

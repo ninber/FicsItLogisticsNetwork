@@ -66,6 +66,7 @@ struct FFILNRegistration {
  UPROPERTY(SaveGame) FGuid RequesterLease;
  UPROPERTY(SaveGame) bool Held = false;
  UPROPERTY(SaveGame) bool Relocating = false;
+ UPROPERTY(SaveGame) bool AwaitingHomeIntent = false; // arrival-only enrollment before a depot route can be established
  UPROPERTY(SaveGame) TArray<FGuid> IdleRoute;
  UPROPERTY(SaveGame) TSubclassOf<UFGItemDescriptor> Resource;
  UPROPERTY(SaveGame) int32 ExpectedCargo = 0;
@@ -107,6 +108,9 @@ private:
  UPROPERTY(SaveGame) TArray<FFILNStationConfig> StationConfigs;
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGDockingStationIdentifier>> DepotStations;
  UPROPERTY(SaveGame) TArray<FFILNRegistration> Registrations;
+ // Membership can precede a valid exclusive bay. These records hold no job leases.
+ UPROPERTY(SaveGame) TArray<TObjectPtr<AFGWheeledVehicleIdentifier>> PendingDepotMembership;
+ UPROPERTY(SaveGame) TArray<TObjectPtr<AFGWheeledVehicleIdentifier>> DepotArrivalSuppressed;
  friend class UFILNTransferObserver;
  friend class UFILNResourceRemote;
  UPROPERTY() TArray<TObjectPtr<UFILNTransferObserver>> TransferObservers;
@@ -192,6 +196,7 @@ private:
  bool bDepotRecipeReady=false;
  TSet<FString> DepotRecipeFailures;
  void DiscoverHomeVehicles();
+ bool TransitionUsesNode(const FGuid& Node) const;
  bool AdoptPlayerHome(AFGWheeledVehicleIdentifier* Vehicle,AFGDockingStationIdentifier* Requested);
  bool StationResourceMatches(const FFILNStationConfig& Config) const;
  static bool StationAcceptsResource(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource);

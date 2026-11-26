@@ -52,6 +52,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  if(VehicleActor->GetDriver()) { R.Diagnostic=TEXT("Player-controlled vehicle excluded"); return false; }
  if(!R.Vehicle->IsAutopilotEnabled()) { R.Diagnostic=TEXT("Autopilot disabled; explicit player opt-in required"); return false; }
  if(!VehicleActor->HasFuel() || !FuelReady(R)) { R.Diagnostic=TEXT("Awaiting full compatible native fuel inventory at assigned home"); return false; }
+ if(TransitionUsesNode(C.Station->GetPathNodeGUID())) { R.Diagnostic=TEXT("Requester still used by a depot-route vehicle awaiting parking"); return false; }
  if(QB->GetIsInLoadMode() || !QB->HasPower() || QB->IsProductionPaused()) { R.Diagnostic=TEXT("Requester mode/power/standby ineligible"); return false; }
  if(!QB->GetInventory() || !QB->GetInventory()->IsEmpty()) { R.Diagnostic=TEXT("Requester is not empty"); return false; }
  if(!StationResourceMatches(C)) { R.Diagnostic=TEXT("Requester native filter no longer matches FILN resource"); return false; }
@@ -83,7 +84,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  if(!Inventory(QB->GetInventory(),C.Resource,Request.kinds,Request.quantity,Request.capacity)) return false;
  if(P!=INDEX_NONE) {
   auto* ID=ProviderCandidates[P].Get(); auto* PB=IsValid(ID)?ID->GetStation():nullptr;
-  if(!IsValid(PB) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode() || !VehicleStationCompatible(VehicleActor,PB) || !StationAcceptsResource(PB,C.Resource)) return false;
+  if(!IsValid(PB) || TransitionUsesNode(ID->GetPathNodeGUID()) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode() || !VehicleStationCompatible(VehicleActor,PB) || !StationAcceptsResource(PB,C.Resource)) return false;
   const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& Entry){return Entry.Station==ID;});
   if(PC && (PC->Resource!=C.Resource || !StationResourceMatches(*PC))) return false;
   if(Fluid && PB->GetCurrentFluidDescriptor() && PB->GetCurrentFluidDescriptor()!=C.Resource) return false;

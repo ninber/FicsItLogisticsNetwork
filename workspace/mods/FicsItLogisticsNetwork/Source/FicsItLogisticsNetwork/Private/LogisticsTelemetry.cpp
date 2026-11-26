@@ -224,7 +224,9 @@ void ALogisticsSubsystem::SampleTelemetry() {
    O->SetStringField(TEXT("id"),Id); O->SetStringField(TEXT("key"),V->GetPathName()); O->SetStringField(TEXT("name"),V->GetVehicleName().ToString());
    const FString VehicleClass=V->GetVehicleClass()?V->GetVehicleClass()->GetPathName():FString();
    O->SetStringField(TEXT("class"),VehicleClass);
-   O->SetBoolField(TEXT("managed"),R!=nullptr); O->SetBoolField(TEXT("home_powered"),IsValid(H) && H->HasPower() && !H->IsProductionPaused());
+   O->SetBoolField(TEXT("managed"),R!=nullptr);
+   O->SetBoolField(TEXT("filn_member"),R!=nullptr || PendingDepotMembership.Contains(V));
+   O->SetBoolField(TEXT("registration_pending"),!R && PendingDepotMembership.Contains(V)); O->SetBoolField(TEXT("home_powered"),IsValid(H) && H->HasPower() && !H->IsProductionPaused());
    O->SetBoolField(TEXT("autopilot"),V->IsAutopilotEnabled()); O->SetBoolField(TEXT("driver"),VehicleOwner->GetDriver()!=nullptr);
    O->SetBoolField(TEXT("has_fuel"),VehicleOwner->HasFuel()); O->SetBoolField(TEXT("docking"),V->IsCurrentlyDocking());
    const FString Medium=VehicleOwner->GetClass()->ImplementsInterface(UFGDockableInterface::StaticClass())?FILNTelemetryMedium(IFGDockableInterface::Execute_GetDockInventoryResourceForm(VehicleOwner)):TEXT("unknown");
@@ -280,7 +282,7 @@ void ALogisticsSubsystem::SampleTelemetry() {
   Dispatcher->SetBoolField(TEXT("enabled"),bAutoDispatchEnabled && bRegistryValidated && !bDispatchBlocked && !bPreparingUninstall && !bUninstallPrepared);
   Dispatcher->SetBoolField(TEXT("cargo_reuse_enabled"),true); Dispatcher->SetBoolField(TEXT("storage_tag_rule_enabled"),true);
   Dispatcher->SetBoolField(TEXT("registry_validated"),bRegistryValidated); Dispatcher->SetBoolField(TEXT("dispatch_blocked"),bDispatchBlocked);
-   Dispatcher->SetNumberField(TEXT("configured_station_count"),StationConfigs.Num()); Dispatcher->SetNumberField(TEXT("registered_vehicle_count"),Registrations.Num()); Dispatcher->SetNumberField(TEXT("tracked_depot_count"),DepotStations.Num()); Dispatcher->SetBoolField(TEXT("depot_recipe_ready"),bDepotRecipeReady);
+   Dispatcher->SetNumberField(TEXT("configured_station_count"),StationConfigs.Num()); Dispatcher->SetNumberField(TEXT("registered_vehicle_count"),Registrations.Num()); Dispatcher->SetNumberField(TEXT("pending_membership_count"),PendingDepotMembership.Num()); Dispatcher->SetNumberField(TEXT("tracked_depot_count"),DepotStations.Num()); Dispatcher->SetBoolField(TEXT("depot_recipe_ready"),bDepotRecipeReady);
   Dispatcher->SetObjectField(TEXT("reservations"),Leases);
   Stats->SetNumberField(TEXT("graph_hits"),static_cast<double>(RoadCache.Hits)); Stats->SetNumberField(TEXT("graph_builds"),static_cast<double>(RoadCache.Misses)); Stats->SetNumberField(TEXT("rank_invalidations"),static_cast<double>(RoadCache.Invalidations)); Stats->SetNumberField(TEXT("graph_work"),static_cast<double>(RoadCache.Work)); Dispatcher->SetObjectField(TEXT("stats"),Stats);
   Snapshot->SetNumberField(TEXT("schema_version"),1); Snapshot->SetStringField(TEXT("runtime"),TEXT("native")); Snapshot->SetStringField(TEXT("world"),TelemetryWorld);
