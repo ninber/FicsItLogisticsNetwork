@@ -553,6 +553,22 @@
       "implementation": "LogisticsPlayerWorkflow.cpp / FILNDepotWarning.cpp / FILNOrganizer.cpp",
       "verification_method": "More trucks than depots; actual native map/compass warning, free new compatible bay, auto-clear and assign, verify other jobs continue and ordinary warning still works.",
       "actual_result": "No cooked game evidence."
+    },
+    {
+      "id": "native-network-names",
+      "status": "not-verified",
+      "reason": "Naming source and portable policy only; native name setters/default names need cooked game validation.",
+      "implementation": "FILNIdentity.cpp",
+      "verification_method": "Create/rename/delete/load mixed members and ordinary vehicles/stations; verify unique persisted names, custom labels and route/map/Organizer consistency.",
+      "actual_result": "No cooked game evidence."
+    },
+    {
+      "id": "native-filn-swatch",
+      "status": "not-verified",
+      "reason": "Dedicated swatch registration and edit/recolor not implemented.",
+      "implementation": "R15 / T137",
+      "verification_method": "Dedicated slot visible in Customizer; changing it recolors all FILN members only, survives reload and replication.",
+      "actual_result": "Not implemented."
     }
   ]
 }

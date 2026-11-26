@@ -114,6 +114,17 @@ private:
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGWheeledVehicleIdentifier>> PendingDepotMembership;
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGWheeledVehicleIdentifier>> PendingDepotRouteMembership;
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGWheeledVehicleIdentifier>> DepotArrivalSuppressed;
+ // Names are presentation only; GUIDs remain authoritative. A one-time record
+ // also protects a player who renames a vehicle back to its factory name.
+ UPROPERTY(SaveGame) TMap<FString,int32> NetworkNameCounters;
+ UPROPERTY(SaveGame) TArray<TObjectPtr<AFGDockingStationIdentifier>> NamedNetworkStations;
+ UPROPERTY(SaveGame) TArray<TObjectPtr<AFGWheeledVehicleIdentifier>> NamedNetworkVehicles;
+ UPROPERTY(SaveGame) TArray<TObjectPtr<AFGDockingStationIdentifier>> KnownNetworkProviders;
+ void NameNetworkStation(AFGDockingStationIdentifier* Station);
+ void NameNetworkVehicle(AFGWheeledVehicleIdentifier* Vehicle);
+ bool IsNetworkStation(AFGDockingStationIdentifier* Station) const;
+ FString AllocateNetworkName(const FString& Prefix);
+ void PruneNetworkIdentity();
  friend class UFILNTransferObserver;
  friend class UFILNResourceRemote;
  UPROPERTY() TArray<TObjectPtr<UFILNTransferObserver>> TransferObservers;

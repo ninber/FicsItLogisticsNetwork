@@ -39,7 +39,7 @@ bool ALogisticsSubsystem::ShouldSave_Implementation() const {
  // A prepared, empty subsystem has no state to serialize into vanilla saves.
  // Keep invalid/conflicted metadata for diagnosis instead of dropping it.
  return SchemaVersion!=1 || bDispatchBlocked || (!bUninstallPrepared && bAutoDispatchEnabled) || !Registrations.IsEmpty() ||
-  !StationConfigs.IsEmpty() || !DepotStations.IsEmpty() || !Stations.IsEmpty();
+  !StationConfigs.IsEmpty() || !DepotStations.IsEmpty() || !Stations.IsEmpty() || (!bUninstallPrepared && (!NetworkNameCounters.IsEmpty() || !PendingDepotMembership.IsEmpty()));
 }
 bool ALogisticsSubsystem::SetDispatchEnabled(bool Enabled) {
  if(!HasAuthority() || (Enabled && (!bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters))) return false;
@@ -412,7 +412,9 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
  for(const auto& Depot:DepotStations) if(auto* B=Building(Depot); IsValid(B)) {
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
- StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty(); bUninstallPrepared=true; Rebuild();
+ StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty();
+ NamedNetworkStations.Empty(); NamedNetworkVehicles.Empty(); KnownNetworkProviders.Empty(); NetworkNameCounters.Empty();
+ bUninstallPrepared=true; Rebuild();
  return bRegistryValidated && !bDispatchBlocked;
 }
 bool ALogisticsSubsystem::IsDepot(AFGDockingStationIdentifier* Station) const {

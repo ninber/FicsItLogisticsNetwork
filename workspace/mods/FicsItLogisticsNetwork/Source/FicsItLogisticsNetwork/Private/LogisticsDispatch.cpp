@@ -242,6 +242,10 @@ bool ALogisticsSubsystem::CommitOffer(int32 V,int32 Q,int32 P) {
  R.State=static_cast<uint8>(filn::State::ToProvider);
  R.RouteActivationDeadline=GetWorld()->GetTimeSeconds()+5.;
  Active.AddUnique(V); R.Diagnostic=TEXT("Native automatic route committed; awaiting measured transfer");
+ // Only a committed FILN assignment proves that an otherwise vanilla LOAD
+ // station is actually participating as a provider. Never infer membership
+ // from arbitrary stock or from a speculative offer.
+ KnownNetworkProviders.AddUnique(Provider);
  UE_LOG(LogFILN,Log,TEXT("AUTO job=%s retained=%d resource=%s amount=%d road=%f"),*Job.ToString(),Offer.vehicle.cargoQuantity>0,*R.Resource->GetPathName(),R.ExpectedCargo,Choice->roadDistance);
  return true;
 }

@@ -48,12 +48,14 @@ void ALogisticsSubsystem::DiscoverDepots() {
  if(PlayerStationCursor>=PlayerStationScan.Num()) {
   if(Now<NextPlayerStationScan) return;
   auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
+  PruneNetworkIdentity();
   PlayerStationScan.Reset(); for(auto* ID:VS->GetDockingStations()) if(IsValid(ID)) PlayerStationScan.Add(ID);
   PlayerStationCursor=0; NextPlayerStationScan=Now+10.;
  }
  for(int32 Work=0; Work<2 && PlayerStationCursor<PlayerStationScan.Num(); ++Work) {
   auto* ID=PlayerStationScan[PlayerStationCursor++].Get();
   if(!IsValid(ID)) continue;
+  if(IsNetworkStation(ID)) NameNetworkStation(ID);
   if(IsAuthoredDepot(ID) && !DepotIndex.Contains(TWeakObjectPtr<AFGDockingStationIdentifier>(ID))) {
    TrackDepot(ID);
    if(auto* B=ID->GetStation(); IsValid(B)) UE_LOG(LogFILN,Log,TEXT("FILN_DEPOT_DISCOVERED node=%s actor=%s class=%s valid_home=%d"),*ID->GetPathNodeGUID().ToString(),*B->GetPathName(),*B->GetClass()->GetPathName(),ValidHome(ID));
@@ -113,6 +115,7 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
     R.IdleRoute=Route; R.Held=false; R.Relocating=true; R.AwaitingHomeIntent=false;
     R.NavigationRetry.Reset(); R.TravelProgress.Reset(); ResetScan();
    }
+   if(!OptOut && !Reassigned) NameNetworkVehicle(V);
    continue;
   }
   if(!HasDepot && PendingDepotRouteMembership.Contains(V)) {
@@ -124,6 +127,7 @@ void ALogisticsSubsystem::DiscoverHomeVehicles() {
    PendingDepotMembership.Remove(V); PendingHomeReason.Remove(V); OverflowCursor.Remove(V); SetDepotCapacityWarning(V,false); continue;
   }
   PendingDepotMembership.AddUnique(V);
+  NameNetworkVehicle(V);
   if(HasDepot) PendingDepotRouteMembership.AddUnique(V);
   if(ArrivalAmbiguous || (Ambiguous && (!Arrived || !Route.Contains(Arrived->GetPathNodeGUID())))) {
    SetDepotCapacityWarning(V,false);
