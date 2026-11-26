@@ -143,9 +143,12 @@ void ALogisticsSubsystem::SampleTelemetry() {
  if(TelemetryWrite.IsValid() && TelemetryWrite.IsReady()) {
   const bool Written=TelemetryWrite.Get();
   TelemetryWrite=TFuture<bool>();
-  if(Written && !bTelemetryPublished) UE_LOG(LogFILN,Log,TEXT("FILN_TELEMETRY_FIRST_SNAPSHOT %s"),*FPaths::Combine(TelemetryDirectory(),TEXT("telemetry.json")));
-  if(Written) UE_LOG(LogFILN,Log,TEXT("FILN_TELEMETRY_PUBLISHED sequence=%lld"),static_cast<long long>(TelemetrySequence));
-  else {
+  if(Written) {
+   if(!bTelemetryPublished) {
+    UE_LOG(LogFILN,Log,TEXT("FILN_TELEMETRY_FIRST_SNAPSHOT %s"),*FPaths::Combine(TelemetryDirectory(),TEXT("telemetry.json")));
+   }
+   UE_LOG(LogFILN,Log,TEXT("FILN_TELEMETRY_PUBLISHED sequence=%lld"),static_cast<long long>(TelemetrySequence));
+  } else {
    UE_LOG(LogFILN,Error,TEXT("FILN_TELEMETRY_WRITE_FAILED %s"),*TelemetryDirectory());
    TelemetryDemand.Failed();
   }

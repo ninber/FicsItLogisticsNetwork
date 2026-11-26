@@ -91,8 +91,10 @@ void ALogisticsSubsystem::ClearDockFilters() {
 }
 void ALogisticsSubsystem::InstallDockReceiptObserver() {
  if(WITH_EDITOR) return;
+ // Parenthesize the complete lambda: the SML macro has exactly two arguments,
+ // and the preprocessor does not treat braces as protecting internal commas.
  SUBSCRIBE_METHOD(AFGBuildableDockingStation::Factory_LoadUnloadDockedInventory,
-  [](auto& Scope,const AFGBuildableDockingStation* Station,UFGInventoryComponent* Cargo) {
+  ([](auto& Scope,const AFGBuildableDockingStation* Station,UFGInventoryComponent* Cargo) {
    if(!Station || Station->GetIsInLoadMode()) return;
    FDockFilterEntry Entry;
    {
@@ -129,11 +131,11 @@ void ALogisticsSubsystem::InstallDockReceiptObserver() {
      Scope.Override(Transfer.Amount); return;
     }
    }
-  });
+  }));
  // SML v3.12.1 after handlers receive the final native operation result.
  // FG header documents result = number of items transferred.
  SUBSCRIBE_METHOD_AFTER(AFGBuildableDockingStation::Factory_LoadUnloadDockedInventory,
-  [](int32 Result,const AFGBuildableDockingStation* Station,UFGInventoryComponent* Cargo) {
+  ([](int32 Result,const AFGBuildableDockingStation* Station,UFGInventoryComponent* Cargo) {
    if(Result<=0 || !Station || !Cargo) return;
    FScopeLock Lock(&ReceiptLock);
    const auto* W=Watches.Find(Cargo); if(!W) return; // O(1), unmanaged traffic untouched
@@ -147,7 +149,7 @@ void ALogisticsSubsystem::InstallDockReceiptObserver() {
     Receipt.Batch.invalid=true; return;
    }
    Receipt.Batch.Add(Result,Added);
-  });
+  }));
 }
 bool ALogisticsSubsystem::ArmDockReceipts(FFILNRegistration& R) {
  check(IsInGameThread());
