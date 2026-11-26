@@ -138,20 +138,33 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
  }
  if(!RequestId || !World || !IsValid(Player) || !IsValid(Target) || Target->GetWorld()!=World || !Target->HasAuthority() ||
     !IsValid(ID) || ID->GetStation()!=Target || FVector::DistSquared(Player->GetActorLocation(),Target->GetActorLocation())>FMath::Square(2000.f) ||
-    !IsValid(S) || !S->bRegistryValidated || S->bDispatchBlocked || S->bPreparingUninstall || S->bUninstallPrepared) {
-  UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_REJECTED invalid context or registry"));
-  ResourceReply(Target,RequestId,false,false,nullptr,NSLOCTEXT("FILN","SelectorInvalid","FILN registry or station interaction unavailable"));
+    !IsValid(S)) {
+  if(Mutate) UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_REJECTED invalid context or subsystem"));
+  ResourceReply(Target,RequestId,false,false,nullptr,NSLOCTEXT("FILN","SelectorInvalidContext","Station interaction or FILN subsystem unavailable. Retrying while FILTERS is open."));
   return;
  }
  const auto Current=[&]() { return S->StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;}); };
- if(FFILNStationSettings::HasProperty(Target) && !Current()) {
-  if(const auto Saved=FFILNStationSettings::Read(Target)) S->ConfigureStation(ID,Saved);
- }
+ // Repeated status queries must not mutate filters; discovery reconciles saved settings.
  const auto* Before=Current();
- const bool Editable=!S->IsDepot(ID) && (!FFILNStationSettings::IsDedicated(Target) || FFILNStationSettings::HasProperty(Target)) && (!Before || !Before->ExternalFilter);
+ const auto SavedResource=FFILNStationSettings::Read(Target);
+ FText BlockReason;
+ if(S->bPreparingUninstall || S->bUninstallPrepared)
+  BlockReason=NSLOCTEXT("FILN","SelectorUninstall","FILN uninstall preparation is active; configuration is locked.");
+ else if(!S->bRegistryValidated || S->bDispatchBlocked)
+  BlockReason=NSLOCTEXT("FILN","SelectorRegistry","FILN registry is not ready. Retrying automatically.");
+ else if(S->IsDepot(ID))
+  BlockReason=NSLOCTEXT("FILN","SelectorDepot","Depots are for parking and fuel, not cargo filters.");
+ else if(FFILNStationSettings::IsDedicated(Target) && !FFILNStationSettings::HasProperty(Target))
+  BlockReason=NSLOCTEXT("FILN","SelectorMissingProperty","Station asset lacks its FILN resource setting; check the installed mod version.");
+ else if(Before && Before->ExternalFilter)
+  BlockReason=NSLOCTEXT("FILN","SelectorLegacyFilter","Legacy external filter detected. FILN cannot safely take ownership; use a new station or report this save.");
+ else if(S->bChangingFilters)
+  BlockReason=NSLOCTEXT("FILN","SelectorTransaction","Another filter update is in progress. Retrying automatically.");
+ else if(!Before && SavedResource)
+  BlockReason=NSLOCTEXT("FILN","SelectorSavedPending","Saved resource is waiting for native registration. Retrying automatically.");
+ const bool Editable=BlockReason.IsEmpty();
  bool Accepted=!Mutate && Editable;
- FText Message=Editable?NSLOCTEXT("FILN","SelectorReady","Select one resource; changes are applied immediately"):
-  NSLOCTEXT("FILN","SelectorNotEditable","Only a valid non-depot logistics station can be configured");
+ FText Message=Editable?NSLOCTEXT("FILN","SelectorReady","Select one resource; changes are applied immediately"):BlockReason;
  if(Mutate && Editable) {
   const double Now=FPlatformTime::Seconds();
   auto* Recipes=AFGRecipeManager::Get(World);
@@ -160,6 +173,10 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
    LastMutation=Now;
    if(Resource && (!Recipes || !Recipes->IsItemDescriptorAvailable(Resource) || !S->StationAcceptsResource(Target,Resource)))
     Message=NSLOCTEXT("FILN","SelectorIncompatible","Selection rejected: unavailable or incompatible resource");
+   else if(Target->GetDockedActor())
+    Message=NSLOCTEXT("FILN","SelectorDocked","A vehicle is docked. Wait for it to leave, then select the resource again.");
+   else if(S->Reservations.StationBusy(TCHAR_TO_UTF8(*S->StationId(ID).ToString())))
+    Message=NSLOCTEXT("FILN","SelectorReserved","An active delivery has reserved this station. Wait for the delivery to finish, then select the resource again.");
    else {
     const bool Changed=Resource?S->ConfigureStation(ID,Resource):S->RemoveStation(ID);
     const auto* After=Current();
@@ -177,7 +194,7 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
  const auto Persisted=FFILNStationSettings::Read(Target);
  const bool Verified=After?S->StationResourceMatches(*After):!Persisted;
  const bool CanEdit=Editable && !S->bPreparingUninstall;
- if(!Verified) { Accepted=false; Message=NSLOCTEXT("FILN","SelectorReadback","Native filter readback failed; configuration is not verified"); }
+ if(!Verified && Editable) { Accepted=false; Message=NSLOCTEXT("FILN","SelectorReadback","Native filter readback failed; configuration is not verified"); }
  if(Mutate) UE_LOG(LogFILN,Log,TEXT("FILN_SELECTOR_%s station=%s resource=%s"),Accepted?TEXT("CONFIRMED"):TEXT("REJECTED"),*Target->GetPathName(),*GetPathNameSafe(Resource.Get()));
  ResourceReply(Target,RequestId,Accepted,CanEdit,After?After->Resource:Persisted,Message);
 }
@@ -276,6 +293,7 @@ void UFILNResourceSelector::RestoreStorage() {
 }
 void UFILNResourceSelector::ClearContext() {
  RestoreStorage();
+ StopRefresh();
  if(auto* R=Remote();R && R->Receiver.Get()==this) R->Receiver.Reset();
  PendingRequest=0; Station.Reset(); InventoryContainer.Reset(); bFilterOpen=false; bEditable=false; bInitialized=false;
  if(Parts) { Parts->SetIsEnabled(false); Parts->SetVisibility(ESlateVisibility::Collapsed); }
@@ -288,15 +306,15 @@ void UFILNResourceSelector::NativeDestruct() {
 void UFILNResourceSelector::Fail(const FText& Reason) {
  bEditable=false; PendingRequest=0;
  if(Parts) Parts->SetIsEnabled(false);
+ if(!Feedback || !Feedback->GetText().EqualTo(Reason)) UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_ERROR %s"),*Reason.ToString());
  if(Feedback) { Feedback->SetVisibility(ESlateVisibility::Visible); Feedback->SetText(Reason); }
- UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_ERROR %s"),*Reason.ToString());
 }
 void UFILNResourceSelector::NativeTabClicked(int32 ButtonIndex) {
  if(bSynchronizing || !bInitialized || !Station.IsValid()) return;
  if(ButtonIndex!=0 && ButtonIndex!=1) { Fail(NSLOCTEXT("FILN","BadTab","Unexpected native tab index")); return; }
  SetTabStyle(ButtonIndex==1);
  if(ButtonIndex==0) {
-  RestoreStorage(); bFilterOpen=false; bEditable=false; PendingRequest=0;
+  RestoreStorage(); StopRefresh(); bFilterOpen=false; bEditable=false; PendingRequest=0;
   Parts->SetVisibility(ESlateVisibility::Collapsed); Feedback->SetVisibility(ESlateVisibility::Collapsed); return;
  }
  auto* Container=InventoryContainer.Get();
@@ -306,13 +324,29 @@ void UFILNResourceSelector::NativeTabClicked(int32 ButtonIndex) {
   if(Child && Child!=this) { StorageVisibility.Emplace(Child,Child->GetVisibility()); Child->SetVisibility(ESlateVisibility::Collapsed); }
  }
  bFilterOpen=true; Parts->SetVisibility(ESlateVisibility::Visible); Feedback->SetVisibility(ESlateVisibility::Visible);
+ if(auto* World=GetWorld()) World->GetTimerManager().SetTimer(RefreshTimer,this,&UFILNResourceSelector::RefreshIfBlocked,2.f,true);
  Query();
 }
-void UFILNResourceSelector::Query() {
- bEditable=false; Parts->SetIsEnabled(false); Feedback->SetText(NSLOCTEXT("FILN","SelectorQuery","Reading authoritative resource selection"));
+void UFILNResourceSelector::StopRefresh() {
+ if(auto* World=GetWorld()) World->GetTimerManager().ClearTimer(RefreshTimer);
+ RequestDeadline=0;
+}
+void UFILNResourceSelector::RefreshIfBlocked() {
+ if(!bFilterOpen || !bInitialized || !Station.IsValid()) { StopRefresh(); return; }
+ if(!filn::selector::ShouldQuery(bEditable,PendingRequest,FPlatformTime::Seconds(),RequestDeadline)) return;
+ if(PendingRequest) {
+  PendingRequest=0;
+  Feedback->SetText(NSLOCTEXT("FILN","SelectorTimeout","No confirmation received. Checking the current selection; changes are not resent."));
+ }
+ Query(true);
+}
+void UFILNResourceSelector::Query(bool Background) {
+ bEditable=false; Parts->SetIsEnabled(false);
+ if(!Background) Feedback->SetText(NSLOCTEXT("FILN","SelectorQuery","Reading authoritative resource selection"));
  auto* R=Remote();
  if(!R || !Station.IsValid()) { Fail(NSLOCTEXT("FILN","MissingRemote","Native resource server unavailable")); return; }
- R->Receiver=this; PendingRequest=R->NextRequestId(); R->QueryResource(Station.Get(),PendingRequest);
+ R->Receiver=this; PendingRequest=R->NextRequestId(); RequestDeadline=FPlatformTime::Seconds()+5.;
+ R->QueryResource(Station.Get(),PendingRequest);
 }
 bool UFILNResourceSelector::ShowSelection(TSubclassOf<UFGItemDescriptor> Resource) {
  TGuardValue<bool> Guard(bSynchronizing,true);
@@ -324,8 +358,9 @@ void UFILNResourceSelector::Reply(AFGBuildableDockingStation* Target,uint32 Requ
  if(!bFilterOpen || !filn::selector::ReplyMatches(PendingRequest,RequestId,Station.Get()==Target)) return;
  PendingRequest=0;
  if(!ShowSelection(Resource)) { Fail(NSLOCTEXT("FILN","SelectorUIReadback","Native selector failed to display authoritative resource")); return; }
- bEditable=Editable; Parts->SetIsEnabled(Editable); Feedback->SetText(Message);
- if(!Accepted) UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_REPLY_REJECTED %s"),*Message.ToString());
+ bEditable=Editable; Parts->SetIsEnabled(Editable);
+ if(!Accepted && !Feedback->GetText().EqualTo(Message)) UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_REPLY_REJECTED %s"),*Message.ToString());
+ Feedback->SetText(Message);
 }
 void UFILNResourceSelector::NativeListChanged(FString SelectedItem,ESelectInfo::Type SelectionType) {
  if(bSynchronizing || !bFilterOpen || !bEditable || PendingRequest || !Station.IsValid() || SelectionType==ESelectInfo::Direct) return;
@@ -339,7 +374,8 @@ void UFILNResourceSelector::NativeListChanged(FString SelectedItem,ESelectInfo::
  if(!R) { Fail(NSLOCTEXT("FILN","MissingRemote2","Native resource server unavailable")); return; }
  bEditable=false; Parts->SetIsEnabled(false);
  Feedback->SetText(NSLOCTEXT("FILN","SelectorPending","Waiting for native inventory confirmation"));
- R->Receiver=this; PendingRequest=R->NextRequestId(); R->SelectResource(Station.Get(),PendingRequest,Resource);
+ R->Receiver=this; PendingRequest=R->NextRequestId(); RequestDeadline=FPlatformTime::Seconds()+5.;
+ R->SelectResource(Station.Get(),PendingRequest,Resource);
 }
 
 namespace {

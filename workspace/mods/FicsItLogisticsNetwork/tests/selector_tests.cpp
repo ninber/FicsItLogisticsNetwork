@@ -8,6 +8,11 @@ int main() {
  CHECK(!ReplyMatches(1,2,true));
  CHECK(!ReplyMatches(1,1,false));
  CHECK(ReplyMatches(1,1,true));
+ CHECK(!ShouldQuery(true,0,20,0));
+ CHECK(ShouldQuery(false,0,20,0));
+ CHECK(!ShouldQuery(false,3,4.99,5));
+ CHECK(ShouldQuery(false,3,5,5));
+ CHECK(ShouldQuery(false,3,20,5));
  CHECK(!Confirmed(false,false,true,true,true));
  CHECK(!Confirmed(true,false,false,true,true));
  CHECK(!Confirmed(true,false,true,false,true));
@@ -16,5 +21,5 @@ int main() {
  CHECK(!Confirmed(false,true,false,false,false));
  CHECK(!Confirmed(true,true,true,true,true));
  CHECK(Confirmed(true,true,false,false,false));
- std::cout << "12 selector protocol checks passed (portable; no Unreal UI/RPC exercised)\n";
+ std::cout << "17 selector protocol checks passed (portable; no Unreal UI/RPC exercised)\n";
 }

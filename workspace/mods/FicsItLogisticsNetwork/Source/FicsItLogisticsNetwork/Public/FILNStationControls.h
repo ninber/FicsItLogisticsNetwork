@@ -5,6 +5,7 @@
 #include "Components/ActorComponent.h"
 #include "FGRemoteCallObject.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "TimerManager.h"
 #include "FILNStationControls.generated.h"
 
 class AFGBuildableDockingStation;
@@ -75,9 +76,13 @@ private:
  TWeakObjectPtr<UVerticalBox> InventoryContainer;
  TArray<TPair<TWeakObjectPtr<UWidget>,ESlateVisibility>> StorageVisibility;
  uint32 PendingRequest=0;
+ double RequestDeadline=0;
+ FTimerHandle RefreshTimer;
  bool bFilterOpen=false, bSynchronizing=false, bEditable=false, bInitialized=false;
  void RestoreStorage();
- void Query();
+ void Query(bool Background=false);
+ void RefreshIfBlocked();
+ void StopRefresh();
  void Fail(const FText& Reason);
  bool ShowSelection(TSubclassOf<UFGItemDescriptor> Resource);
  UFILNResourceRemote* Remote() const;
