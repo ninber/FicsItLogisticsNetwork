@@ -72,7 +72,9 @@ void ALogisticsSubsystem::NameNetworkVehicle(AFGWheeledVehicleIdentifier* V) {
  if(!filn::identity::ShouldName(Member,false,DefaultName)) { NamedNetworkVehicles.AddUnique(V); return; }
  const FString Name=AllocateNetworkName(FILNVehiclePrefix(V));
  if(Name.IsEmpty() || V->GetVehicleName().ToString()!=Before.ToString()) return;
- V->SetVehicleName(FText::FromString(Name));
+ // Generated names contain only our fixed prefix and digits; native internal
+ // setter avoids asynchronous player-text filtering for these system names.
+ V->Internal_SetVehicleName(FText::FromString(Name));
  if(V->GetVehicleName().ToString()==Name) {
   NamedNetworkVehicles.AddUnique(V); UE_LOG(LogFILN,Log,TEXT("FILN_AUTO_NAME vehicle=%s name=%s"),*V->GetPathName(),*Name);
  }
@@ -89,7 +91,7 @@ void ALogisticsSubsystem::NameNetworkStation(AFGDockingStationIdentifier* ID) {
  const FString Prefix=IsDepot(ID)?(Fluid?TEXT("Fluid Depot"):TEXT("Depot")):(Fluid?TEXT("Fluid Station"):TEXT("Station"));
  const FString Name=AllocateNetworkName(Prefix);
  if(Name.IsEmpty() || ID->GetStationName().ToString()!=Before.ToString()) return;
- ID->SetStationName(FText::FromString(Name));
+ ID->Internal_SetStationName(FText::FromString(Name));
  if(ID->GetStationName().ToString()==Name) {
   NamedNetworkStations.AddUnique(ID); UE_LOG(LogFILN,Log,TEXT("FILN_AUTO_NAME station=%s name=%s"),*ID->GetPathName(),*Name);
  }

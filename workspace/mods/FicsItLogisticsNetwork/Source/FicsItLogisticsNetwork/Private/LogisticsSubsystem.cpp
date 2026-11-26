@@ -390,6 +390,10 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
   const TArray<FGuid> HomeRoute={R.Home->GetPathNodeGUID()};
   if(R.Vehicle->IsAutopilotEnabled() && (!R.Held || R.IdleRoute!=HomeRoute || R.Vehicle->GetVehicleRoute()!=HomeRoute)) return false;
  }
+ // Restore optional cosmetic state before changing routes or inventory filters.
+ // If an actor is unavailable, keep the operational network intact.
+ if(!RestoreAllNetworkPaint()) return false;
+ NetworkSwatch=nullptr;
  TGuardValue<bool> Preparing(bPreparingUninstall,true);
  SetDispatchEnabled(false);
  // Removing the AP-tick hook must not release a parked truck into traffic.
@@ -412,8 +416,6 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
  for(const auto& Depot:DepotStations) if(auto* B=Building(Depot); IsValid(B)) {
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
- if(!RestoreAllNetworkPaint()) return false;
- NetworkSwatch=nullptr;
  StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty();
  NamedNetworkStations.Empty(); NamedNetworkVehicles.Empty(); KnownNetworkProviders.Empty(); NetworkNameCounters.Empty();
  bUninstallPrepared=true; Rebuild();
