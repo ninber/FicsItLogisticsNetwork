@@ -75,10 +75,11 @@ class NativeDepotAuthoringTests(unittest.TestCase):
         self.namespace["package"] = package
         return self.namespace["author"](suffix, label, (self.recipe_parent, self.desc_parent, self.actor))
 
-    def test_all_three_buildings_without_override_property(self):
+    def test_all_four_buildings_without_override_property(self):
         for suffix, label in (("FILNDepot", "FILN Depot"),
                               ("FILNFluidDepot", "FILN Fluid Depot"),
-                              ("FILNFluidStation", "FILN Fluid Logistics Station")):
+                              ("FILNFluidStation", "FILN Fluid Logistics Station"),
+                              ("FILNStation", "FILN Logistics Station")):
             with self.subTest(suffix=suffix):
                 receipt = self.run_author(suffix, label)
                 desc = self.created["Desc_" + suffix]
@@ -91,6 +92,22 @@ class NativeDepotAuthoringTests(unittest.TestCase):
                 self.assertIs(recipe.props["m_product"][0].props["item_class"], desc)
                 self.assertEqual(recipe.props["m_product"][0].props["amount"], 1)
                 self.assertEqual(receipt["display_name"], label)
+
+    def test_main_authors_all_four_buildable_roles(self):
+        calls = []
+        self.namespace["unreal"].EditorAssetLibrary = SimpleNamespace(
+            make_directory=lambda _: True, does_directory_exist=lambda _: True)
+        self.namespace["unreal"].log = lambda _: None
+        self.namespace["vanilla_recipe"] = lambda *args: args
+        self.namespace["author"] = lambda suffix, label, parents: calls.append((suffix, parents[2])) or {"name": suffix}
+        self.namespace["VALIDATE_ONLY"] = False
+        with patch.dict("os.environ", {"FILN_DEPOT_AUTHOR_RECEIPT": "unused.json"}):
+            with patch.object(Path, "write_text"):
+                self.namespace["main"]()
+        self.assertEqual(set(calls), {
+            ("FILNDepot", False), ("FILNFluidDepot", True),
+            ("FILNFluidStation", True), ("FILNStation", False)})
+        self.assertEqual(len(calls), 4)
 
     def test_known_descriptor_upgrade_repoints_only_filn_descriptor(self):
         self.run_author("FILNFluidDepot", "FILN Fluid Depot", upgrade=True)

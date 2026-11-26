@@ -6,6 +6,7 @@
 #include "FGPlayerController.h"
 #include "FGCharacterPlayer.h"
 #include "FGRecipeManager.h"
+#include "FGRecipe.h"
 #include "Resources/FGItemDescriptor.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGDockingStationIdentifier.h"
@@ -46,6 +47,15 @@ AFGBuildableDockingStation* FILNSelectorStation(UObject* Object) {
  if(auto* Component=Cast<UActorComponent>(Object)) return Cast<AFGBuildableDockingStation>(Component->GetOwner());
  if(auto* Hit=Cast<UFGHitResultWrapper>(Object)) return Cast<AFGBuildableDockingStation>(Hit->mHitResult.GetActor());
  return nullptr;
+}
+bool FILNSelectorIsDepot(AFGBuildableDockingStation* Target) {
+ if(!IsValid(Target)) return false;
+ const FString Class=Target->GetClass()->GetPathName();
+ const auto Recipe=Target->GetBuiltWithRecipe();
+ return Class==TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNDepot.Build_FILNDepot_C") ||
+  Class==TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNFluidDepot.Build_FILNFluidDepot_C") ||
+  (Recipe && (Recipe->GetPathName()==TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNDepot.Recipe_FILNDepot_C") ||
+              Recipe->GetPathName()==TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNFluidDepot.Recipe_FILNFluidDepot_C")));
 }
 // Resolve the actual inventory container by instance or reflected property.
  // Do not reject a solid/fluid widget merely because its BP class path differs.
@@ -120,10 +130,10 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
  }
  const auto Current=[&]() { return S->StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;}); };
  const auto* Before=Current();
- const bool Editable=!Target->GetIsInLoadMode() && !S->IsDepot(ID) && (!Before || !Before->ExternalFilter);
+ const bool Editable=!S->IsDepot(ID) && (!Before || !Before->ExternalFilter);
  bool Accepted=!Mutate && Editable;
  FText Message=Editable?NSLOCTEXT("FILN","SelectorReady","Select one resource; changes are applied immediately"):
-  NSLOCTEXT("FILN","SelectorNotEditable","Only a valid ordinary UNLOAD station can be configured");
+  NSLOCTEXT("FILN","SelectorNotEditable","Only a valid non-depot logistics station can be configured");
  if(Mutate && Editable) {
   const double Now=FPlatformTime::Seconds();
   auto* Recipes=AFGRecipeManager::Get(World);
@@ -141,7 +151,7 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
      UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_READBACK_FAILED %s"),*Target->GetPathName());
     }
     Message=Accepted?NSLOCTEXT("FILN","SelectorApplied","Resource selection confirmed by native inventory"):
-      NSLOCTEXT("FILN","SelectorRejected","Selection rejected: empty, undocked, unreserved and compatible station required; check native filters");
+      NSLOCTEXT("FILN","SelectorRejected","Selection rejected: undocked, unreserved and compatible station required; check native filters");
    }
   }
  }
@@ -322,9 +332,10 @@ void FILNAttachSelector(UFGInteractWidget* Widget,UObject* Object) {
  auto* Container=FILNSelectorContainer(Widget);
  if(!Container) { UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_ERROR class=%s native mInventoryContainer unavailable"),*Widget->GetClass()->GetPathName()); return; }
  if(auto* Existing=FILNFindSelector(Container)) {
-  if(Existing->HasContext(Target)) return;
+  if(!FILNSelectorIsDepot(Target) && Existing->HasContext(Target)) return;
   Existing->ClearContext(); Existing->RemoveFromParent();
  }
+ if(FILNSelectorIsDepot(Target)) return;
  auto* Selector=CreateWidget<UFILNResourceSelector>(PC);
  if(!Selector || !Selector->BuildControls() || !Container->AddChildToVerticalBox(Selector)) {
   UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_ERROR native controls could not be attached")); return;
@@ -338,9 +349,11 @@ void UFILNResourceSelector::InstallHook() {
   FILNAttachSelector(Widget,Object);
   // RequestInteractWidget can run before the BP has built/pushed its tree.
   // Retry once after native UI initialization, only on the same active station.
-  if(IsValid(Widget) && FILNSelectorStation(Object) && Widget->GetWorld()) {
+  auto* Resolved=FILNSelectorStation(Object);
+  if(!Resolved && IsValid(Widget)) Resolved=FILNSelectorStation(Widget->mInteractObject.Get());
+  if(IsValid(Widget) && IsValid(Resolved) && Widget->GetWorld()) {
    const TWeakObjectPtr<UFGInteractWidget> Weak(Widget);
-   const TWeakObjectPtr<AFGBuildableDockingStation> Target(FILNSelectorStation(Object));
+   const TWeakObjectPtr<AFGBuildableDockingStation> Target(Resolved);
    Widget->GetWorld()->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateLambda([Weak,Target]() {
     auto* W=Weak.Get(); auto* PC=IsValid(W)?W->GetOwningPlayer():nullptr;
     auto* HUD=PC?Cast<AFGHUD>(PC->GetHUD()):nullptr; auto* UI=HUD?HUD->GetGameUI():nullptr;

@@ -13,7 +13,8 @@ void UFILNDepotModule::DispatchLifecycleEvent(ELifecyclePhase Phase) {
   for(const TCHAR* Path : {
    TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNDepot.Recipe_FILNDepot_C"),
    TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNFluidDepot.Recipe_FILNFluidDepot_C"),
-   TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNFluidStation.Recipe_FILNFluidStation_C")}) {
+   TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNFluidStation.Recipe_FILNFluidStation_C"),
+   TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNStation.Recipe_FILNStation_C")}) {
    // Load only during initialization, never on the scheduler tick.
    auto* Recipe=LoadClass<UFGRecipe>(nullptr,Path);
    if(Registry && Recipe) Registry->RegisterRecipe(GetOwnerModReference(),Recipe);

@@ -12,6 +12,7 @@
 namespace {
 constexpr const TCHAR* FILNSolidDepotPath=TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNDepot.Recipe_FILNDepot_C");
 constexpr const TCHAR* FILNFluidDepotPath=TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNFluidDepot.Recipe_FILNFluidDepot_C");
+constexpr const TCHAR* FILNSolidStationPath=TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNStation.Recipe_FILNStation_C");
 constexpr const TCHAR* FILNFluidStationPath=TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNFluidStation.Recipe_FILNFluidStation_C");
 }
 bool ALogisticsSubsystem::IsAuthoredDepot(const AFGDockingStationIdentifier* Station) {
@@ -43,7 +44,7 @@ void ALogisticsSubsystem::EnsureDepotRecipe() {
    UE_LOG(LogFILN,Error,TEXT("FILN_STATION_RECIPE_REJECTED %s"),*Key);
   }
  };
- for(const TCHAR* Path : {FILNSolidDepotPath,FILNFluidDepotPath,FILNFluidStationPath}) {
+ for(const TCHAR* Path : {FILNSolidDepotPath,FILNFluidDepotPath,FILNFluidStationPath,FILNSolidStationPath}) {
   auto* Recipe=FindObject<UClass>(nullptr,Path);
   auto* Parent=Recipe?Recipe->GetSuperClass():nullptr;
   FGameObjectRegistration Entry;
@@ -53,7 +54,8 @@ void ALogisticsSubsystem::EnsureDepotRecipe() {
   }
   if(!Manager->IsRecipeAvailable(Parent)) { AllReady=false; continue; }
   const FString Expected=Path==FILNSolidDepotPath?TEXT("FILN Depot"):
-    Path==FILNFluidDepotPath?TEXT("FILN Fluid Depot"):TEXT("FILN Fluid Logistics Station");
+    Path==FILNFluidDepotPath?TEXT("FILN Fluid Depot"):
+    Path==FILNFluidStationPath?TEXT("FILN Fluid Logistics Station"):TEXT("FILN Logistics Station");
   const auto Products=UFGRecipe::GetProducts(Recipe);
   if(Products.Num()!=1 || !Products[0].ItemClass || Products[0].Amount!=1) {
    Reject(Path,TEXT("Invalid native recipe product")); continue;
@@ -65,7 +67,8 @@ void ALogisticsSubsystem::EnsureDepotRecipe() {
   const auto BuildClass=UFGBuildingDescriptor::GetBuildableClass(TSubclassOf<UFGBuildingDescriptor>(Products[0].ItemClass.Get()));
   const TCHAR* ExpectedActor=Path==FILNSolidDepotPath?TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNDepot.Build_FILNDepot_C"):
     Path==FILNFluidDepotPath?TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNFluidDepot.Build_FILNFluidDepot_C"):
-    TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNFluidStation.Build_FILNFluidStation_C");
+    Path==FILNFluidStationPath?TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNFluidStation.Build_FILNFluidStation_C"):
+    TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNStation.Build_FILNStation_C");
   if(!BuildClass || !BuildClass->IsChildOf(AFGBuildableDockingStation::StaticClass()) || BuildClass->GetPathName()!=ExpectedActor) {
    Reject(Path,FString::Printf(TEXT("Expected buildable '%s'; runtime descriptor builds '%s'"),ExpectedActor,BuildClass?*BuildClass->GetPathName():TEXT("<null>"))); continue;
   }

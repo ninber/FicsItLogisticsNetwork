@@ -41,6 +41,8 @@ class NativePrerequisiteTests(unittest.TestCase):
         self.assertTrue(mod.check(self.project))
         with self.assertRaisesRegex(ValueError,"authored depot asset"):
             mod.check(self.project,True)
+        self.assertEqual(len(mod.DEPOT_FILES), 12)
+        self.assertIn("Build_FILNStation.uasset", mod.DEPOT_FILES)
         for name in mod.DEPOT_FILES:
             self.put(self.depot/name,bytes.fromhex("c1832a9e")+b"x"*150)
         self.assertTrue(mod.check(self.project,True))

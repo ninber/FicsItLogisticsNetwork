@@ -139,7 +139,8 @@ def main():
     result = {"schema": 4, "buildings": [
         author("FILNDepot", "FILN Depot", solid),
         author("FILNFluidDepot", "FILN Fluid Depot", fluid),
-        author("FILNFluidStation", "FILN Fluid Logistics Station", fluid)
+        author("FILNFluidStation", "FILN Fluid Logistics Station", fluid),
+        author("FILNStation", "FILN Logistics Station", solid)
     ]}
     receipt = Path(os.environ["FILN_DEPOT_AUTHOR_RECEIPT"])
     receipt.write_text(json.dumps(result, indent=2), encoding="utf-8")
