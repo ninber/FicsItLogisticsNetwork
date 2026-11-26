@@ -45,6 +45,10 @@ def package(name, parent, configure, validate, upgrade=None):
         bp = require(unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, DEST, unreal.Blueprint, factory), f"Cannot create {path}")
         unreal.BlueprintEditorLibrary.compile_blueprint(bp)
         existing = False
+    station_actor = name in ("Build_FILNStation", "Build_FILNFluidStation")
+    if station_actor:
+        require(unreal.FILNBlueprintSettings.ensure_station_resource_property(bp, VALIDATE_ONLY),
+                f"Missing or invalid FILNResource SaveGame class property: {path}")
     generated = require(assets.load_blueprint_class(path), f"No generated class {path}")
     # UE 5.6 UBlueprint.ParentClass is not a public editor property. Verify the
     # persisted asset registry parent tag on existing/freshly reloaded assets.
@@ -60,7 +64,7 @@ def package(name, parent, configure, validate, upgrade=None):
     elif UPGRADE_NAMES and upgrade is not None:
         changed = upgrade(cdo)
     validate(cdo)
-    if changed:
+    if changed or (station_actor and not VALIDATE_ONLY):
         require(assets.save_loaded_asset(bp, only_if_is_dirty=False), f"Save failed: {path}")
     return generated
 

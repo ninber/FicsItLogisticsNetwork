@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "FILNStationControls.h"
+#include "FILNBlueprintSettings.h"
 #include "FILNSelectorPolicy.h"
 #include "LogisticsSubsystem.h"
 #include "FGHUD.h"
@@ -121,6 +122,21 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
  auto* World=GetWorld(); auto* Player=GetOwnerPlayerCharacter();
  auto* ID=IsValid(Target)?Target->GetStationIdentifier():nullptr;
  auto* S=FILNSelectorSubsystem(World);
+ // Designer instances have no live route or registry identity requirement.
+ if(RequestId && World && IsValid(Player) && IsValid(Target) && Target->GetWorld()==World && Target->HasAuthority() &&
+    Target->IsBuildableInsideBlueprintDesigner() && FVector::DistSquared(Player->GetActorLocation(),Target->GetActorLocation())<=FMath::Square(2000.f)) {
+  const bool Editable=FFILNStationSettings::HasProperty(Target) && !FILNSelectorIsDepot(Target);
+  bool Accepted=Editable;
+  if(Mutate && Editable) {
+   const double Now=FPlatformTime::Seconds(); auto* Recipes=AFGRecipeManager::Get(World);
+   Accepted=Now-LastMutation>=0.2 && (!Resource || (Recipes && Recipes->IsItemDescriptorAvailable(Resource) && ALogisticsSubsystem::StationAcceptsResource(Target,Resource)));
+   if(Accepted) { LastMutation=Now; Accepted=FFILNStationSettings::Write(Target,Resource); }
+  }
+  ResourceReply(Target,RequestId,Accepted,Editable,FFILNStationSettings::Read(Target),Accepted?
+   NSLOCTEXT("FILN","BlueprintResourceSaved","Resource stored in this blueprint station"):
+   NSLOCTEXT("FILN","BlueprintResourceRejected","Blueprint setting rejected or station asset needs rebuilding"));
+  return;
+ }
  if(!RequestId || !World || !IsValid(Player) || !IsValid(Target) || Target->GetWorld()!=World || !Target->HasAuthority() ||
     !IsValid(ID) || ID->GetStation()!=Target || FVector::DistSquared(Player->GetActorLocation(),Target->GetActorLocation())>FMath::Square(2000.f) ||
     !IsValid(S) || !S->bRegistryValidated || S->bDispatchBlocked || S->bPreparingUninstall || S->bUninstallPrepared) {
@@ -129,8 +145,11 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
   return;
  }
  const auto Current=[&]() { return S->StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;}); };
+ if(FFILNStationSettings::HasProperty(Target) && !Current()) {
+  if(const auto Saved=FFILNStationSettings::Read(Target)) S->ConfigureStation(ID,Saved);
+ }
  const auto* Before=Current();
- const bool Editable=!S->IsDepot(ID) && (!Before || !Before->ExternalFilter);
+ const bool Editable=!S->IsDepot(ID) && (!FFILNStationSettings::IsDedicated(Target) || FFILNStationSettings::HasProperty(Target)) && (!Before || !Before->ExternalFilter);
  bool Accepted=!Mutate && Editable;
  FText Message=Editable?NSLOCTEXT("FILN","SelectorReady","Select one resource; changes are applied immediately"):
   NSLOCTEXT("FILN","SelectorNotEditable","Only a valid non-depot logistics station can be configured");
@@ -156,11 +175,12 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
   }
  }
  const auto* After=Current();
- const bool Verified=!After || S->StationResourceMatches(*After);
+ const auto Persisted=FFILNStationSettings::Read(Target);
+ const bool Verified=After?S->StationResourceMatches(*After):!Persisted;
  const bool CanEdit=Editable && !S->bPreparingUninstall;
  if(!Verified) { Accepted=false; Message=NSLOCTEXT("FILN","SelectorReadback","Native filter readback failed; configuration is not verified"); }
  if(Mutate) UE_LOG(LogFILN,Log,TEXT("FILN_SELECTOR_%s station=%s resource=%s"),Accepted?TEXT("CONFIRMED"):TEXT("REJECTED"),*Target->GetPathName(),*GetPathNameSafe(Resource.Get()));
- ResourceReply(Target,RequestId,Accepted,CanEdit,After?After->Resource:TSubclassOf<UFGItemDescriptor>(),Message);
+ ResourceReply(Target,RequestId,Accepted,CanEdit,After?After->Resource:Persisted,Message);
 }
 void UFILNResourceRemote::ResourceReply_Implementation(AFGBuildableDockingStation* Target,uint32 RequestId,bool Accepted,bool Editable,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message) {
  if(Receiver.IsValid()) Receiver->Reply(Target,RequestId,Accepted,Editable,Resource,Message);

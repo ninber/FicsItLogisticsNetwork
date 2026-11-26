@@ -8,6 +8,7 @@
 #include "FILNTransferLedger.h"
 #include "FILNRegistryPolicy.h"
 #include "FILNStationControls.h"
+#include "FILNBlueprintSettings.h"
 #include "FILNTransferObserver.h"
 #include "Resources/FGItemDescriptor.h"
 #include "UObject/UnrealType.h"
@@ -173,7 +174,13 @@ void ALogisticsSubsystem::Rebuild() {
   if(ConfigActors.Contains(C.Station)) {
    RegistryIssue(FString::Printf(TEXT("Duplicate station config removed: %s"),*C.Station->GetPathName())); StationConfigs.RemoveAt(I); continue;
   }
+  auto* B=Building(C.Station);
+  if(IsValid(B) && B->IsBuildableInsideBlueprintDesigner()) { StationConfigs.RemoveAt(I); continue; }
   ConfigActors.Add(C.Station); StationId(C.Station);
+  if(FFILNStationSettings::HasProperty(B) && !C.ExternalFilter) {
+   if(const auto Saved=FFILNStationSettings::Read(B)) C.Resource=Saved;
+   else if(C.Resource) FFILNStationSettings::Write(B,C.Resource);
+  }
   if(!C.ExternalFilter && C.Resource && ValidateStationSlots(C)) {
    if(!ApplyStationFilter(C)) RegistryIssue(FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName()));
   } else RegistryIssue(FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName()));
@@ -322,7 +329,8 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
 bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  auto* B=Building(Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
  if(bDispatchBlocked || !bRegistryValidated || bChangingFilters || bPreparingUninstall || !HasAuthority() || !IsValid(Station) || Station->GetWorld()!=GetWorld() || !IsValid(Inventory) || !Resource || Inventory->GetSizeLinear()<=0 || Inventory->GetSizeLinear()>4096 || B->GetDockedActor()) return false;
- if(IsDepot(Station) || Reservations.StationBusy(Key(StationId(Station))) || !StationAcceptsResource(B,Resource)) return false;
+ if(IsDepot(Station) || B->IsBuildableInsideBlueprintDesigner() || Reservations.StationBusy(Key(StationId(Station))) || !StationAcceptsResource(B,Resource)) return false;
+ if(FFILNStationSettings::IsDedicated(B) && !FFILNStationSettings::HasProperty(B)) return false;
  // Explicit selection, never inference from stock. Native cargo and slot
  // descriptors remain untouched; only the docking filter is published.
  FFILNStationConfig* Existing=StationConfigs.FindByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
@@ -333,7 +341,8 @@ bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,
   ResetScan();
   FFILNStationConfig Updated=*Existing; Updated.Resource=Resource;
   if(!ApplyStationFilter(Updated,Existing->Resource)) return false;
-  *Existing=Updated; return true;
+  *Existing=Updated;
+  return !FFILNStationSettings::IsDedicated(B) || FFILNStationSettings::Write(B,Resource);
  }
  FFILNStationConfig C; C.Station=Station; C.Resource=Resource;
  for(int32 I=0;I<Inventory->GetSizeLinear();++I) {
@@ -344,7 +353,7 @@ bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,
  if(!ApplyStationFilter(C)) return false;
  StationConfigs.Add(C);
  if(!B->FindComponentByClass<UFILNStationMarker>()) NewObject<UFILNStationMarker>(B,NAME_None,RF_Transient)->RegisterComponent();
- ResetScan(); return true;
+ ResetScan(); return !FFILNStationSettings::IsDedicated(B) || FFILNStationSettings::Write(B,Resource);
 }
 bool ALogisticsSubsystem::RestoreStationFilters(const TArray<int32>& Indices) {
  TArray<FFILNStationConfig> Configs; TSet<int32> Seen;
@@ -390,6 +399,7 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
  for(int32 I=0;I<StationConfigs.Num();++I) Indices.Add(I);
  if(!RestoreStationFilters(Indices)) return false;
  for(const auto& C:StationConfigs) if(auto* B=Building(C.Station); IsValid(B)) {
+  if(FFILNStationSettings::HasProperty(B)) FFILNStationSettings::Write(B,nullptr);
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
  for(const auto& Depot:DepotStations) if(auto* B=Building(Depot); IsValid(B)) {

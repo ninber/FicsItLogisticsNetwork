@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LogisticsSubsystem.h"
 #include "FILNPlayerWorkflow.h"
+#include "FILNBlueprintSettings.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
@@ -35,7 +36,7 @@ bool ALogisticsSubsystem::VehicleStationCompatible(AFGWheeledVehicle* Vehicle,AF
 bool ALogisticsSubsystem::StationResourceMatches(const FFILNStationConfig& C) const {
  auto* B=IsValid(C.Station)?C.Station->GetStation():nullptr;
  auto* I=IsValid(B)?B->GetInventory():nullptr;
- if(!IsValid(I) || !StationAcceptsResource(B,C.Resource) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
+ if(!IsValid(I) || B->IsBuildableInsideBlueprintDesigner() || (FFILNStationSettings::IsDedicated(B) && (!FFILNStationSettings::HasProperty(B) || FFILNStationSettings::Read(B)!=C.Resource)) || !StationAcceptsResource(B,C.Resource) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
  // Retired external records are not owned filters. Never infer or restore their
  // configuration from another actor's fields or from current stock.
  if(C.ExternalFilter || C.OriginalFilters.Num()!=I->GetSizeLinear()) return false;
@@ -54,7 +55,15 @@ void ALogisticsSubsystem::DiscoverDepots() {
  }
  for(int32 Work=0; Work<2 && PlayerStationCursor<PlayerStationScan.Num(); ++Work) {
   auto* ID=PlayerStationScan[PlayerStationCursor++].Get();
-  if(!IsValid(ID)) continue;
+  auto* B=IsValid(ID)?ID->GetStation():nullptr;
+  if(!IsValid(B) || B->IsBuildableInsideBlueprintDesigner()) continue;
+  if(FFILNStationSettings::HasProperty(B) && !IsDepot(ID)) {
+   const auto Saved=FFILNStationSettings::Read(B);
+   const auto* Config=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
+   if(Saved && (!Config || Config->Resource!=Saved)) {
+    if(ConfigureStation(ID,Saved)) UE_LOG(LogFILN,Log,TEXT("FILN_BLUEPRINT_RESOURCE_REGISTERED station=%s resource=%s"),*B->GetPathName(),*GetPathNameSafe(Saved.Get()));
+   }
+  }
   const bool Network=IsNetworkStation(ID);
   if(Network) NameNetworkStation(ID);
   UpdateNetworkPaint(ID,ID->GetStation(),Network);

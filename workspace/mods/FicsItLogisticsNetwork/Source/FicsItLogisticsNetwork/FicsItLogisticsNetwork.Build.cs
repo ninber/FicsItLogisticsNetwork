@@ -59,7 +59,7 @@ public class FicsItLogisticsNetwork : ModuleRules
 		});
 
 		if (Target.Type == TargetRules.TargetType.Editor) {
-			PublicDependencyModuleNames.AddRange(new string[] {/*"OnlineBlueprintSupport",*/ "AnimGraph"});
+			PublicDependencyModuleNames.AddRange(new string[] {/*"OnlineBlueprintSupport",*/ "AnimGraph", "UnrealEd", "BlueprintGraph"});
 		}
 		PublicDependencyModuleNames.AddRange(new string[] {"FactoryGame", "SML"});
 
