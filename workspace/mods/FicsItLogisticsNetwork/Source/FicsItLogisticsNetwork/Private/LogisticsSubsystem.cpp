@@ -541,7 +541,7 @@ void ALogisticsSubsystem::Observe() {
     Recover(R,TEXT("Cargo reconciliation disagrees with native docking receipts; no inferred transfer credited")); ++Cursor; continue;
    }
    R.ReceiptMismatchSince=-1; R.LastCargo=Quantity;
-   if((Before==S::Loading && !AtP && (Quantity<=0 || R.LoadedCargo<=0)) ||
+   if((Before==S::Loading && !AtP && (Quantity<=0 || (R.LoadedCargo<=0 && Quantity!=R.ExpectedCargo))) ||
       (Before==S::Unloading && !AtQ && R.DeliveredCargo<=0)) {
     Recover(R,TEXT("Station departed without measured matching cargo transfer")); ++Cursor; continue;
    }
@@ -583,7 +583,7 @@ void ALogisticsSubsystem::Observe() {
   if(Next==S::Recovery) Recover(R,TEXT("Out-of-order docking observed; journey cannot be proven"));
   else if(Next!=Before) {
    SetState(R,Next);
-   UE_LOG(LogFILN,Log,TEXT("job=%s state=%d; docking observation only, transfer unverified"),*R.JobId.ToString(),R.State);
+   UE_LOG(LogFILN,Log,TEXT("job=%s state=%d planned=%d loaded=%d delivered=%d cargo=%d"),*R.JobId.ToString(),R.State,R.ExpectedCargo,R.LoadedCargo,R.DeliveredCargo,R.LastCargo);
    if(Next==S::Completed) {
     if(!Reservations.OwnsJob(Key(R.JobId),Key(R.TruckId))) { Recover(R,TEXT("Completion lease ownership mismatch")); bDispatchBlocked=true; ++Cursor; continue; }
     DisarmDockReceipts(R.JobId); Reservations.Release(Key(R.JobId)); SetState(R,S::Idle); R.Diagnostic=R.Automatic?FString::Printf(TEXT("Home stopped; loaded=%d delivered=%d retained=%d; native autopilot tick held at home"),R.LoadedCargo,R.DeliveredCargo,R.LastCargo):TEXT("Home stopped; transfers not measured");

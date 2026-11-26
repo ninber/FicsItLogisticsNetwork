@@ -7,9 +7,10 @@ struct Snapshot {
  int quantity=0, capacity=0;
 };
 inline Action Decide(const Snapshot& s) {
- if(!s.valid || !s.sameFuel || s.quantity<0 || s.capacity<=0 || s.quantity>s.capacity) return Action::Reject;
+ if(!s.valid || s.quantity<0 || s.capacity<=0 || s.quantity>s.capacity) return Action::Reject;
  if(s.pending) return Action::Observe;
  if(s.quantity==s.capacity) return Action::Ready;
+ if(!s.sameFuel) return Action::Reject;
  return s.supplied&&!s.cooldown?Action::RequestDock:Action::Wait;
 }
 enum class Receipt { Pending, Received, TimedOut, Cancelled };

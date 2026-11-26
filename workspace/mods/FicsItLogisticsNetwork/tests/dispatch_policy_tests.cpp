@@ -147,12 +147,20 @@ int main() {
     cargo.vehicle.cargoKinds = 1;
     cargo.vehicle.cargoQuantity = 12;
     cargo.roads.homeToRequester = 200;
+    CHECK(!Evaluate(cargo)); // provider is mandatory even with cargo
+    cargo.provider = p.provider;
+    cargo.provider->quantity = 36;
     candidate = Evaluate(cargo);
     CHECK(candidate.has_value());
     CHECK(candidate->kind == Kind::RetainedCargo);
-    CHECK(candidate->amount == 12); // partial delivery is allowed for retained cargo
-    CHECK(candidate->provider.empty());
-    CHECK(candidate->roadDistance == 370);
+    CHECK(candidate->amount == 48); // full route and top-up
+    CHECK(candidate->provider == p.provider->id);
+    CHECK(candidate->roadDistance == 510);
+    auto full=cargo; full.vehicle.cargoQuantity=48; full.provider->quantity=1;
+    CHECK(Evaluate(full)->provider==p.provider->id);
+    CHECK(Evaluate(full)->amount==48);
+    full.provider.reset(); CHECK(!Evaluate(full));
+    auto insufficient=cargo; insufficient.provider->quantity=35; CHECK(!Evaluate(insufficient));
     CHECK(Select({p, cargo})->kind == Kind::RetainedCargo);
     cargo.requester.label = "Storage [S]";
     CHECK(!Evaluate(cargo));
@@ -166,9 +174,9 @@ int main() {
     cargo.requester.capacity = 11;
     CHECK(!Evaluate(cargo));
     cargo.requester.capacity = 200;
-    cargo.roads.homeToRequester = -1;
+    cargo.roads.homeToProvider = -1;
     CHECK(!Evaluate(cargo));
-    cargo.roads.homeToRequester = 200;
+    cargo.roads.homeToProvider = 120;
     cargo.vehicle.cargoQuantity = 50;
     CHECK(!Evaluate(cargo));
 
@@ -220,12 +228,14 @@ int main() {
     fluid.roads.homeToRequester = 10;
     CHECK(!Evaluate(fluid)); // unknown-origin retained fluid into warehouse
     fluid.requester.label = "Factory";
-    CHECK(Evaluate(fluid)->amount == 5);
+    CHECK(!Evaluate(fluid)); // no provider bypass for fluids either
+    fluid.provider=p.provider; fluid.provider->medium=Medium::Fluid;
+    CHECK(Evaluate(fluid)->amount == 48);
     fluid.vehicle.driver = true;
     CHECK(!Evaluate(fluid));
 
     cargo = p;
-    cargo.provider.reset(); cargo.vehicle.cargoResource = p.requester.resource;
+    cargo.vehicle.cargoResource = p.requester.resource;
     cargo.vehicle.cargoKinds = 1; cargo.vehicle.cargoQuantity = 5;
     cargo.roads.homeToRequester = 10; cargo.requester.label = "[s] warehouse";
     CHECK(!Evaluate(cargo));

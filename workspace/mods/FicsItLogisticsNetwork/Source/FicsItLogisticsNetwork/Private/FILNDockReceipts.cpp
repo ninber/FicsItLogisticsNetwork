@@ -202,7 +202,7 @@ void ALogisticsSubsystem::ConsumeDockReceipts() {
   const bool TargetValid=IsValid(R.Requester) && Target && R.Requester->GetStation()==Target;
   const bool CanLoad=!B.loaded || (!R.RetainedCargo && (Phase==S::ToProvider || Phase==S::Loading));
   const bool PickupDeparture=Source && O && Source->GetDockedActor()!=O &&
-   (B.loaded>0 || filn::recovery::CanBridgePickupDeparture(Phase==S::Loading,false,R.LoadedCargo,R.LastCargo));
+   (B.loaded>0 || (Phase==S::Loading && R.LastCargo==R.ExpectedCargo && R.LastCargo>0) || filn::recovery::CanBridgePickupDeparture(Phase==S::Loading,false,R.LoadedCargo,R.LastCargo));
   const bool CanUnload=!B.unloaded || Phase==S::ToRequester || Phase==S::Unloading || PickupDeparture;
   if(B.invalid || !SourceValid || !TargetValid || !CanLoad || !CanUnload || R.AbortReturn ||
      !IsValid(O) || !IsValid(Cargo) || V->GetOwnerVehicle()!=O || O->GetStorageInventory()!=Cargo ||
@@ -231,7 +231,13 @@ void ALogisticsSubsystem::ConsumeDockReceipts() {
   R.ReceiptMismatchSince=-1;
   R.LastCargo=Ledger.cargo; R.LoadedCargo=Ledger.loaded; R.DeliveredCargo=Ledger.delivered;
   R.DepartedHome=true;
-  if(B.loaded) { R.CargoOriginKnown=true; R.CargoOriginStorage=filn::dispatch::IsStorage(TCHAR_TO_UTF8(*R.Provider->GetStationName().ToString())); R.State=static_cast<uint8>(S::Loading); }
+  if(B.loaded) {
+   const bool Existing=static_cast<int64>(Ledger.cargo)+Ledger.delivered-Ledger.loaded>0;
+   const bool Storage=filn::dispatch::IsStorage(TCHAR_TO_UTF8(*R.Provider->GetStationName().ToString()));
+   R.CargoOriginKnown=!Existing || R.CargoOriginKnown;
+   R.CargoOriginStorage=Storage || (Existing && R.CargoOriginStorage);
+   R.State=static_cast<uint8>(S::Loading);
+  }
   if(B.unloaded) { R.State=static_cast<uint8>(S::Unloading); if(!R.LastCargo) { R.CargoOriginKnown=false; R.CargoOriginStorage=false; } }
  }
 }

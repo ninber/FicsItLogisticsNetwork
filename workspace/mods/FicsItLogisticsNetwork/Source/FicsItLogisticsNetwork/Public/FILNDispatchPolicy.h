@@ -77,7 +77,7 @@ struct RouteCosts {
 struct Offer {
     Vehicle vehicle;
     Station requester;
-    std::optional<Station> provider; // absent only for retained-cargo delivery
+    std::optional<Station> provider; // required for every new delivery
     RouteCosts roads;
 };
 
@@ -123,22 +123,17 @@ inline bool EligibleWithoutRoads(const Offer& offer) {
         return false;
     }
 
-    if (offer.provider) {
-        const Station& p = *offer.provider;
-        if (v.cargoKinds != 0 || v.cargoQuantity != 0 || p.id.empty() || p.id == v.home || p.id == q.id ||
-            p.medium != q.medium || !p.loadMode || !p.powered || p.paused || p.occupied || p.depot || p.kinds != 1 ||
-            p.resource != q.resource || p.quantity < v.cargoCapacity || p.capacity < p.quantity ||
-            q.capacity < v.cargoCapacity || !PairAllowed(p.label, q.label)) {
-            return false;
-        }
-    } else {
-        // A recovered truck with a single item type may make a partial direct delivery.
-        // Warehouse delivery needs a proven non-warehouse origin for retained cargo.
-        if (v.cargoKinds != 1 || v.cargoQuantity < 1 || v.cargoQuantity > v.cargoCapacity ||
-            v.cargoResource != q.resource || q.capacity < v.cargoQuantity || (IsStorage(q.label) && (!v.cargoOriginKnown || v.cargoOriginStorage))) {
-            return false;
-        }
-    }
+    if (!offer.provider) return false;
+    const Station& p = *offer.provider;
+    const bool retained = v.cargoQuantity > 0;
+    if (v.cargoQuantity < 0 || v.cargoQuantity > v.cargoCapacity ||
+        (retained ? (v.cargoKinds != 1 || v.cargoResource != q.resource) : v.cargoKinds != 0)) return false;
+    // Same provider rules, but only the missing capacity needs to be loaded.
+    if (p.id.empty() || p.id == v.home || p.id == q.id ||
+        p.medium != q.medium || !p.loadMode || !p.powered || p.paused || p.occupied || p.depot || p.kinds != 1 ||
+        p.resource != q.resource || p.quantity <= 0 || p.quantity < v.cargoCapacity - v.cargoQuantity ||
+        p.capacity < p.quantity || q.capacity < v.cargoCapacity || !PairAllowed(p.label, q.label)) return false;
+    if (retained && IsStorage(q.label) && (!v.cargoOriginKnown || v.cargoOriginStorage)) return false;
     return true;
 }
 
@@ -149,18 +144,12 @@ inline std::optional<Choice> Evaluate(const Offer& offer) {
     const auto& q = offer.requester;
     const auto& roads = offer.roads;
     if (!ValidCost(roads.requesterToHome)) return std::nullopt;
-    if (offer.provider) {
-        if (!ValidCost(roads.homeToProvider) || !ValidCost(roads.providerToRequester)) return std::nullopt;
-        const double distance = roads.homeToProvider + roads.providerToRequester + roads.requesterToHome;
-        if (!std::isfinite(distance)) return std::nullopt;
-        return Choice{Kind::Pickup, v.home, v.id, offer.provider->id, q.id, q.resource,
-                      v.cargoCapacity, distance, roads.providerToRequester, roads.homeToProvider};
-    }
-    if (!ValidCost(roads.homeToRequester)) return std::nullopt;
-    const double distance = roads.homeToRequester + roads.requesterToHome;
+    if (!ValidCost(roads.homeToProvider) || !ValidCost(roads.providerToRequester)) return std::nullopt;
+    const double distance = roads.homeToProvider + roads.providerToRequester + roads.requesterToHome;
     if (!std::isfinite(distance)) return std::nullopt;
-    return Choice{Kind::RetainedCargo, v.home, v.id, {}, q.id, q.resource,
-                  v.cargoQuantity, distance, 0.0, roads.homeToRequester};
+    return Choice{v.cargoQuantity>0 ? Kind::RetainedCargo : Kind::Pickup,
+                  v.home, v.id, offer.provider->id, q.id, q.resource,
+                  v.cargoCapacity, distance, roads.providerToRequester, roads.homeToProvider};
 }
 
 inline bool Better(const Choice& a, const Choice& b) {
@@ -168,7 +157,7 @@ inline bool Better(const Choice& a, const Choice& b) {
     if (a.requester != b.requester) return a.requester < b.requester;
     // For one requester, nearest eligible provider is primary. Empty/depot travel
     // must never override provider-to-requester road distance (authoritative spec).
-    if (a.kind == Kind::Pickup && a.requester == b.requester) {
+    if (a.requester == b.requester) {
         if (a.providerDistance != b.providerDistance) return a.providerDistance < b.providerDistance;
         if (a.emptyDistance != b.emptyDistance) return a.emptyDistance < b.emptyDistance;
     }
