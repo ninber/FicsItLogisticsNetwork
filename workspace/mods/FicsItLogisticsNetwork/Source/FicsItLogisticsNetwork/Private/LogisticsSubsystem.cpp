@@ -174,9 +174,9 @@ void ALogisticsSubsystem::Rebuild() {
    RegistryIssue(FString::Printf(TEXT("Duplicate station config removed: %s"),*C.Station->GetPathName())); StationConfigs.RemoveAt(I); continue;
   }
   ConfigActors.Add(C.Station); StationId(C.Station);
-  if(!C.ExternalFilter && C.Resource && RepairStationSlots(C)) {
-   if(!ApplyStationFilter(C)) RegistryIssue(FString::Printf(TEXT("Station filter repair pending: %s"),*C.Station->GetPathName()));
-  } else RegistryIssue(FString::Printf(TEXT("Station filter repair pending: %s"),*C.Station->GetPathName()));
+  if(!C.ExternalFilter && C.Resource && ValidateStationSlots(C)) {
+   if(!ApplyStationFilter(C)) RegistryIssue(FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName()));
+  } else RegistryIssue(FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName()));
   ++I;
  }
  FilterRepairCursor=0;
@@ -267,34 +267,14 @@ void ALogisticsSubsystem::RetireJobToParking(FFILNRegistration& R,const FString&
  UE_LOG(LogFILN,Warning,TEXT("FILN_JOB_RETIRED truck=%s %s"),*R.TruckId.ToString(),*Why);
  ResetScan();
 }
-bool ALogisticsSubsystem::RepairStationSlots(const FFILNStationConfig& C) {
+bool ALogisticsSubsystem::ValidateStationSlots(const FFILNStationConfig& C) {
  auto* B=Building(C.Station); auto* I=IsValid(B)?B->GetInventory():nullptr;
  if(!IsValid(I) || !C.Resource || C.ExternalFilter || I->GetSizeLinear()!=C.OriginalFilters.Num() ||
     I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
- // Only remove the identifiable restriction written by older FILN migration:
- // original unrestricted slot, current restriction exactly the saved resource.
- // Never overwrite an unrelated native restriction or manufacture/delete items.
- TArray<int32> Repair;
- for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) {
-  const auto Actual=I->GetAllowedItemOnIndex(Slot);
-  switch(filn::repair::Slot(C.OriginalFilters[Slot].Get(),Actual.Get(),C.Resource.Get())) {
-   case filn::repair::SlotAction::Keep: break;
-   case filn::repair::SlotAction::RemoveLegacyRestriction: Repair.Add(Slot); break;
-   case filn::repair::SlotAction::Retry: return false;
-  }
- }
- if(Repair.IsEmpty()) return true;
- if(B->GetDockedActor()) return false; // retry after native docking completes
- for(const auto Slot:Repair) {
-  FInventoryStack Before,After;
-  if(!I->GetStackFromIndex(Slot,Before)) return false;
-  I->SetAllowedItemOnIndex(Slot,nullptr);
-  if(I->GetAllowedItemOnIndex(Slot) || !I->GetStackFromIndex(Slot,After) ||
-     !filn::repair::CargoUnchanged(Before.NumItems,After.NumItems,Before.Item.GetItemClass()==After.Item.GetItemClass())) {
-   UE_LOG(LogFILN,Error,TEXT("FILN_SLOT_REPAIR_READBACK station=%s slot=%d"),*B->GetPathName(),Slot); return false;
-  }
- }
- UE_LOG(LogFILN,Log,TEXT("FILN_LEGACY_SLOT_REPAIRED station=%s slots=%d"),*B->GetPathName(),Repair.Num());
+ // Normal own-state validation only. Never rewrite physical slots on load,
+ // selection or retry. Any inconsistent private save must be fixed offline.
+ for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot)
+  if(!filn::repair::SlotMatches(C.OriginalFilters[Slot].Get(),I->GetAllowedItemOnIndex(Slot).Get())) return false;
  return true;
 }
 void ALogisticsSubsystem::RetryStationFilters() {
@@ -302,8 +282,8 @@ void ALogisticsSubsystem::RetryStationFilters() {
  for(int32 Work=0;Work<FMath::Min(4,StationConfigs.Num());++Work) {
   FilterRepairCursor%=StationConfigs.Num(); const auto& C=StationConfigs[FilterRepairCursor++];
   if(!IsValid(C.Station) || !C.Resource || C.ExternalFilter || StationResourceMatches(C)) continue;
-  if(RepairStationSlots(C) && ApplyStationFilter(C)) {
-   const FString Pending=FString::Printf(TEXT("Station filter repair pending: %s"),*C.Station->GetPathName());
+  if(ValidateStationSlots(C) && ApplyStationFilter(C)) {
+   const FString Pending=FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName());
    const FString Prefix=FString::Printf(TEXT("Filter preflight %s:"),*GetNameSafe(C.Station.Get()));
    RegistryDiagnostics.RemoveAll([&](const FString& D){return D==Pending || D.StartsWith(Prefix);});
    ResetScan();
@@ -329,8 +309,7 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
    // Existing cargo is not a filter-setting failure. It remains untouched;
    // scheduler eligibility separately checks actual stock.
   }
-  // Legacy per-slot writes are not silently undone: the saved cargo may
-  // already have been rearranged by the engine. Start from the original save.
+  // FILN publishes a docking resource filter; it never rewrites physical slot restrictions.
   for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) {
    if(I->GetAllowedItemOnIndex(Slot)!=C.OriginalFilters[Slot]) {
     UE_LOG(LogFILN,Error,TEXT("FILN_SLOT_LAYOUT_CONFLICT station=%s slot=%d; no inventory mutation"),*B->GetPathName(),Slot);
@@ -348,7 +327,7 @@ bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,
  // descriptors remain untouched; only the docking filter is published.
  FFILNStationConfig* Existing=StationConfigs.FindByPredicate([Station](const FFILNStationConfig& C){return C.Station==Station;});
  if(Existing) {
-  if(Existing->ExternalFilter || !RepairStationSlots(*Existing)) return false;
+  if(Existing->ExternalFilter || !ValidateStationSlots(*Existing)) return false;
   // Preserve native slot restrictions and publish only the new docking selection.
   for(const auto& Original:Existing->OriginalFilters) if(Original && Original!=Resource) return false;
   ResetScan();

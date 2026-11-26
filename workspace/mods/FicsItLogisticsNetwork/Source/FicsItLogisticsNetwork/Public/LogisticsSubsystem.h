@@ -248,7 +248,7 @@ private:
  void Rebuild();
  void RequestRegistryRepair();
  void RetireJobToParking(FFILNRegistration& R,const FString& Why);
- bool RepairStationSlots(const FFILNStationConfig& C);
+ bool ValidateStationSlots(const FFILNStationConfig& C);
  void RetryStationFilters();
  int32 FilterRepairCursor=0;
  bool ConfigureStation(AFGDockingStationIdentifier* Station, TSubclassOf<UFGItemDescriptor> Resource);
