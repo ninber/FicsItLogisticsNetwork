@@ -22,6 +22,7 @@
 #include "Engine/World.h"
 #include "Engine/Texture2D.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "TextureResource.h" // complete FTextureResource and FTextureRenderTargetResource types
 #include "CanvasItem.h"
 #include "CanvasTypes.h"
 #include "ImageUtils.h"
