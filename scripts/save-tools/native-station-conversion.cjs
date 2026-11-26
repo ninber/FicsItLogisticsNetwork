@@ -29,6 +29,11 @@ function convert(save,selection) {
   const props=station.properties,recipe=props.mBuiltWithRecipe?.value?.pathName;
   const depot=station.typePath===ORDINARY&&recipe===REST;
   assert(depot||(station.typePath===PROGRAMMABLE&&[FILN,PROGRAM_RECIPE].includes(recipe)),'Unsupported legacy class/recipe');
+  // R16: the old converter destroys the player-visible selector by replacing
+  // logistics stations with vanilla actors. Do not emit another such save.
+  // Remove this gate only when the dedicated FILN logistics actor/recipe and
+  // lossless, runtime-verified resource restoration are implemented.
+  assert(depot,'R16 BLOCKED: dedicated FILN logistics station and lossless FILTERS migration are required; refusing vanilla downgrade');
   const id=by.get(props.mStationIdentifier?.value?.pathName),node=by.get(props.mDockingPathNode?.value?.pathName);
   assert(id&&node,'Missing station identifier/road node');
   const key=guid(node.properties.mPathNodeGUID?.value);
