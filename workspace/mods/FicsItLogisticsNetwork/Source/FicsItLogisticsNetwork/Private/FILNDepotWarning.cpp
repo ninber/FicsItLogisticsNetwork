@@ -8,14 +8,9 @@
 #include "Patching/NativeHookManager.h"
 #include "Engine/World.h"
 
-// The native virtual is protected. Expose its inherited member pointer for
-// SML's virtual hook without constructing a derived UObject or replacing a
-// representation. No changes to vanilla map marker storage.
-namespace {
-struct FFILNVehicleWarningAccess : UFGWheeledVehicleRepresentation {
- using UFGWheeledVehicleRepresentation::IsWarningIndicatorVisible;
-};
-}
+// AccessTransformers.ini grants ALogisticsSubsystem access to the protected
+// native virtual. Use its declaring class directly: MSVC rejects the inherited
+// using-declaration as a HookInvoker non-type template argument.
 bool ALogisticsSubsystem::HasDepotCapacityWarning(AFGWheeledVehicleIdentifier* V) const {
  return IsValid(V) && PendingDepotMembership.Contains(V) && !ByVehicle.Contains(V) &&
   DepotCapacityWarnings.Contains(TWeakObjectPtr<AFGWheeledVehicleIdentifier>(V));
@@ -33,7 +28,8 @@ void ALogisticsSubsystem::SetDepotCapacityWarning(AFGWheeledVehicleIdentifier* V
 }
 void ALogisticsSubsystem::InstallDepotWarningHook() {
  if(WITH_EDITOR) return;
- SUBSCRIBE_METHOD_VIRTUAL(FFILNVehicleWarningAccess::IsWarningIndicatorVisible,GetDefault<UFGWheeledVehicleRepresentation>(),
+ using FWarningMethod=bool (UFGWheeledVehicleRepresentation::*)(AActor*,FLinearColor&) const;
+ SUBSCRIBE_METHOD_EXPLICIT_VIRTUAL(FWarningMethod,UFGWheeledVehicleRepresentation::IsWarningIndicatorVisible,GetDefault<UFGWheeledVehicleRepresentation>(),
   ([](auto& Scope,const UFGWheeledVehicleRepresentation* Rep,AActor* Actor,FLinearColor& Color) {
    Scope(Rep,Actor,Color);
    if(!IsInGameThread() || !IsValid(Actor) || !Actor->HasAuthority()) return;
