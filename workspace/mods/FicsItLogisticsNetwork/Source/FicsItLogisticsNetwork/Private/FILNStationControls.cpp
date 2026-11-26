@@ -146,7 +146,6 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
  const auto Current=[&]() { return S->StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;}); };
  // Repeated status queries must not mutate filters; discovery reconciles saved settings.
  const auto* Before=Current();
- const auto SavedResource=FFILNStationSettings::Read(Target);
  FText BlockReason;
  if(S->bPreparingUninstall || S->bUninstallPrepared)
   BlockReason=NSLOCTEXT("FILN","SelectorUninstall","FILN uninstall preparation is active; configuration is locked.");
@@ -160,8 +159,6 @@ void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint
   BlockReason=NSLOCTEXT("FILN","SelectorLegacyFilter","Legacy external filter detected. FILN cannot safely take ownership; use a new station or report this save.");
  else if(S->bChangingFilters)
   BlockReason=NSLOCTEXT("FILN","SelectorTransaction","Another filter update is in progress. Retrying automatically.");
- else if(!Before && SavedResource)
-  BlockReason=NSLOCTEXT("FILN","SelectorSavedPending","Saved resource is waiting for native registration. Retrying automatically.");
  const bool Editable=BlockReason.IsEmpty();
  bool Accepted=!Mutate && Editable;
  FText Message=Editable?NSLOCTEXT("FILN","SelectorReady","Select one resource; changes are applied immediately"):BlockReason;
