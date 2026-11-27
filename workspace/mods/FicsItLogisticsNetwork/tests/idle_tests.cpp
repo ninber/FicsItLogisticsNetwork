@@ -19,5 +19,15 @@ int main(){
   auto bad=s; bad.*field=false; CHECK(Evaluate(bad)==Action::Release);
  }
  s.driver=true; CHECK(Evaluate(s)==Action::Release);
+ CHECK(MayRequestHomeDock(true,true,true,false,true,true,false,false,false));
+ CHECK(!MayRequestHomeDock(false,true,true,false,true,true,false,false,false));
+ CHECK(!MayRequestHomeDock(true,false,true,false,true,true,false,false,false));
+ CHECK(!MayRequestHomeDock(true,true,false,false,true,true,false,false,false));
+ CHECK(!MayRequestHomeDock(true,true,true,true,true,true,false,false,false));
+ CHECK(!MayRequestHomeDock(true,true,true,false,false,true,false,false,false));
+ CHECK(!MayRequestHomeDock(true,true,true,false,true,false,false,false,false));
+ CHECK(!MayRequestHomeDock(true,true,true,false,true,true,true,false,false));
+ CHECK(!MayRequestHomeDock(true,true,true,false,true,true,false,true,false));
+ CHECK(!MayRequestHomeDock(true,true,true,false,true,true,false,false,true));
  std::cout<<n<<" idle recovery checks passed\n";
 }

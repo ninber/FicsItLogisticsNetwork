@@ -1,5 +1,11 @@
 #pragma once
 namespace filn::idle {
+// Native docking handshake only; never bypass CanDock.
+inline bool MayRequestHomeDock(bool ownedRoute,bool homeValid,bool autopilot,bool driver,
+ bool nearby,bool stopped,bool foreignDock,bool docking,bool alreadyDocked) {
+ return ownedRoute && homeValid && autopilot && !driver && nearby && stopped &&
+        !foreignDock && !docking && !alreadyDocked;
+}
 enum class Action { Release, Hold, NativeReturn, RetryEmptyReturn };
 struct Snapshot {
  bool owned=false, idle=false, autopilot=false, driver=false, homeValid=false;

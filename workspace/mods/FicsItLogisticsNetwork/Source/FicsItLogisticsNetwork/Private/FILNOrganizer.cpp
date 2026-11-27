@@ -388,6 +388,10 @@ void UFILNOrganizer::RenderVehicles() {
   else { Status=FILNOString(Job,TEXT("state")); if(Status.IsEmpty()) Status=TEXT("Autopilot on"); }
   FILNOAddH(Head,FILNOText(WidgetTree,Status,13,DepotWarning?FILNOWarn():FILNOMuted(),DepotWarning)); FILNOAdd(Body,Head,4);
   if(DepotWarning) FILNOAdd(Body,FILNOText(WidgetTree,TEXT("Waiting for a free compatible depot · retrying automatically"),13,FILNOWarn()),4);
+  const auto Reason=FILNOString(Job,TEXT("error"));
+  if(Status==TEXT("Relocating") || Status==TEXT("Waiting at depot")) {
+   FILNOAdd(Body,FILNOText(WidgetTree,Reason.IsEmpty()?TEXT("No dispatch/parking reason recorded"):Reason,13,Status==TEXT("Relocating")?FILNOWarn():FILNOMuted()),3);
+  }
   auto* Route=WidgetTree->ConstructWidget<UWrapBox>(); Route->SetInnerSlotPadding(FVector2D(4,2));
   const auto& Nodes=FILNOValues(V,TEXT("route")); const int32 Target=static_cast<int32>(FILNONumber(V,TEXT("target"),-1));
   if(Nodes.IsEmpty()) Route->AddChildToWrapBox(FILNOText(WidgetTree,TEXT("No route"),13,FILNOMuted()));

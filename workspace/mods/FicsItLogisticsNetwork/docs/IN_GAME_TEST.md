@@ -33,3 +33,7 @@ Do not close either issue on portable test or compilation evidence alone.
 - In normal gameplay with no other menu open, press Ctrl+Shift+L; verify Organizer opens and Escape closes it. Repeat after closing a solid and fluid station, after save reload and after respawn. Verify no duplicate Organizer windows.
 - Check that typing in native text fields or the game console does not open Organizer and that pause/other active interactions remain unaffected.
 - Capture FILN_ORGANIZER_INPUT, FILN_ORGANIZER_SHORTCUT and FILN_ORGANIZER_OPEN logs on failure. The console command filn.organizer is an independent diagnostic entry point; close the console after issuing it.
+
+## Fluid fleet parking / dispatch regression
+- Fill six compatible fluid depots with six assigned trucks, each on its own one-node home route. Use powered empty LOAD depots with fuel; include a stopped truck physically within native docking range but not yet docked. No spare depot. Confirm native docking readback precedes Held, refueling and dispatch. Verify an actual crude oil delivery from a full provider to an empty configured requester; preserve cargo, ownership and native AP opt-out.
+- Repeat with driver present, AP off, occupied depot, outside docking range, and native CanDock rejection. No forced docking, synthetic cargo/fuel or fabricated delivery. Organizer vehicle row must expose parking reason; capture telemetry and actual native route and fuel state.
