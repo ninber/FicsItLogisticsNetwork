@@ -11,6 +11,8 @@ class UBlueprint;
 struct FFILNStationSettings {
  static bool IsDedicated(const AFGBuildableDockingStation* Station);
  static bool HasProperty(const AFGBuildableDockingStation* Station);
+ // Only newly authored assets with an unset marker need legacy registry migration.
+ static bool NeedsLegacySelectionMigration(const AFGBuildableDockingStation* Station);
  static TSubclassOf<UFGItemDescriptor> Read(const AFGBuildableDockingStation* Station);
  static bool Write(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource);
 };

@@ -1,5 +1,6 @@
 #include "LogisticsSubsystem.h"
 #include "FILNPlayerWorkflow.h"
+#include "FILNSelectorPolicy.h"
 #include "FILNBlueprintSettings.h"
 #include "Buildables/FGBuildableDockingStation.h"
 #include "WheeledVehicles/FGVehicleSubsystem.h"
@@ -65,7 +66,7 @@ bool ALogisticsSubsystem::StoreDesiredStationResource(AFGBuildableDockingStation
  return true;
 }
 bool ALogisticsSubsystem::StationDesiredMatches(AFGBuildableDockingStation* B,TSubclassOf<UFGItemDescriptor> ActiveResource) const {
- return IsValid(B) && DesiredStationResource(B)==ActiveResource;
+ return IsValid(B) && filn::selector::NewDispatchAllowed(DesiredStationResource(B)==ActiveResource);
 }
 void ALogisticsSubsystem::ReconcileStationSelection(AFGDockingStationIdentifier* ID) {
  auto* B=IsValid(ID)?ID->GetStation():nullptr;
@@ -76,8 +77,8 @@ void ALogisticsSubsystem::ReconcileStationSelection(AFGDockingStationIdentifier*
  if(Desired!=Active) {
   // Existing leases and native fluid contents belong to the old operation.
   // Only the new assignment is suspended; never mutate cargo or active jobs.
-  if(B->GetDockedActor() || Reservations.StationBusy(FILNPlayerGuidKey(StationId(ID)))) return;
-  if(Desired && !StationAcceptsResource(B,Desired)) return;
+  if(!filn::selector::CanReconcile(B->GetDockedActor()!=nullptr,
+     Reservations.StationBusy(FILNPlayerGuidKey(StationId(ID))),!Desired || StationAcceptsResource(B,Desired))) return;
   if(!(Desired?ConfigureStation(ID,Desired):RemoveStation(ID))) return;
   UE_LOG(LogFILN,Log,TEXT("FILN_DESIRED_RESOURCE_APPLIED station=%s resource=%s"),*B->GetPathName(),*GetPathNameSafe(Desired.Get()));
  }

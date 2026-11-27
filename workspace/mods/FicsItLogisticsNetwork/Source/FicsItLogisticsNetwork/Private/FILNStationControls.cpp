@@ -79,7 +79,9 @@ bool FILNSelectorIsDepot(AFGBuildableDockingStation* Target) {
    if(auto* Box=Cast<UVerticalBox>(Child)) return Box;
    if(auto* Panel=Cast<UPanelWidget>(Child))
     for(int32 J=0;J<Panel->GetChildrenCount();++J)
-     if(auto* Item=Panel->GetChildAt(J)) Queue.Add(Item);
+     if(auto* Item=Panel->GetChildAt(J); Item && Item->GetVisibility()!=ESlateVisibility::Collapsed && Item->GetVisibility()!=ESlateVisibility::Hidden) Queue.Add(Item);
+   if(auto* Nested=Cast<UUserWidget>(Child))
+    if(auto* Root=Nested->GetRootWidget(); Root && Root!=Child) Queue.AddUnique(Root);
   }
   return nullptr;
  }
@@ -298,7 +300,7 @@ void UFILNResourceSelector::StopRefresh() {
 }
 void UFILNResourceSelector::RefreshIfBlocked() {
  if(!bFilterOpen || !bInitialized || !Station.IsValid()) { StopRefresh(); return; }
- if(!Parts || Parts->IsOpen() || (PendingRequest && FPlatformTime::Seconds()<RequestDeadline)) return;
+ if(!Parts || !filn::selector::CanRefresh(Parts->IsOpen(),PendingRequest,FPlatformTime::Seconds(),RequestDeadline)) return;
  PendingRequest=0;
  if(!bChoicesReady && AFGRecipeManager::Get(GetWorld())) {
   const FString Previous=Parts->GetSelectedOption();
@@ -332,7 +334,7 @@ void UFILNResourceSelector::Reply(AFGBuildableDockingStation* Target,uint32 Requ
  PendingRequest=0;
  if(!Accepted) return; // retry the latest intent, never revert the visible selection
  if(bAwaitingSelection) {
-  if(Resource==DesiredResource) { bAwaitingSelection=false; bNeedsQuery=false; }
+  if(filn::selector::SelectionAcknowledged(Accepted,Resource==DesiredResource)) { bAwaitingSelection=false; bNeedsQuery=false; }
   return;
  }
  if(Parts->IsOpen()) { bNeedsQuery=true; return; }

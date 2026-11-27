@@ -14,3 +14,17 @@ Prerequisites: matching CSS/SML/game, clean native Win64 build/cook and verified
 8. Inspect Win64 archive and actual cooked imports; no TruckStationSettings/Lua/UE4SS/DataForge dependency. Verify isolated SMM loading only with user authorization.
 
 Record actual results in [acceptance matrix](../../../specs/014-native-completion/acceptance.json). Failed or absent requirements remain unresolved. Host tests, route setters, asset headers and editor compilation alone do not establish gameplay.
+
+## Release-blocking filter regressions (#5 and #6)
+
+These are required native acceptance checks, not evidence of success.
+
+- Build one solid and one fluid FILN logistics station and both depot types. Confirm the logistics stations expose FILTERS and depots do not.
+- Select a resource before connecting the station or registering any vehicle. Change it rapidly three times, then clear; reopen and check that the last edit remains. Keep the dropdown open for more than ten seconds during dispatcher refresh.
+- In Blueprint Designer select a solid and a fluid resource on the corresponding station. Save, place two copies, change and resave the original blueprint, then clear and resave. Verify each placed copy has its own exact desired selection.
+- Save/reload the world during an outstanding filter change; verify the previous active filter remains for an already reserved delivery while the latest desired filter is retained. Verify no new old-resource delivery is assigned; after undocking and release, the new resource or clear is applied.
+- For a fluid station containing fluid A, choose fluid B while connected or reserved. The selection must remain editable and visibly B, while incompatible new delivery is excluded and fluid A is not deleted. Drain or disconnect incompatible fluid normally and verify B becomes operational without reselecting it. Repeat with gas and clearing.
+- Check ordinary stations, inactive dispatcher, station without path nodes, and multiplayer. Keep native storage controls intact in both solid and fluid UI. No internal diagnostic messages should appear in FILTERS.
+- Verify a legacy save whose configured station predates actor resource persistence is migrated only if the actor has never saved an explicit selection. Verify an explicit clear is not resurrected on reload.
+
+Do not close either issue on portable test or compilation evidence alone.

@@ -185,6 +185,9 @@ void ALogisticsSubsystem::Rebuild() {
   ConfigActors.Add(C.Station); StationId(C.Station);
   // Keep the last operational resource on load. The saved desired resource
   // (including an explicit clear) is reconciled after job leases are restored.
+  // Migrate only older actors with no explicit saved selection marker.
+  if(!C.ExternalFilter && C.Resource && FFILNStationSettings::NeedsLegacySelectionMigration(B))
+   FFILNStationSettings::Write(B,C.Resource);
   if(!C.ExternalFilter && C.Resource && ValidateStationSlots(C)) {
    if(!ApplyStationFilter(C)) RegistryIssue(FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName()));
   } else RegistryIssue(FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName()));
