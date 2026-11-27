@@ -6,7 +6,7 @@
 
 *An in-game view of an industrial city — the scale of factory logistics FILN is designed to support.*
 
-`0.01b · Early Beta` • `0.0.1-beta.1` • `Native C++ / SML 3.12.1`
+`0.02b · Early Beta` • `0.0.2-beta.1` • `Native C++ / SML 3.12.1`
 
 [Quick start](#quick-start) · [How dispatch works](#how-dispatch-works) · [Logistics Organizer](#5-monitor-your-network) · [Troubleshooting](#troubleshooting) · [Development](#development) · [Report a bug](https://github.com/ninber/FicsItLogisticsNetwork/issues)
 
@@ -165,7 +165,7 @@ Solid and fluid logistics follow the same operating principles. Fluid transporta
 
 If the issue persists, report it rather than repeatedly changing routes or removing FILN from an important save.
 
-## Early Beta — 0.01b
+## Early Beta — 0.02b
 
 This is a very early experimental release intended for community testing and feedback. Some features may be incomplete or behave unexpectedly.
 
@@ -178,7 +178,7 @@ This is a very early experimental release intended for community testing and fee
 
 ## Development
 
-The canonical implementation is [Spec Kit feature 014](workspace/specs/014-native-completion/spec.md). See the [consistency audit](workspace/specs/014-native-completion/consistency-audit.md), [release requirements](workspace/RELEASE.md), [beta release notes](workspace/RELEASE-0.0.1-beta.1.md), [development setup](DEVELOPMENT.md), [native build instructions](workspace/mods/FicsItLogisticsNetwork/docs/HEADLESS.md) and [acceptance matrix](workspace/specs/014-native-completion/acceptance.json).
+The canonical implementation is [Spec Kit feature 014](workspace/specs/014-native-completion/spec.md). See the [consistency audit](workspace/specs/014-native-completion/consistency-audit.md), [release requirements](workspace/RELEASE.md), [beta release notes](workspace/RELEASE-0.0.2-beta.1.md), [development setup](DEVELOPMENT.md), [native build instructions](workspace/mods/FicsItLogisticsNetwork/docs/HEADLESS.md) and [acceptance matrix](workspace/specs/014-native-completion/acceptance.json).
 
 - `workspace/mods/FicsItLogisticsNetwork`: canonical native SML C++ mod. Dispatch, home ownership/overflow, transfer receipts, station resource selection, native Organizer and dashboard telemetry are implemented in source; outstanding shipping/runtime acceptance remains required.
 - `workspace/experiments/FILNLua`: separate historical UE4SS/KDataForge experiment and behavior reference, not native runtime. Its dashboard frontend is reused by the native read-only service. Do not install the Lua dispatcher alongside native tests.
