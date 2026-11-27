@@ -8,13 +8,28 @@ import zipfile
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'verify-native-package.py'
 class NativePackageVerifierTests(unittest.TestCase):
-    def probe(self, files):
+    def probe(self, files, expected=None):
         with tempfile.TemporaryDirectory() as temp:
             archive = Path(temp) / 'test.zip'
             with zipfile.ZipFile(archive, 'w') as output:
                 for name, data in files.items():
                     output.writestr(name, data)
-            return subprocess.run(['python3', str(SCRIPT), str(archive)], capture_output=True, text=True)
+            args = ['python3', str(SCRIPT), str(archive)]
+            if expected is not None:
+                source = Path(temp) / 'expected.uplugin'
+                source.write_text(json.dumps(expected), encoding='utf-8')
+                args += ['--expected-descriptor', str(source)]
+            return subprocess.run(args, capture_output=True, text=True)
+    def test_previous_valid_version_is_rejected(self):
+        expected = {'FileVersion':3,'Version':1,'VersionName':'0.02b','SemVersion':'0.0.2-beta.1','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'3.12.1'}]}
+        for key, old in [('Version',0),('VersionName','0.01b'),('SemVersion','0.0.1-beta.1'),('Plugins',[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'}])]:
+            with self.subTest(key=key):
+                result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(dict(expected, **{key:old}))}, expected)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Archive descriptor mismatch for '+key, result.stderr)
+        result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(expected)}, expected)
+        self.assertIn('PASS archive descriptor matches', result.stdout)
+        self.assertIn('Missing FILN Win64 DLL', result.stderr)
     def test_source_handoff_is_not_release(self):
         result = self.probe({'Source/module.cpp': '// source'})
         self.assertNotEqual(result.returncode, 0)

@@ -66,8 +66,27 @@ case "$action" in
     flock -n 9 || { echo "Native build already running" >&2; exit 75; }
     bash "$SATISFACTORY_MODDING_ROOT/scripts/verify-windows-sdk.sh"
     python3 "$SATISFACTORY_MODDING_ROOT/scripts/check-native-prerequisites.py" "$SATISFACTORY_PROJECT" --require-depot
+    # Quarantine previous outputs so a no-op/misrouted package cannot pass by
+    # reusing an old ZIP. Preserve them for diagnostics, never touch game saves.
+    project_dir=$(dirname -- "$SATISFACTORY_PROJECT")
+    archive_dir="$project_dir/Saved/ArchivedPlugins/FicsItLogisticsNetwork"
+    archive="$archive_dir/FicsItLogisticsNetwork-Windows.zip"
+    descriptor="$project_dir/Mods/FicsItLogisticsNetwork/FicsItLogisticsNetwork.uplugin"
+    canonical="$SATISFACTORY_MODDING_ROOT/workspace/mods/FicsItLogisticsNetwork/FicsItLogisticsNetwork.uplugin"
+    cmp -s -- "$descriptor" "$canonical" || { echo 'BLOCKED: StarterProject descriptor differs from canonical source' >&2; exit 1; }
+    report=$(mktemp -d "$SATISFACTORY_MODDING_ROOT/logs/package.XXXXXX")
+    cp -- "$descriptor" "$report/expected.uplugin"
+    if [[ -e "$archive_dir" || -L "$archive_dir" ]]; then
+      mv -- "$archive_dir" "$report/previous-archive"
+      printf 'Preserved prior package: %s\n' "$report/previous-archive"
+    fi
     source "$SATISFACTORY_MODDING_ROOT/scripts/win64-paths.sh"
     uat="$UE_ROOT/Engine/Build/BatchFiles/RunUAT.sh"
-    "$uat" -NoCompile "-ScriptsForProject=$SATISFACTORY_PROJECT" PackagePlugin "-project=$SATISFACTORY_PROJECT" -clientconfig=Shipping -serverconfig=Shipping -utf8output -DLCName=FicsItLogisticsNetwork -platform=Win64 -build -nocompileeditor -installed 9>&- ;;
+    "$uat" -NoCompile "-ScriptsForProject=$SATISFACTORY_PROJECT" PackagePlugin "-project=$SATISFACTORY_PROJECT" -clientconfig=Shipping -serverconfig=Shipping -utf8output -DLCName=FicsItLogisticsNetwork -platform=Win64 -build -nocompileeditor -installed 9>&-
+    [[ -s "$archive" ]] || { echo "BLOCKED: UAT did not produce expected archive: $archive" >&2; exit 1; }
+    cmp -s -- "$descriptor" "$report/expected.uplugin" && cmp -s -- "$canonical" "$report/expected.uplugin" || { echo 'BLOCKED: source descriptor changed during packaging' >&2; exit 1; }
+    python3 "$SATISFACTORY_MODDING_ROOT/scripts/verify-native-package.py" "$archive" --expected-descriptor "$report/expected.uplugin"
+    sha256sum -- "$archive" | tee "$report/archive.sha256"
+    printf 'Verified package evidence: %s\n' "$report" ;;
   *) echo 'Usage: bash scripts/headless.sh {test|build|native|uht|integration|author-depot|prepare-uat|sdk|turnkey|package}' >&2; exit 2 ;;
 esac

@@ -2,12 +2,12 @@
 """Fail closed when an Alpakit archive is missing native release evidence."""
 import json
 import re
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import sys
 import zipfile
 
-if len(sys.argv) != 2:
-    sys.exit('Usage: python3 scripts/verify-native-package.py <Alpakit ZIP>')
+if len(sys.argv) not in (2, 4) or (len(sys.argv) == 4 and sys.argv[2] != '--expected-descriptor'):
+    sys.exit('Usage: python3 scripts/verify-native-package.py <Alpakit ZIP> [--expected-descriptor <source .uplugin>]')
 try:
     with zipfile.ZipFile(sys.argv[1]) as archive:
         bad = archive.testzip()
@@ -28,6 +28,12 @@ try:
         if len(descriptors) != 1:
             raise ValueError('Expected exactly one FILN descriptor')
         meta = json.loads(archive.read(descriptors[0]))
+        if len(sys.argv) == 4:
+            expected = json.loads(Path(sys.argv[3]).read_text(encoding='utf-8'))
+            for key in ('FileVersion', 'Version', 'VersionName', 'SemVersion', 'GameVersion', 'Plugins'):
+                if key not in expected or meta.get(key) != expected[key]:
+                    raise ValueError(f'Archive descriptor mismatch for {key}: expected {expected.get(key)!r}, got {meta.get(key)!r}')
+            print('PASS archive descriptor matches current source version and dependency metadata')
         deps = meta.get('Plugins', [])
         if (not isinstance(deps, list) or len(deps) != 1 or not isinstance(deps[0], dict)
                 or deps[0].get('Name') != 'SML' or deps[0].get('Enabled') is not True
