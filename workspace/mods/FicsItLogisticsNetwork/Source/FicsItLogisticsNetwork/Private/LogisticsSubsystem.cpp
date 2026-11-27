@@ -39,7 +39,7 @@ bool ALogisticsSubsystem::ShouldSave_Implementation() const {
  // A prepared, empty subsystem has no state to serialize into vanilla saves.
  // Keep invalid/conflicted metadata for diagnosis instead of dropping it.
  return SchemaVersion!=1 || bDispatchBlocked || (!bUninstallPrepared && bAutoDispatchEnabled) || !Registrations.IsEmpty() ||
-  !StationConfigs.IsEmpty() || !DepotStations.IsEmpty() || !Stations.IsEmpty() || (!bUninstallPrepared && (!NetworkNameCounters.IsEmpty() || !PendingDepotMembership.IsEmpty() || NetworkSwatch || !NetworkPaint.IsEmpty()));
+  !StationConfigs.IsEmpty() || !DesiredStationConfigs.IsEmpty() || !DepotStations.IsEmpty() || !Stations.IsEmpty() || (!bUninstallPrepared && (!NetworkNameCounters.IsEmpty() || !PendingDepotMembership.IsEmpty() || NetworkSwatch || !NetworkPaint.IsEmpty()));
 }
 bool ALogisticsSubsystem::SetDispatchEnabled(bool Enabled) {
  if(!HasAuthority() || (Enabled && (!bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bChangingFilters))) return false;
@@ -183,15 +183,16 @@ void ALogisticsSubsystem::Rebuild() {
    RegistryIssue(FString::Printf(TEXT("Designer setting requires authored SaveGame property: %s"),*B->GetPathName())); ++I; continue;
   }
   ConfigActors.Add(C.Station); StationId(C.Station);
-  if(FFILNStationSettings::HasProperty(B) && !C.ExternalFilter) {
-   if(const auto SavedResource=FFILNStationSettings::Read(B)) C.Resource=SavedResource;
-   else if(C.Resource) FFILNStationSettings::Write(B,C.Resource);
-  }
+  // Keep the last operational resource on load. The saved desired resource
+  // (including an explicit clear) is reconciled after job leases are restored.
   if(!C.ExternalFilter && C.Resource && ValidateStationSlots(C)) {
    if(!ApplyStationFilter(C)) RegistryIssue(FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName()));
   } else RegistryIssue(FString::Printf(TEXT("Station filter validation pending: %s"),*C.Station->GetPathName()));
   ++I;
  }
+ DesiredStationConfigs.RemoveAll([this](const FFILNDesiredStationConfig& D) {
+  return !IsValid(D.Station) || D.Station->GetWorld()!=GetWorld() || D.Station->IsBuildableInsideBlueprintDesigner();
+ });
  FilterRepairCursor=0;
  // Recreate reservations only for jobs with consistent current actor identity.
  // Invalid jobs are retired to native parking with their real cargo intact.
@@ -335,7 +336,7 @@ bool ALogisticsSubsystem::ChangeStationFilters(const TArray<FFILNStationConfig>&
 }
 bool ALogisticsSubsystem::ConfigureStation(AFGDockingStationIdentifier* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  auto* B=Building(Station); auto* Inventory=IsValid(B)?B->GetInventory():nullptr;
- if(bDispatchBlocked || !bRegistryValidated || bChangingFilters || bPreparingUninstall || !HasAuthority() || !IsValid(Station) || Station->GetWorld()!=GetWorld() || !IsValid(Inventory) || !Resource || Inventory->GetSizeLinear()<=0 || Inventory->GetSizeLinear()>4096 || B->GetDockedActor()) return false;
+ if(bDispatchBlocked || !bRegistryValidated || bChangingFilters || bPreparingUninstall || bUninstallPrepared || !HasAuthority() || !IsValid(Station) || Station->GetWorld()!=GetWorld() || !IsValid(Inventory) || !Resource || Inventory->GetSizeLinear()<=0 || Inventory->GetSizeLinear()>4096 || B->GetDockedActor()) return false;
  if(IsDepot(Station) || B->IsBuildableInsideBlueprintDesigner() || Reservations.StationBusy(Key(StationId(Station))) || !StationAcceptsResource(B,Resource)) return false;
  if(FFILNStationSettings::IsDedicated(B) && !FFILNStationSettings::HasProperty(B)) return false;
  // Explicit selection, never inference from stock. Native cargo and slot
@@ -412,7 +413,7 @@ bool ALogisticsSubsystem::PrepareStationsForUninstall() {
  for(const auto& Depot:DepotStations) if(auto* B=Building(Depot); IsValid(B)) {
   if(auto* Marker=B->FindComponentByClass<UFILNStationMarker>()) Marker->DestroyComponent();
  }
- StationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty();
+ StationConfigs.Empty(); DesiredStationConfigs.Empty(); Registrations.Empty(); Stations.Empty(); DepotStations.Empty();
  NamedNetworkStations.Empty(); NamedNetworkVehicles.Empty(); KnownNetworkProviders.Empty(); NetworkNameCounters.Empty();
  bUninstallPrepared=true; Rebuild();
  return bRegistryValidated && !bDispatchBlocked;

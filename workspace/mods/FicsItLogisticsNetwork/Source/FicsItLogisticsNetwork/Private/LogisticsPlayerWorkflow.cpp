@@ -35,12 +35,53 @@ bool ALogisticsSubsystem::VehicleStationCompatible(AFGWheeledVehicle* Vehicle,AF
 bool ALogisticsSubsystem::StationResourceMatches(const FFILNStationConfig& C) const {
  auto* B=IsValid(C.Station)?C.Station->GetStation():nullptr;
  auto* I=IsValid(B)?B->GetInventory():nullptr;
- if(!IsValid(I) || B->IsBuildableInsideBlueprintDesigner() || (FFILNStationSettings::IsDedicated(B) && (!FFILNStationSettings::HasProperty(B) || FFILNStationSettings::Read(B)!=C.Resource)) || !StationAcceptsResource(B,C.Resource) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
+ if(!IsValid(I) || B->IsBuildableInsideBlueprintDesigner() || (FFILNStationSettings::IsDedicated(B) && !FFILNStationSettings::HasProperty(B)) || !StationAcceptsResource(B,C.Resource) || I->GetSizeLinear()<=0 || I->GetSizeLinear()>4096) return false;
  // Retired external records are not owned filters. Never infer or restore their
  // configuration from another actor's fields or from current stock.
  if(C.ExternalFilter || C.OriginalFilters.Num()!=I->GetSizeLinear()) return false;
  for(int32 Slot=0;Slot<I->GetSizeLinear();++Slot) if(I->GetAllowedItemOnIndex(Slot)!=C.OriginalFilters[Slot]) return false;
  return HasDockFilter(C);
+}
+TSubclassOf<UFGItemDescriptor> ALogisticsSubsystem::DesiredStationResource(AFGBuildableDockingStation* B) const {
+ if(!IsValid(B)) return nullptr;
+ if(FFILNStationSettings::HasProperty(B)) return FFILNStationSettings::Read(B);
+ if(const auto* D=DesiredStationConfigs.FindByPredicate([B](const FFILNDesiredStationConfig& E){return E.Station==B;})) return D->Resource;
+ const auto* ID=B->GetStationIdentifier();
+ const auto* C=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& E){return E.Station==ID;});
+ return C?C->Resource:TSubclassOf<UFGItemDescriptor>();
+}
+bool ALogisticsSubsystem::StoreDesiredStationResource(AFGBuildableDockingStation* B,TSubclassOf<UFGItemDescriptor> Resource) {
+ if(!HasAuthority() || !IsValid(B) || B->GetWorld()!=GetWorld() || !B->HasAuthority()) return false;
+ if(FFILNStationSettings::HasProperty(B)) {
+  if(!FFILNStationSettings::Write(B,Resource)) return false;
+ } else {
+  // The world registry cannot serialize a reusable designer template.
+  if(B->IsBuildableInsideBlueprintDesigner()) return false;
+  auto* D=DesiredStationConfigs.FindByPredicate([B](const FFILNDesiredStationConfig& E){return E.Station==B;});
+  if(!D) { FFILNDesiredStationConfig New; New.Station=B; D=&DesiredStationConfigs.Add_GetRef(New); }
+  D->Resource=Resource;
+ }
+ ResetScan();
+ return true;
+}
+bool ALogisticsSubsystem::StationDesiredMatches(AFGBuildableDockingStation* B,TSubclassOf<UFGItemDescriptor> ActiveResource) const {
+ return IsValid(B) && DesiredStationResource(B)==ActiveResource;
+}
+void ALogisticsSubsystem::ReconcileStationSelection(AFGDockingStationIdentifier* ID) {
+ auto* B=IsValid(ID)?ID->GetStation():nullptr;
+ if(!IsValid(B) || B->IsBuildableInsideBlueprintDesigner() || IsDepot(ID)) return;
+ const auto Desired=DesiredStationResource(B);
+ const auto* Config=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
+ const auto Active=Config?Config->Resource:TSubclassOf<UFGItemDescriptor>();
+ if(Desired!=Active) {
+  // Existing leases and native fluid contents belong to the old operation.
+  // Only the new assignment is suspended; never mutate cargo or active jobs.
+  if(B->GetDockedActor() || Reservations.StationBusy(FILNPlayerGuidKey(StationId(ID)))) return;
+  if(Desired && !StationAcceptsResource(B,Desired)) return;
+  if(!(Desired?ConfigureStation(ID,Desired):RemoveStation(ID))) return;
+  UE_LOG(LogFILN,Log,TEXT("FILN_DESIRED_RESOURCE_APPLIED station=%s resource=%s"),*B->GetPathName(),*GetPathNameSafe(Desired.Get()));
+ }
+ DesiredStationConfigs.RemoveAll([B](const FFILNDesiredStationConfig& D){return D.Station==B;});
 }
 void ALogisticsSubsystem::DiscoverDepots() {
  if(!HasAuthority() || !bRegistryValidated || bDispatchBlocked || bPreparingUninstall || bUninstallPrepared || bChangingFilters) return;
@@ -56,13 +97,7 @@ void ALogisticsSubsystem::DiscoverDepots() {
   auto* ID=PlayerStationScan[PlayerStationCursor++].Get();
   auto* B=IsValid(ID)?ID->GetStation():nullptr;
   if(!IsValid(B) || B->IsBuildableInsideBlueprintDesigner()) continue;
-  if(FFILNStationSettings::HasProperty(B) && !IsDepot(ID)) {
-   const auto Saved=FFILNStationSettings::Read(B);
-   const auto* Config=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
-   if(Saved && (!Config || Config->Resource!=Saved)) {
-    if(ConfigureStation(ID,Saved)) UE_LOG(LogFILN,Log,TEXT("FILN_BLUEPRINT_RESOURCE_REGISTERED station=%s resource=%s"),*B->GetPathName(),*GetPathNameSafe(Saved.Get()));
-   }
-  }
+  ReconcileStationSelection(ID);
   const bool Network=IsNetworkStation(ID);
   if(Network) NameNetworkStation(ID);
   UpdateNetworkPaint(ID,ID->GetStation(),Network);

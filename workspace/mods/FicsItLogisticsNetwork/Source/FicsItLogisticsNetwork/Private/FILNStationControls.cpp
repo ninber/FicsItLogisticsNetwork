@@ -16,6 +16,7 @@
 #include "UI/FGGameUI.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/VerticalBox.h"
+#include "Components/PanelWidget.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -59,11 +60,27 @@ bool FILNSelectorIsDepot(AFGBuildableDockingStation* Target) {
 }
 // Resolve the actual inventory container by instance or reflected property.
  // Do not reject a solid/fluid widget merely because its BP class path differs.
- UVerticalBox* FILNSelectorContainer(UFGInteractWidget* Widget) {
+ UVerticalBox* FILNNativeStorageContainer(UFGInteractWidget* Widget) {
   if(!IsValid(Widget)) return nullptr;
   if(auto* Box=Cast<UVerticalBox>(Widget->GetWidgetFromName(TEXT("mInventoryContainer")))) return Box;
   if(auto* Prop=FindFProperty<FObjectPropertyBase>(Widget->GetClass(),TEXT("mInventoryContainer")))
    if(auto* Box=Cast<UVerticalBox>(Prop->GetObjectPropertyValue_InContainer(Widget))) return Box;
+  return nullptr;
+ }
+ // Fluid interaction widgets need not expose the solid inventory box.
+ // Prefer a shallow native vertical layout and keep all its children visible.
+ UVerticalBox* FILNSelectorContainer(UFGInteractWidget* Widget) {
+  if(auto* Box=FILNNativeStorageContainer(Widget)) return Box;
+  if(!IsValid(Widget)) return nullptr;
+  TArray<UWidget*> Queue;
+  if(auto* Root=Widget->GetRootWidget()) Queue.Add(Root);
+  for(int32 I=0;I<Queue.Num();++I) {
+   auto* Child=Queue[I];
+   if(auto* Box=Cast<UVerticalBox>(Child)) return Box;
+   if(auto* Panel=Cast<UPanelWidget>(Child))
+    for(int32 J=0;J<Panel->GetChildrenCount();++J)
+     if(auto* Item=Panel->GetChildAt(J)) Queue.Add(Item);
+  }
   return nullptr;
  }
  UFILNResourceSelector* FILNFindSelector(UVerticalBox* Container) {
@@ -90,7 +107,11 @@ bool FILNSelectorIsDepot(AFGBuildableDockingStation* Target) {
  }
 bool FILNSelectorMedium(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource) {
  if(!Station || !Resource) return false;
- const auto Form=UFGItemDescriptor::GetForm(Resource), Medium=Station->GetDockingStationResourceForm();
+ const auto Form=UFGItemDescriptor::GetForm(Resource);
+ auto Medium=Station->GetDockingStationResourceForm();
+ // Designer instances can precede initialization of native storage.
+ if(FFILNStationSettings::IsDedicated(Station))
+  Medium=Station->GetClass()->GetPathName().Contains(TEXT("Build_FILNFluidStation"))?EResourceForm::RF_LIQUID:EResourceForm::RF_SOLID;
  return (Medium==EResourceForm::RF_SOLID && Form==EResourceForm::RF_SOLID) ||
    ((Medium==EResourceForm::RF_LIQUID || Medium==EResourceForm::RF_GAS) &&
     (Form==EResourceForm::RF_LIQUID || Form==EResourceForm::RF_GAS));
@@ -119,81 +140,26 @@ void UFILNResourceRemote::SelectResource_Implementation(AFGBuildableDockingStati
 }
 void UFILNResourceRemote::HandleResource(AFGBuildableDockingStation* Target,uint32 RequestId,bool Mutate,TSubclassOf<UFGItemDescriptor> Resource) {
  auto* World=GetWorld(); auto* Player=GetOwnerPlayerCharacter();
- auto* ID=IsValid(Target)?Target->GetStationIdentifier():nullptr;
  auto* S=FILNSelectorSubsystem(World);
- // Designer instances have no live route or registry identity requirement.
- if(RequestId && World && IsValid(Player) && IsValid(Target) && Target->GetWorld()==World && Target->HasAuthority() &&
-    Target->IsBuildableInsideBlueprintDesigner() && FVector::DistSquared(Player->GetActorLocation(),Target->GetActorLocation())<=FMath::Square(2000.f)) {
-  const bool Editable=FFILNStationSettings::HasProperty(Target) && !FILNSelectorIsDepot(Target);
-  bool Accepted=Editable;
-  if(Mutate && Editable) {
-   const double Now=FPlatformTime::Seconds(); auto* Recipes=AFGRecipeManager::Get(World);
-   Accepted=Now-LastMutation>=0.2 && (!Resource || (Recipes && Recipes->IsItemDescriptorAvailable(Resource) && ALogisticsSubsystem::StationAcceptsResource(Target,Resource)));
-   if(Accepted) { LastMutation=Now; Accepted=FFILNStationSettings::Write(Target,Resource); }
-  }
-  ResourceReply(Target,RequestId,Accepted,Editable,FFILNStationSettings::Read(Target),Accepted?
-   NSLOCTEXT("FILN","BlueprintResourceSaved","Resource stored in this blueprint station"):
-   NSLOCTEXT("FILN","BlueprintResourceRejected","Blueprint setting rejected or station asset needs rebuilding"));
-  return;
- }
- if(!RequestId || !World || !IsValid(Player) || !IsValid(Target) || Target->GetWorld()!=World || !Target->HasAuthority() ||
-    !IsValid(ID) || ID->GetStation()!=Target || FVector::DistSquared(Player->GetActorLocation(),Target->GetActorLocation())>FMath::Square(2000.f) ||
-    !IsValid(S)) {
-  if(Mutate) UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_REJECTED invalid context or subsystem"));
-  ResourceReply(Target,RequestId,false,false,nullptr,NSLOCTEXT("FILN","SelectorInvalidContext","Station interaction or FILN subsystem unavailable. Retrying while FILTERS is open."));
-  return;
- }
- const auto Current=[&]() { return S->StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;}); };
- // Repeated status queries must not mutate filters; discovery reconciles saved settings.
- const auto* Before=Current();
- FText BlockReason;
- if(S->bPreparingUninstall || S->bUninstallPrepared)
-  BlockReason=NSLOCTEXT("FILN","SelectorUninstall","FILN uninstall preparation is active; configuration is locked.");
- else if(!S->bRegistryValidated || S->bDispatchBlocked)
-  BlockReason=NSLOCTEXT("FILN","SelectorRegistry","FILN registry is not ready. Retrying automatically.");
- else if(S->IsDepot(ID))
-  BlockReason=NSLOCTEXT("FILN","SelectorDepot","Depots are for parking and fuel, not cargo filters.");
- else if(FFILNStationSettings::IsDedicated(Target) && !FFILNStationSettings::HasProperty(Target))
-  BlockReason=NSLOCTEXT("FILN","SelectorMissingProperty","Station asset lacks its FILN resource setting; check the installed mod version.");
- else if(Before && Before->ExternalFilter)
-  BlockReason=NSLOCTEXT("FILN","SelectorLegacyFilter","Legacy external filter detected. FILN cannot safely take ownership; use a new station or report this save.");
- else if(S->bChangingFilters)
-  BlockReason=NSLOCTEXT("FILN","SelectorTransaction","Another filter update is in progress. Retrying automatically.");
- const bool Editable=BlockReason.IsEmpty();
- bool Accepted=!Mutate && Editable;
- FText Message=Editable?NSLOCTEXT("FILN","SelectorReady","Select one resource; changes are applied immediately"):BlockReason;
- if(Mutate && Editable) {
-  const double Now=FPlatformTime::Seconds();
-  auto* Recipes=AFGRecipeManager::Get(World);
-  if(Now-LastMutation<0.2) Message=NSLOCTEXT("FILN","SelectorRate","Selection rejected: request too soon");
-  else {
-   LastMutation=Now;
-   if(Resource && (!Recipes || !Recipes->IsItemDescriptorAvailable(Resource) || !S->StationAcceptsResource(Target,Resource)))
-    Message=NSLOCTEXT("FILN","SelectorIncompatible","Selection rejected: unavailable or incompatible resource");
-   else if(Target->GetDockedActor())
-    Message=NSLOCTEXT("FILN","SelectorDocked","A vehicle is docked. Wait for it to leave, then select the resource again.");
-   else if(S->Reservations.StationBusy(TCHAR_TO_UTF8(*S->StationId(ID).ToString())))
-    Message=NSLOCTEXT("FILN","SelectorReserved","An active delivery has reserved this station. Wait for the delivery to finish, then select the resource again.");
-   else {
-    const bool Changed=Resource?S->ConfigureStation(ID,Resource):S->RemoveStation(ID);
-    const auto* After=Current();
-    Accepted=filn::selector::Confirmed(Changed,!Resource,After!=nullptr,After && S->StationResourceMatches(*After),After && After->Resource==Resource);
-    if(Changed && !Accepted) {
-     S->RegistryDiagnostics.AddUnique(FString::Printf(TEXT("Selector readback failed: %s"),*Target->GetPathName()));
-     UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_READBACK_FAILED %s"),*Target->GetPathName());
-    }
-    Message=Accepted?NSLOCTEXT("FILN","SelectorApplied","Resource selection confirmed by native inventory"):
-      NSLOCTEXT("FILN","SelectorRejected","Selection rejected: undocked, unreserved and compatible station required; check native filters");
-   }
+ const bool Valid=RequestId && World && IsValid(Player) && IsValid(Target) && Target->GetWorld()==World && Target->HasAuthority() &&
+  FVector::DistSquared(Player->GetActorLocation(),Target->GetActorLocation())<=FMath::Square(2000.f) &&
+  !FILNSelectorIsDepot(Target);
+ bool Accepted=Valid;
+ if(Valid && Mutate) {
+  // Validate only the choice's type, never current stock or operational readiness.
+  Accepted=!Resource || FILNSelectorMedium(Target,Resource);
+  if(Accepted) {
+   if(FFILNStationSettings::HasProperty(Target)) {
+    Accepted=FFILNStationSettings::Write(Target,Resource);
+    if(Accepted && IsValid(S)) S->ResetScan();
+   } else Accepted=IsValid(S) && S->StoreDesiredStationResource(Target,Resource);
   }
  }
- const auto* After=Current();
- const auto Persisted=FFILNStationSettings::Read(Target);
- const bool Verified=After?S->StationResourceMatches(*After):!Persisted;
- const bool CanEdit=Editable && !S->bPreparingUninstall;
- if(!Verified && Editable) { Accepted=false; Message=NSLOCTEXT("FILN","SelectorReadback","Native filter readback failed; configuration is not verified"); }
- if(Mutate) UE_LOG(LogFILN,Log,TEXT("FILN_SELECTOR_%s station=%s resource=%s"),Accepted?TEXT("CONFIRMED"):TEXT("REJECTED"),*Target->GetPathName(),*GetPathNameSafe(Resource.Get()));
- ResourceReply(Target,RequestId,Accepted,CanEdit,After?After->Resource:Persisted,Message);
+ if(Valid && !Mutate && !FFILNStationSettings::HasProperty(Target) && (!IsValid(S) || Target->IsBuildableInsideBlueprintDesigner())) Accepted=false;
+ const auto Desired=Valid?(FFILNStationSettings::HasProperty(Target)?FFILNStationSettings::Read(Target):
+  (IsValid(S)?S->DesiredStationResource(Target):TSubclassOf<UFGItemDescriptor>())):TSubclassOf<UFGItemDescriptor>();
+ if(!Accepted) UE_LOG(LogFILN,Warning,TEXT("FILN_DESIRED_RESOURCE_NOT_STORED station=%s mutate=%d property=%d"),*GetPathNameSafe(Target),Mutate,FFILNStationSettings::HasProperty(Target));
+ ResourceReply(Target,RequestId,Accepted,true,Desired,FText::GetEmpty());
 }
 void UFILNResourceRemote::ResourceReply_Implementation(AFGBuildableDockingStation* Target,uint32 RequestId,bool Accepted,bool Editable,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message) {
  if(Receiver.IsValid()) Receiver->Reply(Target,RequestId,Accepted,Editable,Resource,Message);
@@ -254,7 +220,8 @@ void UFILNResourceSelector::PopulateChoices() {
  Choices.Reset(); Parts->ClearOptions();
  Choices.Add(TEXT("No filter"),TSubclassOf<UFGItemDescriptor>()); Parts->AddOption(TEXT("No filter"));
  auto* Recipes=AFGRecipeManager::Get(GetWorld());
- if(!Recipes || !Station.IsValid()) return;
+ bChoicesReady=Recipes && Station.IsValid();
+ if(!bChoicesReady) return;
  TArray<TSubclassOf<UFGItemDescriptor>> Available;
  for(const auto& Resource:Recipes->GetAllAvailableItemDescriptors())
   if(Resource && FILNSelectorMedium(Station.Get(),Resource)) Available.AddUnique(Resource);
@@ -275,11 +242,11 @@ UWidget* UFILNResourceSelector::GenerateChoice(FString Item) {
  Row->AddChildToHorizontalBox(FILNFilterLabel(WidgetTree,FText::FromString(Item)))->SetVerticalAlignment(VAlign_Center);
  return Row;
 }
-void UFILNResourceSelector::SetContext(AFGBuildableDockingStation* Target,UVerticalBox* Container) {
+void UFILNResourceSelector::SetContext(AFGBuildableDockingStation* Target,UVerticalBox* Container,bool HideStorage) {
  ClearContext();
  if(!IsValid(Target) || !IsValid(Container) || !Parts || !Feedback) return;
- Station=Target; InventoryContainer=Container; SetVisibility(ESlateVisibility::Visible);
- PopulateChoices(); SetTabStyle(false); bInitialized=true;
+ Station=Target; InventoryContainer=Container; bHideStorage=HideStorage; SetVisibility(ESlateVisibility::Visible);
+ PopulateChoices(); ShowSelection(FFILNStationSettings::Read(Target)); SetTabStyle(false); bInitialized=true;
  UE_LOG(LogFILN,Log,TEXT("FILN_SELECTOR_ATTACHED station=%s"),*Target->GetPathName());
 }
 void UFILNResourceSelector::OpenStorage() { NativeTabClicked(0); }
@@ -292,8 +259,9 @@ void UFILNResourceSelector::ClearContext() {
  RestoreStorage();
  StopRefresh();
  if(auto* R=Remote();R && R->Receiver.Get()==this) R->Receiver.Reset();
- PendingRequest=0; Station.Reset(); InventoryContainer.Reset(); bFilterOpen=false; bEditable=false; bInitialized=false;
- if(Parts) { Parts->SetIsEnabled(false); Parts->SetVisibility(ESlateVisibility::Collapsed); }
+ PendingRequest=0; Station.Reset(); InventoryContainer.Reset(); bFilterOpen=false; bInitialized=false;
+ bAwaitingSelection=false; bNeedsQuery=true; bChoicesReady=false; DesiredResource=nullptr;
+ if(Parts) Parts->SetVisibility(ESlateVisibility::Collapsed);
  if(Feedback) Feedback->SetVisibility(ESlateVisibility::Collapsed);
  SetVisibility(ESlateVisibility::Collapsed);
 }
@@ -301,30 +269,28 @@ void UFILNResourceSelector::NativeDestruct() {
  ClearContext(); Super::NativeDestruct();
 }
 void UFILNResourceSelector::Fail(const FText& Reason) {
- bEditable=false; PendingRequest=0;
- if(Parts) Parts->SetIsEnabled(false);
- if(!Feedback || !Feedback->GetText().EqualTo(Reason)) UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_ERROR %s"),*Reason.ToString());
- if(Feedback) { Feedback->SetVisibility(ESlateVisibility::Visible); Feedback->SetText(Reason); }
+ PendingRequest=0;
+ UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_ERROR %s"),*Reason.ToString());
 }
 void UFILNResourceSelector::NativeTabClicked(int32 ButtonIndex) {
  if(bSynchronizing || !bInitialized || !Station.IsValid()) return;
  if(ButtonIndex!=0 && ButtonIndex!=1) { Fail(NSLOCTEXT("FILN","BadTab","Unexpected native tab index")); return; }
  SetTabStyle(ButtonIndex==1);
  if(ButtonIndex==0) {
-  RestoreStorage(); StopRefresh(); bFilterOpen=false; bEditable=false; PendingRequest=0;
+  RestoreStorage(); StopRefresh(); bFilterOpen=false; PendingRequest=0;
   Parts->SetVisibility(ESlateVisibility::Collapsed); Feedback->SetVisibility(ESlateVisibility::Collapsed); return;
  }
  auto* Container=InventoryContainer.Get();
  if(!Container) { Fail(NSLOCTEXT("FILN","MissingContainer","Native storage container no longer available")); return; }
  // Re-clicking the active tab must not restart the query or close its dropdown.
  if(bFilterOpen) return;
- for(int32 I=0;I<Container->GetChildrenCount();++I) {
+ if(bHideStorage) for(int32 I=0;I<Container->GetChildrenCount();++I) {
   auto* Child=Container->GetChildAt(I);
   if(Child && Child!=this) { StorageVisibility.Emplace(Child,Child->GetVisibility()); Child->SetVisibility(ESlateVisibility::Collapsed); }
  }
- bFilterOpen=true; Parts->SetVisibility(ESlateVisibility::Visible); Feedback->SetVisibility(ESlateVisibility::Visible);
+ bFilterOpen=true; Parts->SetVisibility(ESlateVisibility::Visible); Feedback->SetVisibility(ESlateVisibility::Collapsed);
  if(auto* World=GetWorld()) World->GetTimerManager().SetTimer(RefreshTimer,this,&UFILNResourceSelector::RefreshIfBlocked,2.f,true);
- Query();
+ if(bAwaitingSelection) SendSelection(); else { bNeedsQuery=true; Query(); }
 }
 void UFILNResourceSelector::StopRefresh() {
  if(auto* World=GetWorld()) World->GetTimerManager().ClearTimer(RefreshTimer);
@@ -332,21 +298,28 @@ void UFILNResourceSelector::StopRefresh() {
 }
 void UFILNResourceSelector::RefreshIfBlocked() {
  if(!bFilterOpen || !bInitialized || !Station.IsValid()) { StopRefresh(); return; }
- // Never disable or refresh the combo while the player is browsing its options.
- if(!Parts || !filn::selector::ShouldQuery(bEditable,Parts->IsOpen(),PendingRequest,FPlatformTime::Seconds(),RequestDeadline)) return;
- if(PendingRequest) {
-  PendingRequest=0;
-  Feedback->SetText(NSLOCTEXT("FILN","SelectorTimeout","No confirmation received. Checking the current selection; changes are not resent."));
+ if(!Parts || Parts->IsOpen() || (PendingRequest && FPlatformTime::Seconds()<RequestDeadline)) return;
+ PendingRequest=0;
+ if(!bChoicesReady && AFGRecipeManager::Get(GetWorld())) {
+  const FString Previous=Parts->GetSelectedOption();
+  const auto* Entry=Choices.Find(Previous);
+  const auto Selected=Entry?*Entry:TSubclassOf<UFGItemDescriptor>();
+  PopulateChoices(); ShowSelection(Selected);
  }
- Query(true);
+ if(bAwaitingSelection) SendSelection();
+ else if(bNeedsQuery) Query(true);
 }
 void UFILNResourceSelector::Query(bool Background) {
- bEditable=false; Parts->SetIsEnabled(false);
- if(!Background) Feedback->SetText(NSLOCTEXT("FILN","SelectorQuery","Reading authoritative resource selection"));
  auto* R=Remote();
- if(!R || !Station.IsValid()) { Fail(NSLOCTEXT("FILN","MissingRemote","Native resource server unavailable")); return; }
+ if(!R || !Station.IsValid()) return;
  R->Receiver=this; PendingRequest=R->NextRequestId(); RequestDeadline=FPlatformTime::Seconds()+5.;
  R->QueryResource(Station.Get(),PendingRequest);
+}
+void UFILNResourceSelector::SendSelection() {
+ auto* R=Remote();
+ if(!R || !Station.IsValid()) return;
+ R->Receiver=this; PendingRequest=R->NextRequestId(); RequestDeadline=FPlatformTime::Seconds()+5.;
+ R->SelectResource(Station.Get(),PendingRequest,DesiredResource);
 }
 bool UFILNResourceSelector::ShowSelection(TSubclassOf<UFGItemDescriptor> Resource) {
  TGuardValue<bool> Guard(bSynchronizing,true);
@@ -355,27 +328,22 @@ bool UFILNResourceSelector::ShowSelection(TSubclassOf<UFGItemDescriptor> Resourc
  return Parts->GetSelectedOption()==Name;
 }
 void UFILNResourceSelector::Reply(AFGBuildableDockingStation* Target,uint32 RequestId,bool Accepted,bool Editable,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message) {
- if(!bFilterOpen || !filn::selector::ReplyMatches(PendingRequest,RequestId,Station.Get()==Target)) return;
+ if(!filn::selector::ReplyMatches(PendingRequest,RequestId,Station.Get()==Target)) return;
  PendingRequest=0;
- if(!ShowSelection(Resource)) { Fail(NSLOCTEXT("FILN","SelectorUIReadback","Native selector failed to display authoritative resource")); return; }
- bEditable=Editable; Parts->SetIsEnabled(Editable);
- if(!Accepted && !Feedback->GetText().EqualTo(Message)) UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_REPLY_REJECTED %s"),*Message.ToString());
- Feedback->SetText(Message);
+ if(!Accepted) return; // retry the latest intent, never revert the visible selection
+ if(bAwaitingSelection) {
+  if(Resource==DesiredResource) { bAwaitingSelection=false; bNeedsQuery=false; }
+  return;
+ }
+ if(Parts->IsOpen()) { bNeedsQuery=true; return; }
+ bNeedsQuery=!ShowSelection(Resource);
 }
 void UFILNResourceSelector::NativeListChanged(FString SelectedItem,ESelectInfo::Type SelectionType) {
- if(bSynchronizing || !bFilterOpen || !bEditable || PendingRequest || !Station.IsValid() || SelectionType==ESelectInfo::Direct) return;
+ if(bSynchronizing || !bFilterOpen || !Station.IsValid() || SelectionType==ESelectInfo::Direct) return;
  const auto* Choice=Choices.Find(SelectedItem);
- if(!Choice) { Query(); return; }
- const auto Resource=*Choice;
- if(Resource && !FILNSelectorMedium(Station.Get(),Resource)) {
-  Query(); Feedback->SetText(NSLOCTEXT("FILN","SelectorWrongMedium","Incompatible resource rejected; reading previous selection")); return;
- }
- auto* R=Remote();
- if(!R) { Fail(NSLOCTEXT("FILN","MissingRemote2","Native resource server unavailable")); return; }
- bEditable=false; Parts->SetIsEnabled(false);
- Feedback->SetText(NSLOCTEXT("FILN","SelectorPending","Waiting for native inventory confirmation"));
- R->Receiver=this; PendingRequest=R->NextRequestId(); RequestDeadline=FPlatformTime::Seconds()+5.;
- R->SelectResource(Station.Get(),PendingRequest,Resource);
+ if(!Choice || (*Choice && !FILNSelectorMedium(Station.Get(),*Choice))) return;
+ DesiredResource=*Choice; bAwaitingSelection=true; bNeedsQuery=false; PendingRequest=0;
+ SendSelection();
 }
 
 namespace {
@@ -395,7 +363,7 @@ void FILNAttachSelector(UFGInteractWidget* Widget,UObject* Object) {
  if(!Selector || !Selector->BuildControls() || !Container->AddChildToVerticalBox(Selector)) {
   UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_ERROR native controls could not be attached")); return;
  }
- Selector->SetContext(Target,Container);
+ Selector->SetContext(Target,Container,Container==FILNNativeStorageContainer(Widget));
 }
 }
 void UFILNResourceSelector::InstallHook() {

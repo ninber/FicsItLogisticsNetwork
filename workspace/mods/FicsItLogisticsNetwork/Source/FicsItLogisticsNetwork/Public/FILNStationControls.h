@@ -39,7 +39,6 @@ public:
 private:
  UPROPERTY(Replicated) bool NetReady=true;
  uint32 ClientSequence=0;
- double LastMutation=-10;
  void HandleResource(AFGBuildableDockingStation* Target,uint32 RequestId,bool Mutate,TSubclassOf<UFGItemDescriptor> Resource);
 };
 
@@ -57,7 +56,7 @@ class FICSITLOGISTICSNETWORK_API UFILNResourceSelector : public UUserWidget {
 public:
  static void InstallHook();
  bool BuildControls();
- void SetContext(AFGBuildableDockingStation* Target,UVerticalBox* Container);
+ void SetContext(AFGBuildableDockingStation* Target,UVerticalBox* Container,bool HideStorage);
  void ClearContext();
  bool HasContext(AFGBuildableDockingStation* Target) const;
  void Reply(AFGBuildableDockingStation* Target,uint32 RequestId,bool Accepted,bool Editable,TSubclassOf<UFGItemDescriptor> Resource,const FText& Message);
@@ -78,7 +77,10 @@ private:
  uint32 PendingRequest=0;
  double RequestDeadline=0;
  FTimerHandle RefreshTimer;
- bool bFilterOpen=false, bSynchronizing=false, bEditable=false, bInitialized=false;
+ bool bFilterOpen=false, bSynchronizing=false, bInitialized=false, bHideStorage=true;
+ bool bAwaitingSelection=false, bNeedsQuery=true, bChoicesReady=false;
+ UPROPERTY() TSubclassOf<UFGItemDescriptor> DesiredResource;
+ void SendSelection();
  void RestoreStorage();
  void Query(bool Background=false);
  void RefreshIfBlocked();

@@ -40,6 +40,14 @@ struct FFILNStationConfig {
  // unowned filter as an owned one. Never create new records with this flag.
  UPROPERTY(SaveGame) bool ExternalFilter=false;
 };
+// World fallback for vanilla stations and assets without an actor setting.
+// A null Resource is an explicit clear, not an absent request.
+USTRUCT()
+struct FFILNDesiredStationConfig {
+ GENERATED_BODY()
+ UPROPERTY(SaveGame) TObjectPtr<AFGBuildableDockingStation> Station;
+ UPROPERTY(SaveGame) TSubclassOf<UFGItemDescriptor> Resource;
+};
 USTRUCT()
 struct FFILNRegistration {
  GENERATED_BODY()
@@ -116,6 +124,11 @@ private:
  UPROPERTY(SaveGame) int32 SchemaVersion = 1;
  UPROPERTY(SaveGame) TArray<FFILNStation> Stations;
  UPROPERTY(SaveGame) TArray<FFILNStationConfig> StationConfigs;
+ UPROPERTY(SaveGame) TArray<FFILNDesiredStationConfig> DesiredStationConfigs;
+ TSubclassOf<UFGItemDescriptor> DesiredStationResource(AFGBuildableDockingStation* Station) const;
+ bool StoreDesiredStationResource(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> Resource);
+ bool StationDesiredMatches(AFGBuildableDockingStation* Station,TSubclassOf<UFGItemDescriptor> ActiveResource) const;
+ void ReconcileStationSelection(AFGDockingStationIdentifier* Station);
  UPROPERTY(SaveGame) TArray<TObjectPtr<AFGDockingStationIdentifier>> DepotStations;
  UPROPERTY(SaveGame) TArray<FFILNRegistration> Registrations;
  // Membership can precede a valid exclusive bay. These records hold no job leases.

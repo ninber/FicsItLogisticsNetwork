@@ -48,7 +48,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
  auto* QB=IsValid(C.Station)?C.Station->GetStation():nullptr;
  auto* HB=IsValid(R.Home)?R.Home->GetStation():nullptr;
  if(!IsValid(VehicleActor) || !IsValid(QB) || !IsValid(HB) || !C.Resource || !ValidHome(R.Home)) return false;
- if(C.ExternalFilter || !VehicleStationCompatible(VehicleActor,HB) || !VehicleStationCompatible(VehicleActor,QB) || !StationAcceptsResource(QB,C.Resource)) return false;
+ if(!StationDesiredMatches(QB,C.Resource) || C.ExternalFilter || !VehicleStationCompatible(VehicleActor,HB) || !VehicleStationCompatible(VehicleActor,QB) || !StationAcceptsResource(QB,C.Resource)) return false;
  if(VehicleActor->GetDriver()) { R.Diagnostic=TEXT("Player-controlled vehicle excluded"); return false; }
  if(!R.Vehicle->IsAutopilotEnabled()) { R.Diagnostic=TEXT("Autopilot disabled; explicit player opt-in required"); return false; }
  if(!VehicleActor->HasFuel() || !FuelReady(R)) { R.Diagnostic=TEXT("Awaiting full compatible native fuel inventory at assigned home"); return false; }
@@ -87,6 +87,7 @@ bool ALogisticsSubsystem::BuildOffer(int32 V,int32 Q,int32 P,filn::dispatch::Off
   if(!IsValid(PB) || PB->IsBuildableInsideBlueprintDesigner() || TransitionUsesNode(ID->GetPathNodeGUID()) || ID==C.Station || IsDepot(ID) || !PB->GetIsInLoadMode() || !VehicleStationCompatible(VehicleActor,PB) || !StationAcceptsResource(PB,C.Resource)) return false;
   const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& Entry){return Entry.Station==ID;});
   if(FFILNStationSettings::IsDedicated(PB) && (!FFILNStationSettings::HasProperty(PB) || (FFILNStationSettings::Read(PB) && !PC))) return false;
+  if(!StationDesiredMatches(PB,PC?PC->Resource:TSubclassOf<UFGItemDescriptor>())) return false;
   if(PC && (PC->Resource!=C.Resource || !StationResourceMatches(*PC))) return false;
   if(Fluid && PB->GetCurrentFluidDescriptor() && PB->GetCurrentFluidDescriptor()!=C.Resource) return false;
   filn::dispatch::Station Provider;
@@ -126,7 +127,7 @@ bool ALogisticsSubsystem::EndpointConfigurationValid(const FFILNRegistration& R)
  auto* P=IsValid(R.Provider)?R.Provider->GetStation():nullptr;
  if(!IsValid(P) || P->IsBuildableInsideBlueprintDesigner() || !P->GetIsInLoadMode() || IsDepot(R.Provider) || !StationAcceptsResource(P,R.Resource) || !VehicleStationCompatible(O,P)) return false;
  const auto* PC=StationConfigs.FindByPredicate([&](const FFILNStationConfig& C){return C.Station==R.Provider;});
- return (!FFILNStationSettings::IsDedicated(P) || (FFILNStationSettings::HasProperty(P) && (!FFILNStationSettings::Read(P) || PC))) &&
+ return (!FFILNStationSettings::IsDedicated(P) || FFILNStationSettings::HasProperty(P)) &&
   (!PC || (PC->Resource==R.Resource && StationResourceMatches(*PC))) &&
   filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*R.Provider->GetStationName().ToString()),TCHAR_TO_UTF8(*R.Requester->GetStationName().ToString()));
 }
@@ -140,7 +141,7 @@ void ALogisticsSubsystem::Schedule() {
   if(Now<NextDispatch) return;
   RequestCursor%=StationConfigs.Num();
   const auto& Q=StationConfigs[RequestCursor]; auto* QB=IsValid(Q.Station)?Q.Station->GetStation():nullptr;
-  if(Q.ExternalFilter || !IsValid(QB) || QB->IsBuildableInsideBlueprintDesigner() || QB->GetIsInLoadMode() || IsDepot(Q.Station) || !StationAcceptsResource(QB,Q.Resource) || !QB->GetInventory() || !QB->GetInventory()->IsEmpty()) {
+  if(!StationDesiredMatches(QB,Q.Resource) || Q.ExternalFilter || !IsValid(QB) || QB->IsBuildableInsideBlueprintDesigner() || QB->GetIsInLoadMode() || IsDepot(Q.Station) || !StationAcceptsResource(QB,Q.Resource) || !QB->GetInventory() || !QB->GetInventory()->IsEmpty()) {
    ++RequestCursor; if(RequestCursor>=StationConfigs.Num()) {RequestCursor=0; NextDispatch=Now+5.;} return;
   }
   auto* VS=AFGVehicleSubsystem::Get(GetWorld()); if(!VS) return;
@@ -183,7 +184,7 @@ void ALogisticsSubsystem::Schedule() {
       // work. Stock is not a road cache key; every new scan resamples it.
       int Kinds=0,Quantity=0,Capacity=0; std::string Actual;
       const auto* PC=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
-      if((FFILNStationSettings::IsDedicated(B) && (!FFILNStationSettings::HasProperty(B) || (FFILNStationSettings::Read(B) && !PC))) || (PC && (PC->ExternalFilter || PC->Resource!=Q.Resource)) || !Inventory(B->GetInventory(),Q.Resource,Kinds,Quantity,Capacity,&Actual) ||
+      if(!StationDesiredMatches(B,PC?PC->Resource:TSubclassOf<UFGItemDescriptor>()) || (FFILNStationSettings::IsDedicated(B) && (!FFILNStationSettings::HasProperty(B) || (FFILNStationSettings::Read(B) && !PC))) || (PC && (PC->ExternalFilter || PC->Resource!=Q.Resource)) || !Inventory(B->GetInventory(),Q.Resource,Kinds,Quantity,Capacity,&Actual) ||
          !filn::dispatch::ProviderResourceMatches(Descriptor(Q.Resource),Actual,Kinds,PC?Descriptor(PC->Resource):std::string()) ||
          !filn::dispatch::PairAllowed(TCHAR_TO_UTF8(*ID->GetStationName().ToString()),TCHAR_TO_UTF8(*Q.Station->GetStationName().ToString()))) { ++Rank.Cursor; continue; }
       double Cost=-1;
