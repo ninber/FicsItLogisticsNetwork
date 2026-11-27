@@ -38,11 +38,67 @@
 #include "Misc/DateTime.h"
 #include "Input/Reply.h"
 #include "InputCoreTypes.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/Application/IInputProcessor.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/Console.h"
+#include "Widgets/SViewport.h"
 
 namespace {
 using FILNORow=const FJsonObject*;
 using FILNOArray=TArray<TSharedPtr<FJsonValue>>;
 FDelegateHandle FILNOInputHandle;
+TSharedPtr<IInputProcessor> FILNOInputProcessor;
+struct FFILNOShortcut {
+ FKey Key=EKeys::L;
+ bool Ctrl=true,Shift=true,Alt=false;
+};
+FFILNOShortcut FILNOReadShortcut() {
+ FString KeyName=TEXT("L"); FFILNOShortcut Shortcut;
+ if(GConfig) {
+  GConfig->GetString(TEXT("FILN.Organizer"),TEXT("Key"),KeyName,GGameIni);
+  GConfig->GetBool(TEXT("FILN.Organizer"),TEXT("Ctrl"),Shortcut.Ctrl,GGameIni);
+  GConfig->GetBool(TEXT("FILN.Organizer"),TEXT("Shift"),Shortcut.Shift,GGameIni);
+  GConfig->GetBool(TEXT("FILN.Organizer"),TEXT("Alt"),Shortcut.Alt,GGameIni);
+ }
+ Shortcut.Key=FKey(FName(*KeyName));
+ return Shortcut;
+}
+class FFILNOInputProcessor final : public IInputProcessor {
+ FFILNOShortcut Shortcut=FILNOReadShortcut();
+public:
+ void Tick(const float DeltaTime,FSlateApplication& SlateApp,TSharedRef<ICursor> Cursor) override {}
+ bool HandleKeyDownEvent(FSlateApplication& SlateApp,const FKeyEvent& Event) override {
+  if(Event.IsRepeat() || Event.GetKey()!=Shortcut.Key ||
+     Event.IsControlDown()!=Shortcut.Ctrl || Event.IsShiftDown()!=Shortcut.Shift ||
+     Event.IsAltDown()!=Shortcut.Alt || Event.IsCommandDown()) return false;
+  auto* Viewport=GEngine?GEngine->GameViewport:nullptr;
+  if(!IsValid(Viewport) || !Viewport->GetWorld()) return false;
+  if(Viewport->ViewportConsole && Viewport->ViewportConsole->ConsoleActive()) return false;
+  auto* PC=Viewport->GetWorld()->GetFirstPlayerController();
+  auto* HUD=IsValid(PC)?Cast<AFGHUD>(PC->GetHUD()):nullptr;
+  auto* UI=HUD?HUD->GetGameUI():nullptr;
+  // Never steal the shortcut from a focused text field or native dialog.
+  const auto GameWidget=Viewport->GetGameViewportWidget();
+  const auto Focused=SlateApp.GetKeyboardFocusedWidget();
+  if(!GameWidget.IsValid() || (Focused.IsValid() && Focused.Get()!=GameWidget.Get())) {
+   UE_LOG(LogFILN,Log,TEXT("FILN_ORGANIZER_SHORTCUT viewport not focused")); return false;
+  }
+  UE_LOG(LogFILN,Log,TEXT("FILN_ORGANIZER_SHORTCUT slate"));
+  const bool WasOpen=IsValid(UI) && UI->HasActiveInteractWidget();
+  UFILNOrganizer::Open(PC);
+  return !WasOpen && IsValid(UI) && UI->HasActiveInteractWidget() && !UI->IsPauseMenuOpen();
+ }
+};
+void FILNOInstallSlateInput() {
+ if(FILNOInputProcessor.IsValid() || !FSlateApplication::IsInitialized() || IsRunningDedicatedServer() || IsRunningCommandlet()) return;
+ auto Processor=MakeShared<FFILNOInputProcessor>();
+ if(FSlateApplication::Get().RegisterInputPreProcessor(Processor)) {
+  FILNOInputProcessor=Processor;
+  UE_LOG(LogFILN,Log,TEXT("FILN_ORGANIZER_INPUT slate registered"));
+ } else UE_LOG(LogFILN,Warning,TEXT("FILN_ORGANIZER_INPUT slate registration failed"));
+}
 // Weak refs avoid retaining a character or its input component across worlds.
 TSet<TWeakObjectPtr<UInputComponent>> FILNOInputBindings;
 
@@ -152,26 +208,24 @@ ALogisticsSubsystem* FILNOFindSubsystem(UWorld* World) {
 }
 void FILNOBindInput(AFGCharacterPlayer* Character,UInputComponent* Input) {
  if(!IsValid(Character) || !IsValid(Input)) return;
+ FILNOInstallSlateInput();
  // Setup can be called again on possession. Avoid duplicate delegate bindings
  // while allowing a freshly rebuilt component to bind again.
  for(auto It=FILNOInputBindings.CreateIterator();It;++It) if(!(*It).IsValid()) It.RemoveCurrent();
  if(FILNOInputBindings.Contains(Input)) return;
- FString KeyName=TEXT("L"); bool Ctrl=true,Shift=true,Alt=false;
- if(GConfig) {
-  GConfig->GetString(TEXT("FILN.Organizer"),TEXT("Key"),KeyName,GGameIni);
-  GConfig->GetBool(TEXT("FILN.Organizer"),TEXT("Ctrl"),Ctrl,GGameIni);
-  GConfig->GetBool(TEXT("FILN.Organizer"),TEXT("Shift"),Shift,GGameIni);
-  GConfig->GetBool(TEXT("FILN.Organizer"),TEXT("Alt"),Alt,GGameIni);
- }
- const FKey Key{FName(*KeyName)};
- if(!Key.IsValid()) { UE_LOG(LogFILN,Warning,TEXT("FILN_ORGANIZER_INVALID_KEY %s"),*KeyName); return; }
- FInputKeyBinding Binding(FInputChord(Key,Shift,Ctrl,Alt,false),IE_Pressed);
+ const auto Shortcut=FILNOReadShortcut();
+ if(!Shortcut.Key.IsValid()) { UE_LOG(LogFILN,Warning,TEXT("FILN_ORGANIZER_INVALID_KEY %s"),*Shortcut.Key.ToString()); return; }
+ FInputKeyBinding Binding(FInputChord(Shortcut.Key,Shortcut.Shift,Shortcut.Ctrl,Shortcut.Alt,false),IE_Pressed);
  Binding.bConsumeInput=false;
  const TWeakObjectPtr<AFGCharacterPlayer> Weak(Character);
  auto& Delegate=Binding.KeyDelegate.GetDelegateForManualSet();
- Delegate.BindLambda([Weak]() { if(auto* C=Weak.Get()) UFILNOrganizer::Open(Cast<APlayerController>(C->GetController())); });
+ Delegate.BindLambda([Weak]() { if(auto* C=Weak.Get()) {
+  UE_LOG(LogFILN,Log,TEXT("FILN_ORGANIZER_SHORTCUT character"));
+  UFILNOrganizer::Open(Cast<APlayerController>(C->GetController()));
+ } });
  FILNOInputBindings.Add(Input);
  Input->KeyBindings.Add(MoveTemp(Binding));
+ UE_LOG(LogFILN,Log,TEXT("FILN_ORGANIZER_INPUT character bound key=%s ctrl=%d shift=%d alt=%d"),*Shortcut.Key.ToString(),Shortcut.Ctrl,Shortcut.Shift,Shortcut.Alt);
 }
 }
 
@@ -185,20 +239,30 @@ UFILNOrganizer::UFILNOrganizer(const FObjectInitializer& Initializer):Super(Init
 }
 void UFILNOrganizer::InstallInput() {
  if(!FILNOInputHandle.IsValid()) FILNOInputHandle=AFGCharacterPlayer::OnPlayerInputInitialized.AddStatic(&FILNOBindInput);
+ FILNOInstallSlateInput();
 }
 void UFILNOrganizer::RemoveInput() {
  if(FILNOInputHandle.IsValid()) AFGCharacterPlayer::OnPlayerInputInitialized.Remove(FILNOInputHandle);
  FILNOInputHandle.Reset();
+ if(FILNOInputProcessor.IsValid() && FSlateApplication::IsInitialized()) FSlateApplication::Get().UnregisterInputPreProcessor(FILNOInputProcessor);
+ FILNOInputProcessor.Reset();
  // Input components are owned by their game-world characters and destroyed
  // with them. No native hot-unload is supported by this mod.
  FILNOInputBindings.Reset();
 }
 void UFILNOrganizer::Open(APlayerController* PC) {
- if(!IsValid(PC) || !PC->IsLocalController() || !PC->GetPawn()) return;
+ if(!IsValid(PC) || !PC->IsLocalController() || !PC->GetPawn()) {
+  UE_LOG(LogFILN,Log,TEXT("FILN_ORGANIZER_OPEN_BLOCKED no local possessed controller")); return;
+ }
  auto* W=PC->GetWorld();
- if(!W || !W->IsGameWorld() || W->bIsTearingDown || FPluginModuleLoader::IsMainMenuWorld(W)) return;
+ if(!W || !W->IsGameWorld() || W->bIsTearingDown || FPluginModuleLoader::IsMainMenuWorld(W)) {
+  UE_LOG(LogFILN,Log,TEXT("FILN_ORGANIZER_OPEN_BLOCKED no active gameplay world")); return;
+ }
  auto* HUD=Cast<AFGHUD>(PC->GetHUD()); auto* UI=HUD?HUD->GetGameUI():nullptr;
- if(!IsValid(UI) || UI->IsPauseMenuOpen() || UI->HasActiveInteractWidget() || PC->bShowMouseCursor) return;
+ if(!IsValid(UI) || UI->IsPauseMenuOpen() || UI->HasActiveInteractWidget() || PC->bShowMouseCursor) {
+  UE_LOG(LogFILN,Log,TEXT("FILN_ORGANIZER_OPEN_BLOCKED ui=%d pause=%d interact=%d cursor=%d"),IsValid(UI),IsValid(UI) && UI->IsPauseMenuOpen(),IsValid(UI) && UI->HasActiveInteractWidget(),PC->bShowMouseCursor); return;
+ }
+ UE_LOG(LogFILN,Log,TEXT("FILN_ORGANIZER_OPEN_REQUEST"));
  HUD->OpenInteractUI(StaticClass(),PC);
 }
 TSharedRef<SWidget> UFILNOrganizer::RebuildWidget() {

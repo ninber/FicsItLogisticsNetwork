@@ -28,3 +28,8 @@ These are required native acceptance checks, not evidence of success.
 - Verify a legacy save whose configured station predates actor resource persistence is migrated only if the actor has never saved an explicit selection. Verify an explicit clear is not resurrected on reload.
 
 Do not close either issue on portable test or compilation evidence alone.
+
+## Organizer keyboard regression
+- In normal gameplay with no other menu open, press Ctrl+Shift+L; verify Organizer opens and Escape closes it. Repeat after closing a solid and fluid station, after save reload and after respawn. Verify no duplicate Organizer windows.
+- Check that typing in native text fields or the game console does not open Organizer and that pause/other active interactions remain unaffected.
+- Capture FILN_ORGANIZER_INPUT, FILN_ORGANIZER_SHORTCUT and FILN_ORGANIZER_OPEN logs on failure. The console command filn.organizer is an independent diagnostic entry point; close the console after issuing it.
