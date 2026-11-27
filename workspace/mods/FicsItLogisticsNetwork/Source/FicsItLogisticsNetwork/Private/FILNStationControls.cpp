@@ -16,6 +16,11 @@
 #include "UI/FGGameUI.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/VerticalBox.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
+#include "Components/Border.h"
 #include "Components/PanelWidget.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/TextBlock.h"
@@ -57,6 +62,80 @@ bool FILNSelectorIsDepot(AFGBuildableDockingStation* Target) {
   Class==TEXT("/FicsItLogisticsNetwork/Depot/Build_FILNFluidDepot.Build_FILNFluidDepot_C") ||
   (Recipe && (Recipe->GetPathName()==TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNDepot.Recipe_FILNDepot_C") ||
               Recipe->GetPathName()==TEXT("/FicsItLogisticsNetwork/Depot/Recipe_FILNFluidDepot.Recipe_FILNFluidDepot_C")));
+}
+bool FILNSelectorIsFluidStation(const AFGBuildableDockingStation* Target) {
+ return FFILNStationSettings::IsDedicated(Target) &&
+  Target->GetClass()->GetPathName().Contains(TEXT("Build_FILNFluidStation"));
+}
+// Fluid controls belong to the station dialog, not to a random nested vertical box.
+// Follow only single-child wrappers before selecting a top-level layout.
+UWidget* FILNFluidLayoutRoot(UFGInteractWidget* Widget) {
+ UWidget* Layout=IsValid(Widget)?Widget->GetRootWidget():nullptr;
+ for(int32 Depth=0;Layout && Depth<16;++Depth) {
+  if(Cast<UCanvasPanel>(Layout) || Cast<UOverlay>(Layout) || Cast<UVerticalBox>(Layout)) return Layout;
+  if(auto* User=Cast<UUserWidget>(Layout)) {
+   Layout=User->GetRootWidget();
+  } else if(auto* Panel=Cast<UPanelWidget>(Layout); Panel && Panel->GetChildrenCount()==1) {
+   Layout=Panel->GetChildAt(0);
+  } else break;
+ }
+ return Layout;
+}
+bool FILNFluidOwnedWidget(const UWidget* Widget,const TCHAR* Prefix) {
+ return IsValid(Widget) && Widget->GetName().StartsWith(Prefix);
+}
+UVerticalBox* FILNFluidSelectorContainer(UFGInteractWidget* Widget,bool Create) {
+ auto* Layout=FILNFluidLayoutRoot(Widget);
+ if(auto* Vertical=Cast<UVerticalBox>(Layout)) {
+  if(Create) UE_LOG(LogFILN,Log,TEXT("FILN_FLUID_SELECTOR_LAYOUT vertical=%s"),*GetPathNameSafe(Vertical));
+  return Vertical;
+ }
+ auto* Canvas=Cast<UCanvasPanel>(Layout);
+ auto* Overlay=Cast<UOverlay>(Layout);
+ if(Overlay) {
+  for(int32 I=0;I<Overlay->GetChildrenCount();++I) {
+   auto* Child=Overlay->GetChildAt(I);
+   if(FILNFluidOwnedWidget(Child,TEXT("FILNFluidSelectorLayer"))) { Canvas=Cast<UCanvasPanel>(Child); break; }
+  }
+ }
+ if(Canvas) for(int32 I=0;I<Canvas->GetChildrenCount();++I) {
+  auto* Child=Canvas->GetChildAt(I);
+  if(FILNFluidOwnedWidget(Child,TEXT("FILNFluidSelectorHost"))) return Cast<UVerticalBox>(Child);
+ }
+ if(!Create) return nullptr;
+ if(!Canvas && !Overlay) {
+  UE_LOG(LogFILN,Warning,TEXT("FILN_FLUID_SELECTOR_LAYOUT_UNSUPPORTED widget=%s root=%s layout=%s"),
+   *GetPathNameSafe(Widget),*GetPathNameSafe(Widget->GetRootWidget()),*GetPathNameSafe(Layout));
+  return nullptr;
+ }
+ if(!Canvas) {
+  Canvas=NewObject<UCanvasPanel>(Widget,MakeUniqueObjectName(Widget,UCanvasPanel::StaticClass(),FName(TEXT("FILNFluidSelectorLayer"))));
+  Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+  auto* LayerSlot=Overlay->AddChildToOverlay(Canvas);
+  if(!LayerSlot) return nullptr;
+  LayerSlot->SetHorizontalAlignment(HAlign_Fill); LayerSlot->SetVerticalAlignment(VAlign_Fill);
+ }
+ auto* Host=NewObject<UVerticalBox>(Widget,MakeUniqueObjectName(Widget,UVerticalBox::StaticClass(),FName(TEXT("FILNFluidSelectorHost"))));
+ Host->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+ auto* HostSlot=Canvas->AddChildToCanvas(Host);
+ if(!HostSlot) {
+  if(FILNFluidOwnedWidget(Canvas,TEXT("FILNFluidSelectorLayer"))) Canvas->RemoveFromParent();
+  return nullptr;
+ }
+ // The fluid dialog's left data column has space below the station data.
+ // Relative anchors keep the small control within that column as the dialog scales.
+ HostSlot->SetAnchors(FAnchors(.025f,.34f,.27f,.34f));
+ HostSlot->SetOffsets(FMargin(0.f,0.f,0.f,78.f));
+ HostSlot->SetZOrder(100);
+ UE_LOG(LogFILN,Log,TEXT("FILN_FLUID_SELECTOR_LAYOUT widget=%s root=%s host=%s"),
+  *GetPathNameSafe(Widget),*GetPathNameSafe(Layout),*GetPathNameSafe(Host));
+ return Host;
+}
+void FILNRemoveFluidHost(UVerticalBox* Host) {
+ if(!FILNFluidOwnedWidget(Host,TEXT("FILNFluidSelectorHost"))) return;
+ auto* Layer=Host->GetParent();
+ Host->RemoveFromParent();
+ if(FILNFluidOwnedWidget(Layer,TEXT("FILNFluidSelectorLayer"))) Layer->RemoveFromParent();
 }
 // Resolve the actual inventory container by instance or reflected property.
  // Do not reject a solid/fluid widget merely because its BP class path differs.
@@ -171,10 +250,18 @@ UFILNResourceRemote* UFILNResourceSelector::Remote() const {
  auto* PC=Cast<AFGPlayerController>(GetOwningPlayer());
  return PC?PC->GetRemoteCallObjectOfClass<UFILNResourceRemote>():nullptr;
 }
-bool UFILNResourceSelector::BuildControls() {
+bool UFILNResourceSelector::BuildControls(bool InlineFluid) {
  if(!GetOwningPlayer()) return false;
  if(!WidgetTree) WidgetTree=NewObject<UWidgetTree>(this,TEXT("FILNFilterTree"));
- auto* Root=WidgetTree->ConstructWidget<UVerticalBox>(); WidgetTree->RootWidget=Root;
+ auto* Root=WidgetTree->ConstructWidget<UVerticalBox>();
+ if(InlineFluid) {
+  auto* Frame=WidgetTree->ConstructWidget<UBorder>();
+  Frame->SetBrushColor(FILNFilterColor(TEXT("24292D")));
+  Frame->SetPadding(FMargin(8.f,5.f));
+  Frame->AddChild(Root); WidgetTree->RootWidget=Frame;
+  Root->AddChildToVerticalBox(FILNFilterLabel(WidgetTree,NSLOCTEXT("FILN","FluidResourceFilter","RESOURCE FILTER"),13));
+ } else {
+ WidgetTree->RootWidget=Root;
  auto* Bar=WidgetTree->ConstructWidget<UHorizontalBox>();
  StorageTab=WidgetTree->ConstructWidget<UButton>();
  FiltersTab=WidgetTree->ConstructWidget<UButton>();
@@ -186,6 +273,7 @@ bool UFILNResourceSelector::BuildControls() {
  StorageTab->OnClicked.AddDynamic(this,&UFILNResourceSelector::OpenStorage);
  FiltersTab->OnClicked.AddDynamic(this,&UFILNResourceSelector::OpenFilters);
  Root->AddChildToVerticalBox(Bar);
+ }
  Parts=WidgetTree->ConstructWidget<UComboBoxString>();
  Parts->SetMaxListHeight(360.f);
  FComboBoxStyle Combo=Parts->GetWidgetStyle();
@@ -249,7 +337,8 @@ void UFILNResourceSelector::SetContext(AFGBuildableDockingStation* Target,UVerti
  if(!IsValid(Target) || !IsValid(Container) || !Parts || !Feedback) return;
  Station=Target; InventoryContainer=Container; bHideStorage=HideStorage; SetVisibility(ESlateVisibility::Visible);
  PopulateChoices(); ShowSelection(FFILNStationSettings::Read(Target)); SetTabStyle(false); bInitialized=true;
- UE_LOG(LogFILN,Log,TEXT("FILN_SELECTOR_ATTACHED station=%s"),*Target->GetPathName());
+ UE_LOG(LogFILN,Log,TEXT("FILN_SELECTOR_ATTACHED station=%s fluid=%d container=%s"),*Target->GetPathName(),FILNSelectorIsFluidStation(Target),*GetPathNameSafe(Container));
+ if(FILNSelectorIsFluidStation(Target)) OpenFilters();
 }
 void UFILNResourceSelector::OpenStorage() { NativeTabClicked(0); }
 void UFILNResourceSelector::OpenFilters() { NativeTabClicked(1); }
@@ -353,19 +442,34 @@ void FILNAttachSelector(UFGInteractWidget* Widget,UObject* Object) {
  if(!IsInGameThread() || !IsValid(Widget)) return;
  auto* PC=Widget->GetOwningPlayer(); auto* Target=FILNSelectorStation(Object);
  if(!Target) Target=FILNSelectorStation(Widget->mInteractObject.Get());
- if(!IsValid(PC) || !PC->IsLocalController() || !IsValid(Target) || Target->GetWorld()!=Widget->GetWorld()) return;
- auto* Container=FILNSelectorContainer(Widget);
- if(!Container) { UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_ERROR class=%s native mInventoryContainer unavailable"),*Widget->GetClass()->GetPathName()); return; }
+ if(!IsValid(PC) || !PC->IsLocalController() || !IsValid(Target) || Target->GetWorld()!=Widget->GetWorld()) {
+  if(Widget->GetClass()->GetName().Contains(TEXT("Truck")) || Widget->GetClass()->GetName().Contains(TEXT("Docking")) || Widget->GetClass()->GetName().Contains(TEXT("Fluid")))
+   UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_TARGET_UNRESOLVED widget=%s object=%s interact=%s local=%d"),*GetPathNameSafe(Widget),*GetPathNameSafe(Object),*GetPathNameSafe(Widget->mInteractObject.Get()),IsValid(PC) && PC->IsLocalController());
+  return;
+ }
+ const bool Depot=FILNSelectorIsDepot(Target);
+ const bool Fluid=FILNSelectorIsFluidStation(Target);
+ if(Depot) {
+  if(auto* FluidHost=FILNFluidSelectorContainer(Widget,false)) {
+   if(auto* Existing=FILNFindSelector(FluidHost)) { Existing->ClearContext(); Existing->RemoveFromParent(); }
+   FILNRemoveFluidHost(FluidHost);
+  }
+  if(auto* Existing=FILNFindSelector(FILNSelectorContainer(Widget))) { Existing->ClearContext(); Existing->RemoveFromParent(); }
+  return;
+ }
+ auto* Container=Fluid?FILNFluidSelectorContainer(Widget,true):FILNSelectorContainer(Widget);
+ if(!Container) { UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_ERROR widget=%s station=%s fluid=%d layout unavailable"),*GetPathNameSafe(Widget),*GetPathNameSafe(Target),Fluid); return; }
  if(auto* Existing=FILNFindSelector(Container)) {
-  if(!FILNSelectorIsDepot(Target) && Existing->HasContext(Target)) return;
+  if(Existing->HasContext(Target)) return;
   Existing->ClearContext(); Existing->RemoveFromParent();
  }
- if(FILNSelectorIsDepot(Target)) return;
  auto* Selector=CreateWidget<UFILNResourceSelector>(PC);
- if(!Selector || !Selector->BuildControls() || !Container->AddChildToVerticalBox(Selector)) {
-  UE_LOG(LogFILN,Error,TEXT("FILN_SELECTOR_ERROR native controls could not be attached")); return;
+ if(!Selector || !Selector->BuildControls(Fluid) || !Container->AddChildToVerticalBox(Selector)) {
+  UE_LOG(LogFILN,Warning,TEXT("FILN_SELECTOR_ERROR widget=%s fluid=%d controls could not be attached"),*GetPathNameSafe(Widget),Fluid);
+  if(Fluid) FILNRemoveFluidHost(Container);
+  return;
  }
- Selector->SetContext(Target,Container,Container==FILNNativeStorageContainer(Widget));
+ Selector->SetContext(Target,Container,!Fluid && Container==FILNNativeStorageContainer(Widget));
 }
 }
 void UFILNResourceSelector::InstallHook() {
@@ -379,17 +483,30 @@ void UFILNResourceSelector::InstallHook() {
   if(IsValid(Widget) && IsValid(Resolved) && Widget->GetWorld()) {
    const TWeakObjectPtr<UFGInteractWidget> Weak(Widget);
    const TWeakObjectPtr<AFGBuildableDockingStation> Target(Resolved);
-   Widget->GetWorld()->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateLambda([Weak,Target]() {
+   auto Retry=[Weak,Target]() {
     auto* W=Weak.Get(); auto* PC=IsValid(W)?W->GetOwningPlayer():nullptr;
     auto* HUD=PC?Cast<AFGHUD>(PC->GetHUD()):nullptr; auto* UI=HUD?HUD->GetGameUI():nullptr;
-    if(IsValid(UI) && UI->GetInteractWidgetStack().Contains(W) && Target.IsValid()) FILNAttachSelector(W,Target.Get());
-   }));
+    auto* Current=IsValid(W)?FILNSelectorStation(W->mInteractObject.Get()):nullptr;
+    if(IsValid(UI) && UI->GetInteractWidgetStack().Contains(W) && Target.IsValid() &&
+       (!Current || Current==Target.Get())) FILNAttachSelector(W,Target.Get());
+   };
+   auto& Timers=Widget->GetWorld()->GetTimerManager();
+   Timers.SetTimerForNextTick(FTimerDelegate::CreateLambda(Retry));
+   if(FILNSelectorIsFluidStation(Resolved)) {
+    FTimerHandle RetrySoon,RetryLater;
+    Timers.SetTimer(RetrySoon,FTimerDelegate::CreateLambda(Retry),.25f,false);
+    Timers.SetTimer(RetryLater,FTimerDelegate::CreateLambda(Retry),1.f,false);
+   }
   }
  }));
  SUBSCRIBE_METHOD_AFTER(UFGInteractWidget::Native_Init,[](UFGInteractWidget* Widget) {
   if(IsValid(Widget)) FILNAttachSelector(Widget,Widget->mInteractObject.Get());
  });
  SUBSCRIBE_METHOD_AFTER(UFGGameUI::RemoveInteractWidget,[](UFGGameUI*,UFGInteractWidget* Widget) {
+  if(auto* FluidHost=FILNFluidSelectorContainer(Widget,false)) {
+   if(auto* Selector=FILNFindSelector(FluidHost)) { Selector->ClearContext(); Selector->RemoveFromParent(); }
+   FILNRemoveFluidHost(FluidHost);
+  }
   if(auto* Selector=FILNFindSelector(FILNSelectorContainer(Widget))) { Selector->ClearContext(); Selector->RemoveFromParent(); }
  });
 }

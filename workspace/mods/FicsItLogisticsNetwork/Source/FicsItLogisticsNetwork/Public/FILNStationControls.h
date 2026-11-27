@@ -55,7 +55,7 @@ class FICSITLOGISTICSNETWORK_API UFILNResourceSelector : public UUserWidget {
  GENERATED_BODY()
 public:
  static void InstallHook();
- bool BuildControls();
+ bool BuildControls(bool InlineFluid=false);
  void SetContext(AFGBuildableDockingStation* Target,UVerticalBox* Container,bool HideStorage);
  void ClearContext();
  bool HasContext(AFGBuildableDockingStation* Target) const;
