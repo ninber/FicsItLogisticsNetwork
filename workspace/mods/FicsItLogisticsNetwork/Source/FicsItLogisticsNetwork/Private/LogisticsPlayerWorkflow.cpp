@@ -73,8 +73,8 @@ void ALogisticsSubsystem::ReconcileStationSelection(AFGDockingStationIdentifier*
  if(!IsValid(B) || B->IsBuildableInsideBlueprintDesigner() || IsDepot(ID)) return;
  const auto Desired=DesiredStationResource(B);
  const auto* Config=StationConfigs.FindByPredicate([ID](const FFILNStationConfig& C){return C.Station==ID;});
- const auto Active=Config?Config->Resource:TSubclassOf<UFGItemDescriptor>();
- if(Desired!=Active) {
+ const auto ActiveResource=Config?Config->Resource:TSubclassOf<UFGItemDescriptor>();
+ if(Desired!=ActiveResource) {
   // Existing leases and native fluid contents belong to the old operation.
   // Only the new assignment is suspended; never mutate cargo or active jobs.
   if(!filn::selector::CanReconcile(B->GetDockedActor()!=nullptr,
