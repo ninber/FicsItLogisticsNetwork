@@ -49,6 +49,8 @@ try:
             raise ValueError('Invalid SMR GameVersion metadata')
         if not isinstance(meta.get('SemVersion'), str) or not re.fullmatch(r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$', meta['SemVersion']):
             raise ValueError('Invalid SMR mod SemVersion')
+        if meta['Version'] != int(meta['SemVersion'].split('.', 1)[0]):
+            raise ValueError('SemVer major version should match Version')
         if not isinstance(deps[0]['SemVersion'], str) or not re.fullmatch(r'^(<=|<|>|>=|\^)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$', deps[0]['SemVersion']):
             raise ValueError('Invalid SMR dependency SemVersion: use one comparison operator or exact version')
         binaries = [name for name in names if '/Binaries/Win64/' in '/' + name and 'FicsItLogisticsNetwork' in name and name.endswith('.dll')]

@@ -21,8 +21,8 @@ class NativePackageVerifierTests(unittest.TestCase):
                 args += ['--expected-descriptor', str(source)]
             return subprocess.run(args, capture_output=True, text=True)
     def test_previous_valid_version_is_rejected(self):
-        expected = {'FileVersion':3,'Version':1,'VersionName':'0.02b','SemVersion':'0.0.2-beta.1','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'3.12.1'}]}
-        for key, old in [('Version',0),('VersionName','0.01b'),('SemVersion','0.0.1-beta.1'),('Plugins',[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'}])]:
+        expected = {'FileVersion':3,'Version':0,'VersionName':'0.02b','SemVersion':'0.0.2-beta.1','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'3.12.1'}]}
+        for key, old in [('Version',1),('VersionName','0.01b'),('SemVersion','0.0.1-beta.1'),('Plugins',[{'Name':'SML','Enabled':True,'SemVersion':'>=3.12.1'}])]:
             with self.subTest(key=key):
                 result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(dict(expected, **{key:old}))}, expected)
                 self.assertNotEqual(result.returncode, 0)
@@ -30,6 +30,16 @@ class NativePackageVerifierTests(unittest.TestCase):
         result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(expected)}, expected)
         self.assertIn('PASS archive descriptor matches', result.stdout)
         self.assertIn('Missing FILN Win64 DLL', result.stderr)
+    def test_smr_major_version_must_match_integer_version(self):
+        for major, integer in ((0, 1), (1, 0), (2, 1)):
+            with self.subTest(major=major, integer=integer):
+                meta = {'FileVersion':3,'Version':integer,'SemVersion':f'{major}.0.2-beta.1','GameVersion':'>=520140','Plugins':[{'Name':'SML','Enabled':True,'SemVersion':'3.12.1'}]}
+                for expected in (None, dict(meta, VersionName='beta')):
+                    if expected is not None:
+                        meta['VersionName'] = 'beta'
+                    result = self.probe({'FicsItLogisticsNetwork.uplugin':json.dumps(meta)}, expected)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('SemVer major version should match Version', result.stderr)
     def test_source_handoff_is_not_release(self):
         result = self.probe({'Source/module.cpp': '// source'})
         self.assertNotEqual(result.returncode, 0)
